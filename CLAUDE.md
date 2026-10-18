@@ -18,8 +18,8 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | Phase | State |
 | --- | --- |
 | Prototype (single HTML file) | Done. Tag file format, tag tree, role mapping and scoring all confirmed against real Scryfall data |
-| 1. Data foundation | **Next**: see "First session" below |
-| 2. Core editor | Not started |
+| 1. Data foundation | Built on branch `phase-1/data-foundation`; first import loaded Oct 17, 2026. Daily workflow written, not yet switched on |
+| 2. Core editor | **Next** |
 | 3. Tag layer (roles, sliders, top tags) | Logic exists in the prototype; needs porting |
 | 4. Suggestions | Logic exists in the prototype; needs porting |
 | 5. Bracket targeting | Not started |
@@ -32,7 +32,11 @@ The GitHub repository is connected to a Supabase project. Ask David for the proj
 
 - **Next.js + TypeScript**, hosted on **Vercel** (free tier).
 - **Supabase**: Postgres plus Auth (Discord and Google sign-in), with row-level security on every user table.
-- **Daily import job**: a scheduled server job, never in the browser.
+- **Daily import job**: a scheduled server job, never in the browser. Decided Oct 17, 2026:
+  - Runs as a **GitHub Actions scheduled workflow**. Vercel's free tier kills functions after about 60 s, which is too short for a full load.
+  - Loads with a **direct Postgres connection and `COPY`** (`SUPABASE_DB_URL`), not the Supabase REST API.
+  - **Tag tables rebuild inside one transaction** (clear, reload, commit) so removed tags disappear and readers never see a half-load. `cards` is upserted, because decks reference `oracle_id`.
+- Node.js 24 LTS. Supabase clients live in `src/lib/supabase/` (`client.ts` browser, `server.ts` per-user server, `admin.ts` service role, server-only).
 - Card images load straight from Scryfall's image CDN. Credit Scryfall on every page.
 
 ## Scryfall data facts (learned the hard way in the prototype)
@@ -43,10 +47,20 @@ The GitHub repository is connected to a Supabase project. Ask David for the proj
 - **Tag object**: `{ id, slug, label, type, description?, aliases?, parent_ids?, child_ids?, taggings: [{ oracle_id | illustration_id, weight, annotation? }] }`.
   - Oracle tags key on `oracle_id`, shared by every printing of a card.
   - Art tags key on `illustration_id`, so they're printing-specific. Use the deck's chosen printing.
-- **The tag tree** exists (about 4,600 parent links) and may be stored as `parent_ids`, `child_ids` or both. Merge both directions. **Each card is tagged at ONE level only**: a card with *death trigger* is not also tagged *triggered ability*. Parents are implied.
+  - Art tags have `type: "illustration"` in the file; we store them as `kind = 'art'`.
+- **The tag tree** exists (24,477 links in Oct 2026, mostly in the art-tag tree; the prototype's ~4,600 was oracle-only) and may be stored as `parent_ids`, `child_ids` or both. Merge both directions. **Each card is tagged at ONE level only**: a card with *death trigger* is not also tagged *triggered ability*. Parents are implied.
 - **Search syntax**: `otag:<slug>` for oracle tags, `art:<slug>` for art tags, plus `id<=BG f:commander game:paper`, `order=edhrec`. A search with no results returns HTTP 404; treat it as empty.
 - **Rate limit**: stay at or under 10 requests a second (the prototype waits 110 ms between calls). Send `Accept` and a descriptive `User-Agent` from the server.
 - **Popularity**: `edhrec_rank` is on every card object, so EDHREC itself never needs scraping. Today's price is `prices.usd`, refreshed daily; there's no price history.
+
+## Data layer (Phase 1)
+
+- Schema: `supabase/migrations/` (numbered SQL files). Apply with `npm run db:migrate`; it records what ran in `schema_migrations`.
+- Import: `npm run import` runs `scripts/import-scryfall.mts` (about 1.5 minutes). Every run logs counts to `import_runs`.
+- Saved queries for the Supabase SQL editor: `supabase/queries/row-counts.sql` and `card-tags.sql` (tags for one card).
+- First load: 38,753 cards; 4,578 oracle tags; 11,637 art tags; 24,477 tag links; 236,840 card tags; 497,762 illustration tags. Nothing skipped.
+- **Database size is about 322 MB of the 500 MB free cap.** Roughly half of that is the previous day's copy, which Postgres keeps and reuses, so it holds steady instead of growing. Before adding all printings (Phase 2), slim the `cards` row: `legalities` and `image_uris` are most of it.
+- **Role slugs not in the data** (Oct 2026): `card-draw`, `creature-removal`, `board-wipe`, `wrath`, `mass-removal`, `reanimation`, `graveyard-recursion`. Every role still works through its root tag (`draw`, `removal`, `sweeper`, `recursion` and so on) plus descendants. Drop the dead slugs when porting in Phase 3.
 
 ## Logic to port from the prototype
 
