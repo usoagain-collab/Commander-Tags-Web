@@ -1,0 +1,46 @@
+# Daily Scryfall import: refreshes cards, prices and tags in Supabase.
+#
+# To switch it on:
+#   1. Merge this file into the default branch (scheduled workflows only run from there).
+#   2. GitHub repo -> Settings -> Secrets and variables -> Actions -> New repository secret:
+#      name SUPABASE_DB_URL, value = the same Session pooler string as in .env.local.
+# Until the secret exists, the job skips itself instead of failing.
+# You can also run it by hand: Actions tab -> Daily Scryfall import -> Run workflow.
+name: Daily Scryfall import
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # 22:30 UTC, after Scryfall publishes its daily files (~21:00 UTC)
+  workflow_dispatch:
+
+concurrency:
+  group: scryfall-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Check the database secret is set
+        id: secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::notice::SUPABASE_DB_URL secret not set; skipping import."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.secret.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: steps.secret.outputs.ok == 'true'
+      - run: npm run import
+        if: steps.secret.outputs.ok == 'true'
