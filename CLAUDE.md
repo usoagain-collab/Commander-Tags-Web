@@ -18,15 +18,19 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | Phase | State |
 | --- | --- |
 | Prototype (single HTML file) | Done. Tag file format, tag tree, role mapping and scoring all confirmed against real Scryfall data |
-| 1. Data foundation | Built on branch `phase-1/data-foundation`; first import loaded Oct 17, 2026. Daily workflow written, not yet switched on |
-| 2. Core editor | **Next** |
+| 1. Data foundation | Done (merged Oct 18, 2026). Daily import runs from GitHub Actions at 22:30 UTC |
+| 2. Core editor | **In progress**, one PR per step: **2a sign-in + decks** (built), 2b editor basics (quick add, boards, autosave, undo), 2c import/export, 2d card search, 2e drag from Scryfall |
 | 3. Tag layer (roles, sliders, top tags) | Logic exists in the prototype; needs porting |
 | 4. Suggestions | Logic exists in the prototype; needs porting |
 | 5. Bracket targeting | Not started |
 | 6. Playtester | Not started |
 | 7. Friend test | Not started |
 
-The GitHub repository is connected to a Supabase project. Ask David for the project URL and keys when you need them.
+The GitHub repository is connected to a Supabase project and a Vercel project. Ask David for keys when you need them; he enters secrets himself.
+
+- **Vercel needs the env vars too**: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Production and Preview). Without them every page fails, because the middleware creates a Supabase client on each request.
+- `NEXT_PUBLIC_SUPABASE_URL` is the bare project address (`https://<ref>.supabase.co`), **not** the `/rest/v1/` API URL. With the suffix, database calls still work but sign-in breaks.
+- `vercel.json` sets `framework: nextjs`, because the Vercel project was created as "Other".
 
 ## Stack (decided)
 
@@ -38,6 +42,15 @@ The GitHub repository is connected to a Supabase project. Ask David for the proj
   - **Tag tables rebuild inside one transaction** (clear, reload, commit) so removed tags disappear and readers never see a half-load. `cards` is upserted, because decks reference `oracle_id`.
 - Node.js 24 LTS. Supabase clients live in `src/lib/supabase/` (`client.ts` browser, `server.ts` per-user server, `admin.ts` service role, server-only).
 - Card images load straight from Scryfall's image CDN. Credit Scryfall on every page.
+
+## Phase 2 decisions (Oct 18, 2026)
+
+- **Decks are normalized**: `decks` plus `deck_cards` (one row per card per board: `commander`, `main`, `maybe`, `companion`), not a JSON blob. Schema in `supabase/migrations/0003_profiles_decks.sql`.
+- **RLS**: owners have full access to their own profile, decks and deck cards; anyone can read `public` decks. **Unlisted decks have no open read policy** (it would let anyone list them all); share links (Phase 7) go through a server route that fetches one deck by id.
+- **Card search**: the browser calls Scryfall's search API directly (full syntax), then joins results to our DB by `oracle_id` for tags. Quick add and `otag:` autocomplete use our own DB.
+- **Sign-in**: Discord first (working locally), Google next. A profile row is created automatically on first sign-in.
+- **Printing picker deferred**: `deck_cards.printing_id` exists (null = default). Slim the `cards` rows before loading all printings.
+- Local dev: `npm run dev` (http://localhost:3000). Supabase redirect URLs include `http://localhost:3000/**` and the Vercel preview pattern.
 
 ## Scryfall data facts (learned the hard way in the prototype)
 

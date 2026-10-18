@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
   title: "Commander Tags",
@@ -14,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen flex flex-col">
+        <SiteHeader />
         <div className="flex-1">{children}</div>
         <footer className="px-6 py-4 text-xs opacity-70">
           Card data, images and tags courtesy of{" "}
