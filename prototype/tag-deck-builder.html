@@ -1,0 +1,1400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tag Deck Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: three working columns — role profile + themes | suggestions | the deck itself */
+:root {
+  --bg: #f2f4f3; --panel: #ffffff; --ink: #1a1f1d; --muted: #5b6560; --line: #dce1de;
+  --accent: #1d6b58; --accent-ink: #ffffff; --accent-soft: #e2efeb;
+  --good: #2e7a33; --warn: #a96400; --over: #7b8681; --hl: #fff1c2; --danger: #b3261e;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111413; --panel: #191d1b; --ink: #e6eae8; --muted: #9aa49f; --line: #2b322f;
+    --accent: #5bbf9f; --accent-ink: #0e1a16; --accent-soft: #1c3630;
+    --good: #6cc070; --warn: #e3a23b; --over: #7f8a85; --hl: #3b3520; --danger: #f2827a; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+header.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between;
+  padding: 14px max(16px, 3vw); border-bottom: 1px solid var(--line); background: var(--panel); }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font: 700 20px/1.1 var(--display); margin: 0; letter-spacing: -0.01em; }
+.brand .cmdr { color: var(--muted); }
+.brand .cmdr b { color: var(--ink); font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--over); }
+.pill.ok .dot { background: var(--good); } .pill.busy .dot { background: var(--warn); } .pill.bad .dot { background: var(--danger); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 6px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.small { padding: 3px 8px; font-size: 12.5px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.importer { padding: 14px max(16px, 3vw); border-bottom: 1px solid var(--line); background: var(--panel); }
+.importer[hidden] { display: none !important; }
+.importer .row { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+.importer textarea { width: 100%; min-height: 220px; resize: vertical; padding: 10px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--bg); font: 13px/1.5 var(--mono); }
+.importer .help { color: var(--muted); font-size: 13px; display: grid; gap: 10px; align-content: start; }
+.notice { margin: 10px max(16px, 3vw) 0; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel); font-size: 13px; }
+.notice.warn { border-color: var(--warn); }
+.notice[hidden] { display: none !important; }
+
+main.grid { display: grid; gap: 16px; padding: 16px max(16px, 3vw) 40px;
+  grid-template-columns: 330px minmax(0, 1fr) 320px; align-items: start; }
+@media (max-width: 1180px) { main.grid { grid-template-columns: 320px minmax(0, 1fr); } .deckcol { grid-column: 1 / -1; } }
+@media (max-width: 760px) { main.grid { grid-template-columns: minmax(0, 1fr); } .importer .row { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel + .panel { margin-top: 16px; }
+.panel h2 { font: 700 13px/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 4px; }
+.panel .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+
+/* Role profile */
+.roles { display: grid; gap: 12px; }
+.role { display: grid; gap: 4px; }
+.role-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.role-name { background: none; border: 0; padding: 0; font-weight: 600; text-align: left; }
+.role-name:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.role-count { font-family: var(--mono); font-size: 13px; }
+.role-count .state { font-family: var(--body); font-size: 11.5px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+.bar { position: relative; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--warn); }
+.role.met .bar > span { background: var(--good); } .role.over .bar > span { background: var(--over); }
+.role.met .state { color: var(--good); } .role.under .state { color: var(--warn); } .role.over .state { color: var(--over); }
+.role input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0 0; }
+.role .missing { color: var(--warn); font-size: 12px; }
+.role .rm { font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; text-decoration: underline; }
+.addrole { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 6px; margin-top: 14px; }
+.addrole input { min-width: 0; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+/* Theme tags */
+.tags { display: grid; gap: 2px; }
+.tagrow { display: grid; grid-template-columns: minmax(0, 1fr) 20px; gap: 4px; align-items: center; border-radius: 6px; }
+.tagpick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 6px;
+  background: none; border: 0; text-align: left; width: 100%; min-width: 0; border-radius: 6px; }
+.tagrow .hide { background: none; border: 0; padding: 0; color: var(--muted); font-size: 15px; line-height: 1; opacity: 0.5; }
+.tagrow:hover .hide { opacity: 1; } .tagrow .hide:hover { color: var(--danger); }
+.tags-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.tags-head h2 { margin: 0; }
+.seg.small button { padding: 3px 9px; font-size: 12px; }
+.chip.flavor { background: none; border: 1px dashed var(--accent); }
+#treeCard { position: fixed; z-index: 60; max-width: 300px; padding: 10px 12px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-size: 12.5px; line-height: 1.5; pointer-events: none; }
+#treeCard[hidden] { display: none !important; }
+#treeCard .tr { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+#treeCard .tr.me { color: var(--ink); font-weight: 600; background: var(--accent-soft); border-radius: 4px; margin: 1px -4px; padding: 0 4px; }
+#treeCard .tr .n { font-family: var(--mono); font-size: 11.5px; color: var(--accent); margin-left: 6px; }
+#treeCard .hd { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
+#treeCard .more { color: var(--muted); font-style: italic; }
+.showhidden { margin: 8px 6px 0; font-size: 12.5px; justify-self: start; }
+.tagrow:hover, .tagrow.on { background: var(--accent-soft); }
+.tagrow .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tagrow .cnt { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.tagrow.pinned .lbl::before { content: "Commander · "; color: var(--accent); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Suggestions */
+.sugg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: end; margin-bottom: 12px; }
+.sugg-head h2 { margin: 0; }
+.sugg-head .for { font: 700 18px/1.2 var(--display); margin-top: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex-wrap: wrap; }
+.seg button { border: 0; background: var(--panel); padding: 6px 11px; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.stylecfg { display: flex; flex-wrap: wrap; gap: 14px; margin: -2px 0 12px; font-size: 13px; color: var(--muted); }
+.stylecfg[hidden] { display: none !important; }
+.stylecfg label { display: flex; gap: 8px; align-items: center; }
+.stylecfg input[type=range] { width: 120px; accent-color: var(--accent); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 12px; }
+.card { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; padding: 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--panel); align-content: start; }
+.card img { width: 74px; aspect-ratio: 488 / 680; border-radius: 4px; object-fit: cover; background: var(--line); max-width: 100%; }
+.card .nm { font-weight: 600; line-height: 1.25; }
+.card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.card .why { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); }
+.chip.role { background: none; border: 1px solid var(--good); }
+.card .score { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.card .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.empty { color: var(--muted); padding: 24px 4px; text-align: center; }
+.loading { color: var(--muted); padding: 24px 4px; }
+
+/* Deck */
+.deck-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.deck-head .tot { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.group { margin-top: 12px; }
+.group h3 { font: 600 12px/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  margin: 0 0 4px; display: flex; justify-content: space-between; }
+.deckrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 18px; gap: 6px; align-items: center;
+  padding: 2px 4px; border-radius: 4px; font-size: 13.5px; }
+.deckrow:hover { background: var(--accent-soft); }
+.deckrow.hl { background: var(--hl); }
+.deckrow .q { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+.deckrow .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deckrow .p { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.deckrow .x { background: none; border: 0; padding: 0; color: var(--muted); font-size: 15px; line-height: 1; }
+.deckrow .x:hover { color: var(--danger); }
+.deckrow .flag { font-size: 10.5px; color: var(--accent); margin-left: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+#preview { position: fixed; z-index: 50; pointer-events: none; width: 220px; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+#preview[hidden] { display: none !important; }
+footer { color: var(--muted); font-size: 12px; padding: 0 max(16px, 3vw) 24px; }
+@media (prefers-reduced-motion: no-preference) { .bar > span { transition: width 0.15s ease; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <h1>Tag Deck Builder</h1>
+    <span class="cmdr" id="cmdrLabel">No deck loaded</span>
+  </div>
+  <div class="actions">
+    <span class="pill" id="tagStatus"><span class="dot"></span><span>Tag data: not loaded</span></span>
+    <button class="btn" id="toggleImport" type="button">Edit decklist</button>
+  </div>
+</header>
+
+<section class="importer" id="importer">
+  <div class="row">
+    <div>
+      <label for="deckText" style="font-weight:600;display:block;margin-bottom:6px">Paste a Commander decklist</label>
+      <textarea id="deckText" spellcheck="false"></textarea>
+      <div class="actions" style="margin-top:8px">
+        <button class="btn primary" id="loadDeck" type="button">Load deck</button>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px">Commander
+          <select id="cmdrSelect" style="max-width:240px;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--panel)"></select>
+        </label>
+      </div>
+    </div>
+    <div class="help">
+      <div><b>Formats that work:</b> Moxfield and Archidekt text exports, MTGO lists, or one card per line. Set codes and foil markers are ignored.</div>
+      <div><b>Commander:</b> put it under a <span class="num">Commander</span> heading, or pick it from the menu after loading.</div>
+      <div><b>First load</b> downloads Scryfall's tag file once (it's large; give it a minute), then it's cached in this browser for 7 days.</div>
+      <div>The sample list is a Meren of Clan Nel Toth deck so you can see it work. Replace it with one of yours.</div>
+    </div>
+  </div>
+</section>
+
+<div class="notice warn" id="notice" hidden></div>
+<div class="notice" id="tagHelp" hidden></div>
+
+<main class="grid">
+  <div>
+    <section class="panel" aria-labelledby="hProfile">
+      <h2 id="hProfile">Role profile</h2>
+      <p class="sub">Drag a slider to set the target. Click a role to get cards that fill it.</p>
+      <div class="roles" id="roles"></div>
+      <form class="addrole" id="addRole" autocomplete="off">
+        <input id="newRoleTag" list="tagList" placeholder="Add a role from any tag, e.g. sacrifice-outlet" aria-label="Tag for new role">
+        <input id="newRoleTarget" type="number" min="0" max="60" value="6" aria-label="Target count">
+        <button class="btn small" type="submit">Add</button>
+      </form>
+      <datalist id="tagList"></datalist>
+      <div class="profile-actions">
+        <button class="btn small" id="saveDefaults" type="button">Save as my default targets</button>
+        <button class="btn small" id="resetDefaults" type="button">Reset to standard</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="hTags">
+      <div class="tags-head">
+        <h2 id="hTags">Top tags in this deck</h2>
+        <div class="seg small" role="group" aria-label="Tag type" id="modeSeg">
+          <button type="button" data-mode="gameplay" aria-pressed="true">Gameplay</button>
+          <button type="button" data-mode="flavor" aria-pressed="false">Flavor</button>
+        </div>
+      </div>
+      <div class="tags-head" style="justify-content:flex-start">
+        <span style="font-size:12.5px;color:var(--muted)">Detail</span>
+        <div class="seg small" role="group" aria-label="Tag detail" id="depthSeg">
+          <button type="button" data-specific="1" aria-pressed="true" title="Tags as Scryfall applied them, deepest subtags listed first">Specific</button>
+          <button type="button" data-specific="0" aria-pressed="false" title="Also count each tag's parent tags, so related subtags group together">Broad</button>
+        </div>
+        <span style="font-size:12.5px;color:var(--muted);margin-left:6px">Sort</span>
+        <div class="seg small" role="group" aria-label="Sort tags" id="sortSeg">
+          <button type="button" data-sort="relevance" aria-pressed="true" title="Hits weighted by how rare the tag is overall">Relevance</button>
+          <button type="button" data-sort="count" aria-pressed="false" title="Most cards in this deck first">Count</button>
+        </div>
+      </div>
+      <p class="sub" id="tagsSub"></p>
+      <div class="tags" id="tags"><div class="empty">Load a deck to see its themes.</div></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="hSugg">
+    <div class="sugg-head">
+      <div>
+        <h2 id="hSugg">Suggestions</h2>
+        <div class="for" id="suggFor">Pick a role or tag</div>
+      </div>
+      <div class="seg" role="group" aria-label="Suggestion style" id="styleSeg">
+        <button type="button" data-style="best" aria-pressed="true">Best fit</button>
+        <button type="button" data-style="gems" aria-pressed="false">Hidden gems</button>
+        <button type="button" data-style="budget" aria-pressed="false">Budget</button>
+        <button type="button" data-style="custom" aria-pressed="false">Custom</button>
+      </div>
+    </div>
+    <div class="stylecfg" id="cfgBudget" hidden>
+      <label for="priceCap">Price cap <input type="range" id="priceCap" min="0.25" max="20" step="0.25" value="3"> <span class="num" id="priceCapVal">$3.00</span></label>
+    </div>
+    <div class="stylecfg" id="cfgCustom" hidden>
+      <label for="wFit">Tag fit <input type="range" id="wFit" min="0" max="100" value="60"></label>
+      <label for="wPop">Popularity <input type="range" id="wPop" min="-100" max="100" value="30"></label>
+      <label for="wPrice">Cheapness <input type="range" id="wPrice" min="0" max="100" value="10"></label>
+    </div>
+    <div id="suggList"><div class="empty">Under-target roles are the best place to start. Click one on the left.</div></div>
+  </section>
+
+  <section class="panel deckcol" aria-labelledby="hDeck">
+    <div class="deck-head">
+      <h2 id="hDeck">Deck <span class="num" id="deckCount"></span></h2>
+      <span class="tot" id="deckTotal"></span>
+    </div>
+    <div id="deck"><div class="empty">No cards yet.</div></div>
+  </section>
+</main>
+
+<footer>Card data, prices and tags from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Tags are community-made on Scryfall Tagger. Prototype: nothing is uploaded anywhere; your deck and targets stay in this browser.</footer>
+<img id="preview" alt="" hidden>
+<div id="treeCard" role="tooltip" hidden></div>
+
+<script>
+"use strict";
+const API = "https://api.scryfall.com";
+const IDB_NAME = "tag-deck-builder", IDB_STORE = "kv", INDEX_MAX_AGE = 7 * 864e5;
+// v2 keeps each tag's parent links; older caches dropped them.
+const TAG_KEY = "index-v2", ART_KEY = "artIndex-v2";
+
+const STANDARD_ROLES = [
+  { key: "lands", name: "Lands", target: 37, land: true },
+  { key: "ramp", name: "Ramp", target: 10, slugs: ["ramp", "mana-rock", "mana-dork", "land-ramp"] },
+  { key: "draw", name: "Card advantage", target: 10, slugs: ["card-advantage", "draw", "card-draw"] },
+  { key: "removal", name: "Targeted removal", target: 8, slugs: ["removal", "spot-removal", "creature-removal"], exclude: "wipes" },
+  { key: "wipes", name: "Board wipes", target: 3, slugs: ["sweeper", "board-wipe", "wrath", "mass-removal"] },
+  { key: "protection", name: "Protection", target: 3, slugs: ["protection", "gives-protection", "protects-permanent", "gives-hexproof", "gives-indestructible"] },
+  { key: "recursion", name: "Recursion", target: 2, slugs: ["recursion", "reanimation", "graveyard-recursion"] },
+];
+
+const SAMPLE = `Commander
+1 Meren of Clan Nel Toth
+
+Deck
+1 Sol Ring
+1 Arcane Signet
+1 Golgari Signet
+1 Commander's Sphere
+1 Skullclamp
+1 Ashnod's Altar
+1 Phyrexian Altar
+1 Executioner's Capsule
+1 Lightning Greaves
+1 Swiftfoot Boots
+1 Sakura-Tribe Elder
+1 Wood Elves
+1 Eternal Witness
+1 Viscera Seer
+1 Carrion Feeder
+1 Yawgmoth, Thran Physician
+1 Plaguecrafter
+1 Fleshbag Marauder
+1 Merciless Executioner
+1 Ravenous Chupacabra
+1 Shriekmaw
+1 Gravedigger
+1 Grave Titan
+1 Golgari Grave-Troll
+1 Spore Frog
+1 Blood Artist
+1 Zulaport Cutthroat
+1 Savra, Queen of the Golgari
+1 Deathrite Shaman
+1 Elvish Visionary
+1 Satyr Wayfinder
+1 Stitcher's Supplier
+1 Doomed Necromancer
+1 Massacre Wurm
+1 Woodfall Primus
+1 Acidic Slime
+1 Caustic Caterpillar
+1 Reclamation Sage
+1 Liliana, Death's Majesty
+1 Birthing Pod
+1 Grisly Salvage
+1 Victimize
+1 Living Death
+1 Damnation
+1 Toxic Deluge
+1 Pernicious Deed
+1 Beast Within
+1 Putrefy
+1 Assassin's Trophy
+1 Abrupt Decay
+1 Krosan Grip
+1 Heroic Intervention
+1 Golgari Charm
+1 Cultivate
+1 Kodama's Reach
+1 Rampant Growth
+1 Farseek
+1 Nature's Lore
+1 Three Visits
+1 Harmonize
+1 Night's Whisper
+1 Phyrexian Arena
+1 Sylvan Library
+1 Demonic Tutor
+1 Survival of the Fittest
+1 Buried Alive
+1 Command Tower
+1 Overgrown Tomb
+1 Woodland Cemetery
+1 Llanowar Wastes
+1 Golgari Rot Farm
+1 Jungle Hollow
+1 Twilight Mire
+1 Verdant Catacombs
+1 Polluted Delta
+1 Bojuka Bog
+1 Reliquary Tower
+1 Phyrexian Tower
+1 Urborg, Tomb of Yawgmoth
+1 Myriad Landscape
+1 Evolving Wilds
+1 Terramorphic Expanse
+8 Forest
+9 Swamp`;
+
+// ---------- state ----------
+const S = {
+  idx: null,            // tag index: { tags[], slugToIdx Map, byOracle Map, n }
+  fallback: false,      // true when the tag file could not be loaded
+  roles: [],            // active roles with targets
+  deck: [],             // { name, qty, card }
+  commanders: [],       // card objects
+  ci: "",
+  apiRoles: new Map(),  // fallback mode: card name -> Set(roleKey)
+  highlightKey: null,   // "o:<idx>" for an oracle tag, "a:<idx>" for an art tag
+  art: null,            // art tag index: { tags[], slugToIdx, byIll Map, n }
+  specific: true,       // true: tags as Scryfall applied them; false: also roll up to parent tags
+  sortBy: "relevance",  // "relevance" (hits weighted by rarity) or "count" (raw hits)
+  tagMode: "gameplay",  // "gameplay" (oracle tags) or "flavor" (art + name/wording tags)
+  source: null,         // what suggestions are for
+  pool: [],             // raw candidates for current source
+  dismissed: new Set(),
+  hiddenTags: new Set(),
+  style: "best", priceCap: 3, w: { fit: 60, pop: 30, price: 10 },
+};
+
+// ---------- small helpers ----------
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (v) => (v == null || isNaN(v) ? "—" : "$" + Number(v).toFixed(2));
+const store = {
+  get(k) { try { const v = localStorage.getItem("tdb." + k); return v ? JSON.parse(v) : null; } catch { return null; } },
+  set(k, v) { try { localStorage.setItem("tdb." + k, JSON.stringify(v)); } catch {} },
+};
+function notice(html, warn = true) { const n = $("notice"); n.innerHTML = html; n.hidden = !html; n.classList.toggle("warn", warn); }
+function setStatus(text, kind) { const p = $("tagStatus"); p.className = "pill " + (kind || ""); p.lastElementChild.textContent = text; }
+
+// Scryfall asks for ~10 requests/second at most.
+let lastReq = 0;
+async function sf(path, opts = {}) {
+  const wait = lastReq + 110 - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastReq = Date.now();
+  const headers = { Accept: "application/json" };
+  if (opts.body) headers["Content-Type"] = "application/json";
+  const res = await fetch(path.startsWith("http") ? path : API + path, { ...opts, headers });
+  if (res.status === 404) return { object: "list", data: [], has_more: false };
+  if (!res.ok) {
+    let msg = res.status + " " + res.statusText;
+    try { const j = await res.json(); if (j.details) msg = j.details; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+// ---------- IndexedDB cache for the tag index ----------
+function idb() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE);
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function idbGet(key) {
+  try { const db = await idb(); return await new Promise((res, rej) => { const q = db.transaction(IDB_STORE).objectStore(IDB_STORE).get(key); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+  catch { return null; }
+}
+async function idbSet(key, val) {
+  try { const db = await idb(); await new Promise((res, rej) => { const t = db.transaction(IDB_STORE, "readwrite"); t.objectStore(IDB_STORE).put(val, key); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+  catch (e) { console.warn("Could not cache tag index", e); }
+}
+
+// ---------- tag index ----------
+function buildIndex(raw) {
+  const list = Array.isArray(raw) ? raw : raw.data || [];
+  const idToIdx = new Map();
+  list.forEach((t, i) => idToIdx.set(t.id, i));
+  const tags = [], byOracle = new Map();
+  list.forEach((t, i) => {
+    tags.push({ slug: t.slug, label: t.label || t.slug, size: (t.taggings || []).length,
+      children: (t.child_ids || []).map((id) => idToIdx.get(id)).filter((x) => x != null),
+      parents: (t.parent_ids || []).map((id) => idToIdx.get(id)).filter((x) => x != null) });
+    for (const tg of t.taggings || []) {
+      if (!tg.oracle_id) continue;
+      let a = byOracle.get(tg.oracle_id);
+      if (!a) byOracle.set(tg.oracle_id, (a = []));
+      a.push(i);
+    }
+  });
+  return { tags, byOracle, savedAt: Date.now() };
+}
+function hydrate(ix) {
+  linkTree(ix);
+  ix.slugToIdx = new Map(ix.tags.map((t, i) => [t.slug, i]));
+  ix.n = ix.byOracle.size;
+  const dl = $("tagList");
+  dl.innerHTML = ix.tags.slice().sort((a, b) => b.size - a.size).slice(0, 4000)
+    .map((t) => `<option value="${esc(t.slug)}">${esc(t.label)}</option>`).join("");
+  return ix;
+}
+
+const tagUrl = (e) => e && (e.download_uri || e.jsonl_download_uri || e.compressed_download_uri) || null;
+const tagSize = (e) => e && (e.size || e.compressed_size) || 0;
+
+async function bytesToText(buf) {
+  // gzip files start with bytes 1f 8b
+  if (buf[0] === 0x1f && buf[1] === 0x8b) {
+    if (!("DecompressionStream" in window)) throw new Error("this browser can't unzip the file; try Chrome or Edge");
+    return await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  }
+  return new TextDecoder().decode(buf);
+}
+function parseTagText(text) {
+  const t = text.trimStart();
+  if (t.startsWith("[") || t.startsWith('{"object":"list"')) return JSON.parse(t);
+  // JSONL: one tag object per line
+  const out = [];
+  for (const line of t.split(/\r?\n/)) { const l = line.trim(); if (l) out.push(JSON.parse(l)); }
+  return out;
+}
+
+async function bulkEntry(type) {
+  if (!S.bulkEntries) {
+    const bulk = await sf("/bulk-data");
+    S.bulkEntries = bulk.data || [];
+    S.bulkTypes = S.bulkEntries.map((d) => d.type);
+  }
+  return S.bulkEntries.find((d) => d.type === type) || null;
+}
+const findTagEntry = () => bulkEntry("oracle_tags");
+
+// Download one of Scryfall's tag files and parse it. `say` reports progress.
+async function fetchBulk(type, label, say) {
+  say(`${label}: finding file…`);
+  const entry = await bulkEntry(type);
+  if (!entry) throw new Error(`Scryfall's bulk list has no ${type} file`);
+  const url = tagUrl(entry);
+  if (!url) throw new Error(`Scryfall's listing for ${type} has no download link`);
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error("Download failed: " + res.status);
+  const total = Number(res.headers.get("content-length")) || tagSize(entry);
+  const reader = res.body.getReader(), parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    say(`${label}: downloading ${(got / 1048576).toFixed(0)}${total ? " of " + (total / 1048576).toFixed(0) : ""} MB`);
+  }
+  say(`${label}: indexing…`);
+  await sleep(20);
+  const buf = new Uint8Array(got);
+  let off = 0; for (const p of parts) { buf.set(p, off); off += p.length; }
+  return parseTagText(await bytesToText(buf));
+}
+async function downloadTagFile() {
+  return buildIndex(await fetchBulk("oracle_tags", "Tag data", (t) => setStatus(t, "busy")));
+}
+
+// ---------- art tags (flavor) ----------
+// Art tags attach to an illustration, not a card, so they're keyed by illustration_id.
+function buildArtIndex(raw) {
+  const list = Array.isArray(raw) ? raw : raw.data || [];
+  const idToIdx = new Map();
+  list.forEach((t, i) => idToIdx.set(t.id, i));
+  const tags = [], byIll = new Map();
+  list.forEach((t, i) => {
+    tags.push({ slug: t.slug, label: t.label || t.slug, size: (t.taggings || []).length,
+      children: (t.child_ids || []).map((id) => idToIdx.get(id)).filter((x) => x != null),
+      parents: (t.parent_ids || []).map((id) => idToIdx.get(id)).filter((x) => x != null) });
+    for (const tg of t.taggings || []) {
+      if (!tg.illustration_id) continue;
+      let a = byIll.get(tg.illustration_id);
+      if (!a) byIll.set(tg.illustration_id, (a = []));
+      a.push(i);
+    }
+  });
+  return { tags, byIll, savedAt: Date.now() };
+}
+function hydrateArt(ix) {
+  linkTree(ix);
+  ix.slugToIdx = new Map(ix.tags.map((t, i) => [t.slug, i]));
+  ix.n = ix.byIll.size;
+  return ix;
+}
+const artSay = (t) => { $("tags").innerHTML = `<div class="loading">${esc(t)}</div>`; };
+async function loadArtIndex() {
+  if (S.art) return true;
+  let ix = await idbGet(ART_KEY);
+  if (ix && Date.now() - ix.savedAt > INDEX_MAX_AGE) ix = null;
+  try {
+    if (!ix) { ix = buildArtIndex(await fetchBulk("art_tags", "Art tags", artSay)); await idbSet(ART_KEY, ix); }
+    S.art = hydrateArt(ix);
+    return true;
+  } catch (e) {
+    await showArtHelp(e);
+    return false;
+  }
+}
+async function showArtHelp(err) {
+  let entry = null;
+  try { entry = await bulkEntry("art_tags"); } catch {}
+  const url = tagUrl(entry);
+  if (!url) {
+    $("tags").innerHTML = `<div class="empty">Scryfall's art tag file isn't available (${esc(err.message)}). Name and wording tags still show below once you switch back and forth.</div>`;
+    return;
+  }
+  const mb = tagSize(entry) ? ` (about ${Math.max(1, Math.round(tagSize(entry) / 1048576))} MB)` : "";
+  $("tags").innerHTML = `<div style="font-size:13px;line-height:1.5">
+    <b>One-time step for flavor tags.</b> The page couldn't download Scryfall's art tag file (${esc(err.message)}).
+    <ol style="margin:8px 0 0 18px;padding:0">
+      <li><a href="${esc(url)}" target="_blank" rel="noopener">Download the art tag file</a>${mb}. If it opens as text, right-click and choose <i>Save link as</i>.</li>
+      <li>Load it here: <input type="file" id="artFileInput" accept=".json,.jsonl,.gz,application/json,application/gzip"></li>
+    </ol></div>`;
+}
+async function loadArtFileFromDisk(file) {
+  try {
+    artSay("Art tags: reading file…");
+    const ix = buildArtIndex(parseTagText(await bytesToText(new Uint8Array(await file.arrayBuffer()))));
+    if (!ix.tags.length) throw new Error("that file has no tags in it");
+    await idbSet(ART_KEY, ix);
+    S.art = hydrateArt(ix);
+    renderTags(); renderSuggestions();
+  } catch (e) {
+    $("tags").innerHTML = `<div class="empty">Couldn't read that file: ${esc(e.message)}. Make sure it's the art tag file from the link.</div>`;
+  }
+}
+
+async function loadTagIndex(force = false) {
+  let ix = force ? null : await idbGet(TAG_KEY);
+  if (ix && Date.now() - ix.savedAt > INDEX_MAX_AGE) ix = null;
+  if (!ix) {
+    ix = await downloadTagFile();
+    await idbSet(TAG_KEY, ix);
+  }
+  S.idx = hydrate(ix);
+  S.fallback = false;
+  const days = Math.floor((Date.now() - ix.savedAt) / 864e5);
+  setStatus(`Tag data: ${ix.tags.length.toLocaleString()} tags · ${days ? days + "d old" : "fresh"}`, "ok");
+}
+
+// The browser may refuse a direct download of the tag file (CORS), but a normal
+// link click always works. So: give a link, then read the saved file from disk.
+async function showTagFileHelp(err) {
+  let entry = null;
+  try { entry = await findTagEntry(); } catch {}
+  if (!entry) {
+    const h = $("tagHelp"); h.hidden = false; h.classList.add("warn");
+    h.innerHTML = (`Scryfall's tag file isn't available (${esc(err.message)}). Bulk files Scryfall lists right now: ${esc((S.bulkTypes || []).join(", ") || "none")}. Roles still work through live searches; theme tags are off.`);
+    return;
+  }
+  const url = tagUrl(entry);
+  if (!url) {
+    const h = $("tagHelp"); h.hidden = false; h.classList.add("warn");
+    h.innerHTML = `Scryfall lists a tag file but gives no download link for it. Fields it sent: ${esc(Object.keys(entry).join(", "))}. Send this message to Claude.`;
+    return;
+  }
+  const mb = tagSize(entry) ? ` (about ${Math.max(1, Math.round(tagSize(entry) / 1048576))} MB)` : "";
+  const h = $("tagHelp"); h.hidden = false;
+  h.innerHTML = (`<b>One-time step to turn on theme tags.</b> The page couldn't download Scryfall's tag file on its own (${esc(err.message)}), so do it by hand:
+    <ol style="margin:8px 0 8px 18px;padding:0">
+      <li><a href="${esc(url)}" target="_blank" rel="noopener">Download the tag file</a>${mb}. If it opens as text in a tab instead of saving, right-click the link and choose <i>Save link as</i>.</li>
+      <li>Then load it here: <input type="file" id="tagFileInput" accept=".json,.jsonl,.gz,application/json,application/gzip"></li>
+    </ol>
+    The page keeps it for 7 days. Until then, roles still work through live searches.`);
+}
+
+async function loadTagFileFromDisk(file) {
+  try {
+    setStatus("Tag data: reading file…", "busy");
+    const text = await bytesToText(new Uint8Array(await file.arrayBuffer()));
+    setStatus("Tag data: indexing…", "busy");
+    await sleep(20);
+    const ix = buildIndex(parseTagText(text));
+    if (!ix.tags.length) throw new Error("that file has no tags in it");
+    await idbSet(TAG_KEY, ix);
+    S.idx = hydrate(ix);
+    S.fallback = false;
+    setStatus(`Tag data: ${ix.tags.length.toLocaleString()} tags · fresh`, "ok");
+    $("tagHelp").hidden = true;
+    resolveRoles();
+    renderAll();
+  } catch (e) {
+    setStatus("Tag data: unavailable, using live search", "bad");
+    notice(`Couldn't read that file: ${esc(e.message)}. Make sure it's the tag file from the link, not a different Scryfall download.`);
+  }
+}
+
+function descendants(rootIdxs) {
+  const out = new Set(), stack = [...rootIdxs];
+  while (stack.length) {
+    const i = stack.pop();
+    if (out.has(i)) continue;
+    out.add(i);
+    for (const c of S.idx.tags[i].children) stack.push(c);
+  }
+  return out;
+}
+function resolveRoles() {
+  for (const r of S.roles) {
+    if (r.land) continue;
+    if (!S.idx) { r.found = r.slugs.slice(); r.missing = []; r.tagSet = null; continue; }
+    r.found = r.slugs.filter((s) => S.idx.slugToIdx.has(s));
+    r.missing = r.slugs.filter((s) => !S.idx.slugToIdx.has(s));
+    r.tagSet = descendants(r.found.map((s) => S.idx.slugToIdx.get(s)));
+  }
+}
+function tagsOf(card) {
+  if (!S.idx || !card) return [];
+  return S.idx.byOracle.get(card.oracle_id || (card.card_faces && card.card_faces[0].oracle_id)) || [];
+}
+function artTagsOf(card) {
+  if (!S.art || !card) return [];
+  const ill = card.illustration_id || (card.card_faces && card.card_faces[0].illustration_id);
+  return S.art.byIll.get(ill) || [];
+}
+// Every tag on a card as a key: "o:<idx>" for oracle tags, "a:<idx>" for art tags.
+function keysOf(card) {
+  return [...tagsOf(card).map((t) => "o:" + t), ...artTagsOf(card).map((t) => "a:" + t)];
+}
+function tagRef(key) {
+  const i = +key.slice(2);
+  return key[0] === "a" ? S.art && S.art.tags[i] : S.idx && S.idx.tags[i];
+}
+const hideKey = (key) => key[0] + ":" + tagRef(key).slug;
+
+// ---------- tag tree ----------
+// Parents are derived from each tag's child list, once per index.
+// The file may list a tag's children, its parents, or both; merge both directions.
+function linkTree(ix) {
+  if (ix._parents) return;
+  const par = ix.tags.map(() => new Set()), kids = ix.tags.map(() => new Set());
+  ix.tags.forEach((t, i) => {
+    for (const c of t.children || []) { kids[i].add(c); par[c].add(i); }
+    for (const p of t.parents || []) { par[i].add(p); kids[p].add(i); }
+  });
+  ix._parents = par.map((x) => [...x]);
+  ix.tags.forEach((t, i) => { t.children = [...kids[i]]; });
+  ix.links = par.reduce((a, x) => a + x.size, 0);
+  ix._anc = new Map();
+}
+function parentsOf(ix) { linkTree(ix); return ix._parents; }
+function ancestors(key) {
+  const ix = key[0] === "a" ? S.art : S.idx;
+  if (!ix) return [];
+  const parents = parentsOf(ix), i = +key.slice(2);
+  if (ix._anc.has(i)) return ix._anc.get(i);
+  const out = new Set(), stack = [...parents[i]];
+  while (stack.length) { const p = stack.pop(); if (out.has(p) || p === i) continue; out.add(p); stack.push(...parents[p]); }
+  const keys = [...out].map((p) => key[0] + ":" + p);
+  ix._anc.set(i, keys);
+  return keys;
+}
+// Drop any tag that is an ancestor of another tag on the same card.
+function mostSpecific(keys) {
+  const covered = new Set();
+  for (const k of keys) for (const a of ancestors(k)) covered.add(a);
+  return keys.filter((k) => !covered.has(k));
+}
+function withAncestors(keys) {
+  const out = new Set(keys);
+  for (const k of keys) for (const a of ancestors(k)) out.add(a);
+  return [...out];
+}
+// Specific: every tag exactly as applied (nothing trimmed). Broad: also roll up to parents.
+const themeKeysOf = (card) => (S.specific ? keysOf(card) : withAncestors(keysOf(card)));
+// Depth in the tag tree: 1 for a top-level tag, +1 for each level below it (longest path).
+function depthOf(key) {
+  const ix = key[0] === "a" ? S.art : S.idx;
+  const parents = parentsOf(ix);
+  ix._depth = ix._depth || new Map();
+  const walk = (i, seen) => {
+    if (ix._depth.has(i)) return ix._depth.get(i);
+    if (seen.has(i)) return 1;
+    seen.add(i);
+    const d = 1 + Math.max(0, ...parents[i].map((p) => walk(p, seen)));
+    ix._depth.set(i, d);
+    return d;
+  };
+  return walk(+key.slice(2), new Set());
+}
+// Diagnostic: how many deck cards carry both a tag and one of its parents?
+function doubleTagged() {
+  let n = 0;
+  for (const e of deckCards()) {
+    const keys = keysOf(e.card);
+    if (mostSpecific(keys).length < keys.length) n++;
+  }
+  return n;
+}
+// "triggered ability › death trigger": the tag's first line of ancestry, for tooltips.
+function tagPath(key) {
+  const ix = key[0] === "a" ? S.art : S.idx;
+  const parents = parentsOf(ix), names = [tagRef(key).label], seen = new Set();
+  let i = +key.slice(2);
+  while (parents[i] && parents[i].length && !seen.has(i) && names.length < 6) { seen.add(i); i = parents[i][0]; names.unshift(ix.tags[i].label); }
+  return names.join(" › ");
+}
+const isLand = (card) => /\bLand\b/.test(card.type_line || (card.card_faces && card.card_faces[0].type_line) || "");
+
+// Which roles does a card fill?
+function rolesOf(card) {
+  const out = new Set();
+  if (!card) return out;
+  if (isLand(card)) { out.add("lands"); return out; }
+  if (S.fallback) return S.apiRoles.get(card.name) || out;
+  const ts = tagsOf(card);
+  for (const r of S.roles) {
+    if (r.land || !r.tagSet) continue;
+    if (ts.some((t) => r.tagSet.has(t))) out.add(r.key);
+  }
+  for (const r of S.roles) if (r.exclude && out.has(r.exclude)) out.delete(r.key);
+  return out;
+}
+
+// ---------- roles + profile defaults ----------
+function loadRoles() {
+  const saved = store.get("defaults");
+  const roles = STANDARD_ROLES.map((r) => ({ ...r, slugs: r.slugs ? r.slugs.slice() : undefined }));
+  if (saved) {
+    for (const r of roles) if (saved.targets && saved.targets[r.key] != null) r.target = saved.targets[r.key];
+    for (const c of saved.custom || []) roles.push({ key: "c_" + c.slug, name: c.name, target: c.target, slugs: [c.slug], custom: true });
+  }
+  S.roles = roles;
+}
+function saveDefaults() {
+  store.set("defaults", {
+    targets: Object.fromEntries(S.roles.filter((r) => !r.custom).map((r) => [r.key, r.target])),
+    custom: S.roles.filter((r) => r.custom).map((r) => ({ slug: r.slugs[0], name: r.name, target: r.target })),
+  });
+}
+
+// ---------- deck parsing + loading ----------
+function parseDeck(text) {
+  const out = { commanders: [], cards: [] };
+  let section = "main";
+  for (let line of text.split(/\r?\n/)) {
+    line = line.trim();
+    if (!line) continue;
+    const head = line.replace(/^\/\/\s*/, "").replace(/:$/, "").trim().toLowerCase();
+    if (/^(commander|commanders)$/.test(head)) { section = "cmd"; continue; }
+    if (/^(deck|main|mainboard|main deck|companion)$/.test(head)) { section = "main"; continue; }
+    if (/^(sideboard|maybeboard|maybe|considering|tokens|attractions)$/.test(head)) { section = "skip"; continue; }
+    if (line.startsWith("//") || line.startsWith("#")) continue;
+    if (section === "skip") continue;
+    let isCmdr = section === "cmd" || /\*CMDR\*/i.test(line) || /\[commander/i.test(line);
+    line = line.replace(/\[[^\]]*\]/g, "").replace(/\^[^^]*\^/g, "").replace(/\*[A-Z]+\*/gi, "").trim();
+    const m = line.match(/^(\d+)\s*x?\s+(.+)$/i);
+    let qty = 1, name = line;
+    if (m) { qty = parseInt(m[1], 10); name = m[2]; }
+    name = name.replace(/\s+\([A-Za-z0-9]{2,8}\)(\s+\S+)?\s*$/, "").trim();
+    if (!name) continue;
+    (isCmdr ? out.commanders : out.cards).push({ name, qty });
+  }
+  return out;
+}
+
+async function fetchCards(names) {
+  const found = new Map(), notFound = [];
+  const uniq = [...new Set(names)];
+  for (let i = 0; i < uniq.length; i += 75) {
+    const chunk = uniq.slice(i, i + 75);
+    const res = await sf("/cards/collection", { method: "POST", body: JSON.stringify({ identifiers: chunk.map((name) => ({ name })) }) });
+    for (const c of res.data || []) {
+      found.set(c.name.toLowerCase(), c);
+      if (c.card_faces) found.set(c.card_faces[0].name.toLowerCase(), c);
+    }
+    for (const nf of res.not_found || []) notFound.push(nf.name);
+  }
+  return { found, notFound };
+}
+
+async function loadDeck() {
+  const text = $("deckText").value;
+  store.set("decktext", text);
+  const parsed = parseDeck(text);
+  const all = [...parsed.commanders, ...parsed.cards];
+  if (!all.length) { notice("That list has no cards I could read. Use one card per line, like <span class='num'>1 Sol Ring</span>."); return; }
+  notice("");
+  $("loadDeck").disabled = true;
+  try {
+    setDeckBusy("Fetching card data from Scryfall…");
+    const { found, notFound } = await fetchCards(all.map((c) => c.name));
+    const pick = (e) => ({ name: e.name, qty: e.qty, card: found.get(e.name.toLowerCase()) || null });
+    const cmdrs = parsed.commanders.map(pick).filter((e) => e.card);
+    S.deck = parsed.cards.map(pick).filter((e) => e.card);
+    if (!cmdrs.length) {
+      const leg = S.deck.find((e) => /Legendary.*Creature/.test(e.card.type_line || ""));
+      if (leg) { cmdrs.push(leg); S.deck = S.deck.filter((e) => e !== leg); }
+    }
+    S.commanders = cmdrs.map((e) => e.card);
+    fillCommanderSelect();
+    computeCI();
+    if (notFound.length) notice(`Scryfall couldn't find ${notFound.length} card${notFound.length > 1 ? "s" : ""}: ${notFound.map(esc).join(", ")}. Check the spelling and load again.`);
+    if (S.fallback) await computeRolesViaApi();
+    S.source = null; S.pool = []; S.highlightKey = null;
+    renderAll();
+    $("importer").hidden = true;
+  } catch (e) {
+    notice("Couldn't load the deck: " + esc(e.message) + ". If you opened this file inside Claude, download it and open it in Chrome or Edge instead.");
+    setDeckBusy("");
+  } finally { $("loadDeck").disabled = false; }
+}
+function setDeckBusy(msg) { $("deck").innerHTML = msg ? `<div class="loading">${esc(msg)}</div>` : `<div class="empty">No cards yet.</div>`; }
+
+function fillCommanderSelect() {
+  const sel = $("cmdrSelect");
+  const legends = [...S.commanders, ...S.deck.map((e) => e.card).filter((c) => /Legendary/.test(c.type_line || ""))];
+  sel.innerHTML = legends.map((c) => `<option ${S.commanders.includes(c) ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+}
+function computeCI() {
+  const set = new Set();
+  for (const c of S.commanders) for (const x of c.color_identity || []) set.add(x);
+  S.ci = "WUBRG".split("").filter((x) => set.has(x)).join("");
+  $("cmdrLabel").innerHTML = S.commanders.length
+    ? `Commander: <b>${S.commanders.map((c) => esc(c.name)).join(" + ")}</b> · <span class="num">${S.ci || "Colorless"}</span>`
+    : "No commander set";
+}
+function deckCards() { return [...S.commanders.map((c) => ({ name: c.name, qty: 1, card: c, cmdr: true })), ...S.deck]; }
+
+// Fallback: no tag file, so ask Scryfall which deck cards match each role tag.
+async function computeRolesViaApi() {
+  S.apiRoles = new Map();
+  const names = [...new Set(deckCards().filter((e) => !isLand(e.card)).map((e) => e.card.name))];
+  const chunks = []; for (let i = 0; i < names.length; i += 25) chunks.push(names.slice(i, i + 25));
+  const roles = S.roles.filter((r) => !r.land);
+  let done = 0; const total = roles.reduce((a, r) => a + r.slugs.length, 0) * chunks.length;
+  for (const r of roles) {
+    r.found = []; r.missing = [];
+    for (const slug of r.slugs) {
+      let hit = false;
+      for (const ch of chunks) {
+        setDeckBusy(`Checking roles without the tag file… ${++done} of ${total}`);
+        const q = `otag:${slug} (${ch.map((n) => `!"${n.replace(/"/g, "")}"`).join(" or ")})`;
+        let res; try { res = await sf("/cards/search?q=" + encodeURIComponent(q)); } catch { res = { data: [] }; }
+        for (const c of res.data || []) {
+          hit = true;
+          let s = S.apiRoles.get(c.name); if (!s) S.apiRoles.set(c.name, (s = new Set())); s.add(r.key);
+        }
+      }
+      (hit ? r.found : r.missing).push(slug);
+    }
+  }
+  for (const s of S.apiRoles.values()) for (const r of S.roles) if (r.exclude && s.has(r.exclude)) s.delete(r.key);
+}
+
+// ---------- analysis ----------
+// Tags that describe wording, frame or card construction rather than what a card does.
+// Oracle tags that describe how a card is built, not what it does: never a theme.
+const MECHANIC_NOISE = new Set(["static ability", "keyword ability",
+  "mana ability", "virtual vanilla", "vanilla", "french vanilla", "reminder text"]);
+// Oracle tags about names, wording and frame: not gameplay, so they belong with flavor.
+const FLAVOR_ORACLE = new Set(["single english word name", "alliteration", "flavor name", "color break", "illustrated"]);
+const GENERIC_SHARE = 0.04; // a tag on more than 4% of cards (or illustrations) is too broad to be a theme
+const normLabel = (l) => String(l).toLowerCase().replace(/[-_]+/g, " ").trim();
+function isFlavorOracle(tag) {
+  const l = normLabel(tag.label), s = normLabel(tag.slug);
+  return FLAVOR_ORACLE.has(l) || FLAVOR_ORACLE.has(s) || /\bflavor\b|english word|alliteration|\bpun\b/.test(l);
+}
+// Should this tag count as a theme in the given mode?
+function themeOk(key, mode) {
+  const tag = tagRef(key);
+  if (!tag || S.hiddenTags.has(hideKey(key))) return false;
+  if (key[0] === "a") return mode === "flavor" && tag.size <= S.art.n * GENERIC_SHARE;
+  if (tag.slug.startsWith("cycle-") || tag.slug.startsWith("reprint")) return false;
+  if (MECHANIC_NOISE.has(normLabel(tag.label)) || MECHANIC_NOISE.has(normLabel(tag.slug))) return false;
+  const flavor = isFlavorOracle(tag);
+  if (mode === "flavor") return flavor;
+  // No size cutoff for gameplay tags: the Specific/Broad switch and rarity weighting handle broad tags.
+  return !flavor;
+}
+function roleCounts() {
+  const counts = Object.fromEntries(S.roles.map((r) => [r.key, 0]));
+  for (const e of deckCards()) for (const k of rolesOf(e.card)) if (k in counts) counts[k] += e.qty;
+  return counts;
+}
+function themeTags(mode = S.tagMode) {
+  if (!S.idx) return [];
+  const roleKeys = new Set();
+  for (const r of S.roles) if (r.tagSet) for (const t of r.tagSet) roleKeys.add("o:" + t);
+  const count = new Map(), cmdrKeys = new Set();
+  for (const e of deckCards()) {
+    if (isLand(e.card)) continue;
+    for (const key of themeKeysOf(e.card)) {
+      if (roleKeys.has(key) || !themeOk(key, mode)) continue;
+      count.set(key, (count.get(key) || 0) + (e.cmdr ? 2 : 1));
+      if (e.cmdr) cmdrKeys.add(key);
+    }
+  }
+  const out = [];
+  for (const [key, c] of count) {
+    if (c < 2 && !cmdrKeys.has(key)) continue;
+    const n = key[0] === "a" ? S.art.n : S.idx.n;
+    const size = Math.max(1, tagRef(key).size);
+    out.push({ key, count: c, pinned: cmdrKeys.has(key), score: c * Math.log(1 + n / size) });
+  }
+  out.sort((a, b) => (b.pinned - a.pinned) || (S.sortBy === "count" ? b.count - a.count || b.score - a.score : b.score - a.score));
+  return out.slice(0, 24);
+}
+
+// ---------- suggestions ----------
+async function suggest(source) {
+  S.source = source;
+  $("suggFor").textContent = source.label;
+  $("suggList").innerHTML = `<div class="loading">Searching Scryfall…</div>`;
+  const id = S.ci ? `id<=${S.ci}` : "id:c";
+  let clause;
+  if (source.kind === "role" && source.role.land) clause = "t:land -t:basic";
+  else if (source.kind === "role") {
+    const slugs = source.role.found && source.role.found.length ? source.role.found : source.role.slugs;
+    clause = "(" + slugs.map((s) => "otag:" + s).join(" or ") + ")";
+  } else clause = (source.key[0] === "a" ? "art:" : "otag:") + tagRef(source.key).slug;
+  const q = `${clause} ${id} f:commander game:paper`;
+  try {
+    const inDeck = new Set(deckCards().map((e) => e.card.name));
+    let res = await sf(`/cards/search?order=edhrec&q=${encodeURIComponent(q)}`);
+    let pool = res.data || [];
+    if (res.has_more && res.next_page) {
+      res = await sf(res.next_page); pool = pool.concat(res.data || []);
+      // Also pull the least-played end so "Hidden gems" has real options to surface.
+      if (res.has_more) {
+        const tail = await sf(`/cards/search?order=edhrec&dir=desc&q=${encodeURIComponent(q)}`);
+        const seen = new Set(pool.map((c) => c.id));
+        pool = pool.concat((tail.data || []).filter((c) => !seen.has(c.id)));
+      }
+    }
+    if (S.source !== source) return;
+    S.pool = pool.filter((c) => !inDeck.has(c.name));
+    renderSuggestions();
+  } catch (e) {
+    $("suggList").innerHTML = `<div class="empty">Scryfall search failed: ${esc(e.message)}</div>`;
+  }
+}
+
+function scorePool() {
+  const themes = themeTags().slice(0, 15);
+  const tw = new Map(themes.map((x) => [x.key, x.score]));
+  const totalW = themes.reduce((a, x) => a + x.score, 0) || 1;
+  const counts = roleCounts();
+  const under = new Set(S.roles.filter((r) => !r.land && counts[r.key] < r.target).map((r) => r.key));
+  const rows = S.pool.filter((c) => !S.dismissed.has(c.name)).map((c) => {
+    const shared = themeKeysOf(c).filter((k) => tw.has(k));
+    const fitRaw = shared.reduce((a, k) => a + tw.get(k), 0) / totalW;
+    const fills = [...rolesOf(c)].filter((k) => under.has(k));
+    const price = parseFloat(c.prices && (c.prices.usd || c.prices.usd_foil)) || null;
+    const rank = c.edhrec_rank || null;
+    const pop = rank ? 1 - Math.min(rank, 20000) / 20000 : 0;
+    return { c, shared, fitRaw, fills, price, rank, pop };
+  });
+  const maxFit = Math.max(0.0001, ...rows.map((r) => r.fitRaw));
+  for (const r of rows) {
+    r.fit = Math.min(1, r.fitRaw / maxFit + 0.12 * r.fills.length);
+    const cheap = r.price == null ? 0.5 : 1 - Math.min(r.price, 20) / 20;
+    let s;
+    if (S.style === "best") s = 0.6 * r.fit + 0.4 * r.pop;
+    else if (S.style === "gems") s = 0.65 * r.fit + 0.35 * (1 - r.pop);
+    else if (S.style === "budget") s = 0.6 * r.fit + 0.25 * r.pop + 0.15 * (r.price == null ? 0.5 : 1 - r.price / S.priceCap);
+    else {
+      const sum = Math.abs(S.w.fit) + Math.abs(S.w.pop) + Math.abs(S.w.price) || 1;
+      const popTerm = S.w.pop >= 0 ? r.pop : 1 - r.pop;
+      s = (S.w.fit * r.fit + Math.abs(S.w.pop) * popTerm + S.w.price * cheap) / sum;
+    }
+    r.score = s;
+  }
+  let out = rows;
+  if (S.style === "budget") out = out.filter((r) => r.price != null && r.price <= S.priceCap);
+  if (S.style === "gems") out = out.filter((r) => r.fitRaw > 0 || r.fills.length || S.fallback);
+  return out.sort((a, b) => b.score - a.score).slice(0, 24);
+}
+
+function img(c, size = "small") {
+  const u = c.image_uris || (c.card_faces && c.card_faces[0].image_uris) || {};
+  return u[size] || u.normal || "";
+}
+
+function renderSuggestions() {
+  if (!S.source) return;
+  const rows = scorePool();
+  if (!rows.length) {
+    $("suggList").innerHTML = `<div class="empty">${S.pool.length ? "Nothing matches this style's filters. Try another style or raise the price cap." : "No new cards found for this in your colors."}</div>`;
+    return;
+  }
+  const roleName = Object.fromEntries(S.roles.map((r) => [r.key, r.name]));
+  $("suggList").innerHTML = `<div class="cards">${rows.map((r, i) => `
+    <article class="card" data-i="${i}">
+      <img src="${esc(img(r.c))}" alt="" loading="lazy" data-preview="${esc(img(r.c, "normal"))}">
+      <div style="min-width:0">
+        <div class="nm">${esc(r.c.name)}</div>
+        <div class="meta"><span class="num">${money(r.price)}</span> · ${r.rank ? "EDHREC #" + r.rank.toLocaleString() : "unranked"}</div>
+        <div class="why">
+          ${r.fills.map((k) => `<span class="chip role">fills ${esc(roleName[k] || k)}</span>`).join("")}
+          ${r.shared.slice(0, 4).map((k) => `<span class="chip ${k[0] === "a" ? "flavor" : ""}">${esc(tagRef(k).label)}</span>`).join("")}
+        </div>
+        <div class="score">fit ${(r.fit * 100).toFixed(0)} · pop ${(r.pop * 100).toFixed(0)} · score ${(r.score * 100).toFixed(0)}</div>
+        <div class="btns">
+          <button class="btn small primary" data-add="${esc(r.c.name)}" type="button">Add</button>
+          <button class="btn small" data-dismiss="${esc(r.c.name)}" type="button">Not for this deck</button>
+        </div>
+      </div>
+    </article>`).join("")}</div>`;
+  S._rows = rows;
+}
+
+// ---------- rendering ----------
+function renderProfile() {
+  const counts = roleCounts();
+  $("roles").innerHTML = S.roles.map((r) => {
+    const tip = r.land ? "Cards with Land in their type line" : "Tags: " + (r.found && r.found.length ? r.found.join(", ") : r.slugs.join(", "));
+    return `<div class="role" data-key="${r.key}">
+      <div class="role-head">
+        <button class="role-name" type="button" title="${esc(tip)}" data-role="${r.key}">${esc(r.name)}</button>
+        <span class="role-count"><span class="cv"></span><span class="state"></span></span>
+      </div>
+      <div class="bar"><span></span></div>
+      <input type="range" min="0" max="${r.land ? 45 : 25}" value="${r.target}" aria-label="${esc(r.name)} target" data-target="${r.key}">
+      ${r.missing && r.missing.length && (!r.found || !r.found.length) ? `<div class="missing">None of these tags exist on Scryfall: ${esc(r.missing.join(", "))}</div>` : ""}
+      ${r.custom ? `<button class="rm" type="button" data-remove="${r.key}">Remove role</button>` : ""}
+    </div>`;
+  }).join("");
+  for (const r of S.roles) updateRoleRow(r, counts[r.key]);
+}
+function updateRoleRow(r, count) {
+  const el = document.querySelector(`.role[data-key="${r.key}"]`);
+  if (!el) return;
+  const state = count < r.target ? "under" : count === r.target ? "met" : "over";
+  el.classList.remove("under", "met", "over"); el.classList.add(state);
+  el.querySelector(".cv").textContent = `${count} / ${r.target}`;
+  el.querySelector(".state").textContent = state === "under" ? `need ${r.target - count}` : state === "met" ? "on target" : `+${count - r.target}`;
+  el.querySelector(".bar > span").style.width = Math.min(100, r.target ? (count / r.target) * 100 : 100) + "%";
+}
+
+function renderTags() {
+  if (!S.idx) {
+    $("tags").innerHTML = `<div class="empty">Theme tags need Scryfall's tag file. Follow the one-time step at the top of the page to load it. Roles still work without it.</div>`;
+    return;
+  }
+  $("tagsSub").textContent = S.tagMode === "flavor"
+    ? "What the deck looks like: art tags (what's in the pictures) plus name and wording tags. Click one to find cards with the same flavor."
+    : "What the deck does, weighted so rare tags count more than common ones. Click one to highlight those cards and get suggestions.";
+  const ix = S.tagMode === "flavor" && S.art ? S.art : S.idx;
+  linkTree(ix);
+  $("tagsSub").textContent += ix.links
+    ? ` Tag tree: ${ix.links.toLocaleString()} parent links · ${doubleTagged()} card${doubleTagged() === 1 ? "" : "s"} here carry both a tag and its parent.`
+    : " Scryfall's file has no parent/child links, so Specific and Broad show the same tags.";
+  const themes = themeTags().slice();
+  if (S.specific) {
+    // Deepest tags first; keep the Sort order within each depth (sort is stable).
+    for (const x of themes) x.depth = depthOf(x.key);
+    themes.sort((a, b) => (b.pinned - a.pinned) || (b.depth - a.depth));
+  }
+  if (!themes.length) {
+    $("tags").innerHTML = `<div class="empty">${deckCards().length ? "No shared " + (S.tagMode === "flavor" ? "flavor" : "gameplay") + " themes yet. Themes appear once two or more cards share a tag." : "Load a deck to see its themes."}</div>`;
+    return;
+  }
+  const hidden = S.hiddenTags.size ? `<button class="linkish showhidden" type="button" data-unhide="1">Show ${S.hiddenTags.size} hidden tag${S.hiddenTags.size > 1 ? "s" : ""}</button>` : "";
+  $("tags").innerHTML = themes.map((x) => {
+    const tag = tagRef(x.key), art = x.key[0] === "a";
+    return `<div class="tagrow ${x.pinned ? "pinned" : ""} ${S.highlightKey === x.key ? "on" : ""}">
+      <button class="tagpick" type="button" data-tag="${x.key}" aria-label="${esc(tag.label)}: ${x.count} in deck">
+        <span class="lbl">${esc(tag.label)}${art ? ' <span class="chip flavor">art</span>' : ""}</span><span class="cnt">${x.count} in deck</span>
+      </button>
+      <button class="hide" type="button" data-hide="${esc(hideKey(x.key))}" aria-label="Hide ${esc(tag.label)}" title="Hide this tag">×</button>
+    </div>`;
+  }).join("") + hidden;
+}
+
+function renderDeck() {
+  const entries = deckCards();
+  if (!entries.length) { setDeckBusy(""); return; }
+  const groups = new Map([["Commander", []], ...S.roles.map((r) => [r.name, []]), ["Other", []]]);
+  const roleName = Object.fromEntries(S.roles.map((r) => [r.key, r.name]));
+  for (const e of entries) {
+    if (e.cmdr) { groups.get("Commander").push(e); continue; }
+    const rs = [...rolesOf(e.card)];
+    const g = rs.length ? roleName[rs[0]] : "Other";
+    groups.get(g).push(e);
+  }
+  let total = 0, cards = 0;
+  for (const e of entries) { cards += e.qty; total += e.qty * (parseFloat(e.card.prices && e.card.prices.usd) || 0); }
+  $("deckCount").textContent = `(${cards})`;
+  $("deckTotal").textContent = `${money(total)} today`;
+  const hl = S.highlightKey;
+  let html = "";
+  for (const [name, list] of groups) {
+    if (!list.length) continue;
+    list.sort((a, b) => a.card.name.localeCompare(b.card.name));
+    html += `<div class="group"><h3><span>${esc(name)}</span><span class="num">${list.reduce((a, e) => a + e.qty, 0)}</span></h3>`;
+    for (const e of list) {
+      const rs = [...rolesOf(e.card)];
+      const also = rs.length > 1 ? `<span class="flag">+${rs.length - 1} role${rs.length > 2 ? "s" : ""}</span>` : "";
+      const on = hl != null && keysOf(e.card).includes(hl);
+      html += `<div class="deckrow ${on ? "hl" : ""}" data-preview="${esc(img(e.card, "normal"))}">
+        <span class="q">${e.qty}</span><span class="n">${esc(e.card.name)}${also}</span>
+        <span class="p">${money(parseFloat(e.card.prices && e.card.prices.usd))}</span>
+        ${e.cmdr ? "<span></span>" : `<button class="x" type="button" aria-label="Remove ${esc(e.card.name)}" data-remove-card="${esc(e.card.name)}">×</button>`}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  $("deck").innerHTML = html;
+}
+
+function renderAll() { renderProfile(); renderTags(); renderDeck(); if (S.source) renderSuggestions(); }
+
+// ---------- events ----------
+$("toggleImport").onclick = () => { $("importer").hidden = !$("importer").hidden; };
+$("loadDeck").onclick = loadDeck;
+$("cmdrSelect").onchange = (ev) => {
+  const name = ev.target.value;
+  const all = deckCards();
+  const chosen = all.find((e) => e.card.name === name);
+  if (!chosen) return;
+  for (const c of S.commanders) S.deck.push({ name: c.name, qty: 1, card: c });
+  S.deck = S.deck.filter((e) => e.card.name !== name);
+  S.commanders = [chosen.card];
+  computeCI(); renderAll();
+};
+
+$("roles").addEventListener("input", (ev) => {
+  const key = ev.target.dataset.target; if (!key) return;
+  const r = S.roles.find((x) => x.key === key); r.target = +ev.target.value;
+  updateRoleRow(r, roleCounts()[key]);
+});
+$("roles").addEventListener("click", (ev) => {
+  const k = ev.target.dataset.role, rm = ev.target.dataset.remove;
+  if (k) { const r = S.roles.find((x) => x.key === k); suggest({ kind: "role", role: r, label: "Fill: " + r.name }); }
+  if (rm) { S.roles = S.roles.filter((x) => x.key !== rm); renderAll(); }
+});
+$("addRole").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const slug = $("newRoleTag").value.trim().toLowerCase().replace(/^otag:/, "");
+  if (!slug) return;
+  if (S.idx && !S.idx.slugToIdx.has(slug)) { notice(`There's no Scryfall tag called <span class="num">${esc(slug)}</span>. Pick one from the suggestions as you type.`); return; }
+  if (S.roles.some((r) => r.key === "c_" + slug)) return;
+  const label = S.idx ? S.idx.tags[S.idx.slugToIdx.get(slug)].label : slug;
+  S.roles.push({ key: "c_" + slug, name: label, target: Math.max(0, +$("newRoleTarget").value || 0), slugs: [slug], custom: true });
+  resolveRoles();
+  $("newRoleTag").value = ""; notice("");
+  if (S.fallback && deckCards().length) computeRolesViaApi().then(renderAll); else renderAll();
+});
+$("saveDefaults").onclick = () => { saveDefaults(); $("saveDefaults").textContent = "Saved"; setTimeout(() => ($("saveDefaults").textContent = "Save as my default targets"), 1500); };
+$("resetDefaults").onclick = () => {
+  store.set("defaults", null); loadRoles(); resolveRoles();
+  if (S.fallback && deckCards().length) computeRolesViaApi().then(renderAll); else renderAll();
+};
+
+$("tags").addEventListener("click", (ev) => {
+  const hide = ev.target.closest("[data-hide]");
+  if (hide) {
+    S.hiddenTags.add(hide.dataset.hide); store.set("hiddenTags", [...S.hiddenTags]);
+    renderTags(); renderSuggestions(); return;
+  }
+  if (ev.target.closest("[data-unhide]")) {
+    S.hiddenTags.clear(); store.set("hiddenTags", []); renderTags(); renderSuggestions(); return;
+  }
+  const b = ev.target.closest("[data-tag]"); if (!b) return;
+  const key = b.dataset.tag;
+  S.highlightKey = S.highlightKey === key ? null : key;
+  renderTags(); renderDeck();
+  if (S.highlightKey != null) suggest({ kind: "tag", key, label: "More: " + tagRef(key).label + (key[0] === "a" ? " (art)" : "") });
+});
+
+$("modeSeg").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-mode]"); if (!b || b.dataset.mode === S.tagMode) return;
+  S.tagMode = b.dataset.mode;
+  for (const x of $("modeSeg").children) x.setAttribute("aria-pressed", x === b);
+  store.set("tagMode", S.tagMode);
+  // A highlighted tag from the other mode no longer applies.
+  if (S.highlightKey && !themeTags().some((x) => x.key === S.highlightKey)) S.highlightKey = null;
+  if (S.tagMode === "flavor" && !S.art) { if (!(await loadArtIndex())) return; }
+  renderTags(); renderDeck(); renderSuggestions();
+});
+$("depthSeg").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-specific]"); if (!b) return;
+  S.specific = b.dataset.specific === "1";
+  for (const x of $("depthSeg").children) x.setAttribute("aria-pressed", x === b);
+  store.set("specific", S.specific);
+  renderTags(); renderSuggestions();
+});
+$("sortSeg").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-sort]"); if (!b) return;
+  S.sortBy = b.dataset.sort;
+  for (const x of $("sortSeg").children) x.setAttribute("aria-pressed", x === b);
+  store.set("sortBy", S.sortBy);
+  renderTags();
+});
+$("tags").addEventListener("change", (ev) => {
+  if (ev.target.id === "artFileInput" && ev.target.files[0]) loadArtFileFromDisk(ev.target.files[0]);
+});
+
+$("styleSeg").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-style]"); if (!b) return;
+  S.style = b.dataset.style;
+  for (const x of $("styleSeg").children) x.setAttribute("aria-pressed", x === b);
+  $("cfgBudget").hidden = S.style !== "budget";
+  $("cfgCustom").hidden = S.style !== "custom";
+  renderSuggestions();
+});
+$("priceCap").oninput = (ev) => { S.priceCap = +ev.target.value; $("priceCapVal").textContent = money(S.priceCap); renderSuggestions(); };
+for (const k of ["Fit", "Pop", "Price"]) $("w" + k).oninput = (ev) => { S.w[k.toLowerCase()] = +ev.target.value; renderSuggestions(); };
+
+$("suggList").addEventListener("click", (ev) => {
+  const add = ev.target.dataset.add, dis = ev.target.dataset.dismiss;
+  if (add) {
+    const r = S._rows.find((x) => x.c.name === add);
+    S.deck.push({ name: add, qty: 1, card: r.c });
+    S.pool = S.pool.filter((c) => c.name !== add);
+    // Without the tag file we only know roles from searches, so credit the role we searched for.
+    if (S.fallback && S.source && S.source.kind === "role" && !S.source.role.land) S.apiRoles.set(add, new Set([S.source.role.key]));
+    renderAll();
+  }
+  if (dis) { S.dismissed.add(dis); renderSuggestions(); }
+});
+$("deck").addEventListener("click", (ev) => {
+  const n = ev.target.dataset.removeCard; if (!n) return;
+  const i = S.deck.findIndex((e) => e.card.name === n);
+  if (i >= 0) { if (S.deck[i].qty > 1) S.deck[i].qty--; else S.deck.splice(i, 1); }
+  renderAll();
+});
+
+$("tagHelp").addEventListener("change", (ev) => {
+  if (ev.target.id === "tagFileInput" && ev.target.files[0]) loadTagFileFromDisk(ev.target.files[0]);
+});
+
+// ---------- tag tree card ----------
+function chainTo(key) {
+  const ix = key[0] === "a" ? S.art : S.idx, parents = parentsOf(ix);
+  const chain = [+key.slice(2)], seen = new Set(chain);
+  let i = chain[0];
+  while (parents[i] && parents[i].length && chain.length < 8) {
+    i = parents[i][0];
+    if (seen.has(i)) break;
+    seen.add(i); chain.unshift(i);
+  }
+  return chain.map((j) => key[0] + ":" + j);
+}
+function deckKeyCounts() {
+  const m = new Map();
+  for (const e of deckCards()) for (const k of keysOf(e.card)) m.set(k, (m.get(k) || 0) + 1);
+  return m;
+}
+function showTree(btn) {
+  const key = btn.dataset.tag, tag = tagRef(key); if (!tag) return;
+  const counts = deckKeyCounts(), chain = chainTo(key), depth = chain.length;
+  const ind = (d) => `padding-left:${d * 12}px`;
+  const n = (k) => (counts.get(k) ? `<span class="n">${counts.get(k)}</span>` : "");
+  let html = `<div class="hd">${key[0] === "a" ? "Art tag" : "Card tag"} tree</div>`;
+  chain.forEach((k, d) => {
+    html += `<div class="tr ${k === key ? "me" : ""}" style="${ind(d)}">${d ? "› " : ""}${esc(tagRef(k).label)}${n(k)}</div>`;
+  });
+  const kids = (tag.children || []).map((c) => key[0] + ":" + c)
+    .sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0));
+  for (const k of kids.slice(0, 8)) html += `<div class="tr" style="${ind(depth)}">› ${esc(tagRef(k).label)}${n(k)}</div>`;
+  if (kids.length > 8) html += `<div class="tr more" style="${ind(depth)}">+${kids.length - 8} more subtags</div>`;
+  if (chain.length === 1 && !kids.length) html += `<div class="tr more">No parent or subtags</div>`;
+  html += `<div class="tr" style="margin-top:4px">Numbers are cards in this deck · on ${tag.size.toLocaleString()} ${key[0] === "a" ? "illustrations" : "cards"} overall</div>`;
+  const tc = $("treeCard");
+  tc.innerHTML = html; tc.hidden = false;
+  const r = btn.getBoundingClientRect(), w = tc.offsetWidth, h = tc.offsetHeight;
+  let x = r.right + 10, y = r.top - 6;
+  if (x + w > innerWidth - 8) x = Math.max(8, r.left - w - 10);
+  y = Math.max(8, Math.min(y, innerHeight - h - 8));
+  tc.style.left = x + "px"; tc.style.top = y + "px";
+}
+const hideTree = () => { $("treeCard").hidden = true; };
+$("tags").addEventListener("mouseover", (ev) => { const b = ev.target.closest(".tagpick"); if (b) showTree(b); });
+$("tags").addEventListener("mouseout", (ev) => {
+  const to = ev.relatedTarget;
+  if (ev.target.closest(".tagpick") && !(to && to.closest && to.closest(".tagpick"))) hideTree();
+});
+$("tags").addEventListener("focusin", (ev) => { const b = ev.target.closest(".tagpick"); if (b) showTree(b); });
+$("tags").addEventListener("focusout", hideTree);
+$("tags").addEventListener("click", hideTree);
+addEventListener("scroll", hideTree, { passive: true });
+
+// Card image preview on hover
+const pv = $("preview");
+document.addEventListener("mouseover", (ev) => {
+  const el = ev.target.closest("[data-preview]");
+  if (!el || !el.dataset.preview || window.matchMedia("(hover: none)").matches) { pv.hidden = true; return; }
+  if (pv.src !== el.dataset.preview) pv.src = el.dataset.preview;
+  pv.hidden = false;
+});
+document.addEventListener("mousemove", (ev) => {
+  if (pv.hidden) return;
+  const w = 220, h = 307, pad = 16;
+  let x = ev.clientX + pad, y = ev.clientY - h / 2;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - pad;
+  y = Math.max(8, Math.min(y, innerHeight - h - 8));
+  pv.style.left = x + "px"; pv.style.top = y + "px";
+});
+
+// ---------- boot ----------
+(async function boot() {
+  $("deckText").value = store.get("decktext") || SAMPLE;
+  // Older versions stored bare slugs for card tags; keys now carry a kind prefix.
+  if (store.get("sortBy") === "count") $("sortSeg").querySelector('[data-sort="count"]').click();
+  if (store.get("specific") === false) $("depthSeg").querySelector('[data-specific="0"]').click();
+  S.hiddenTags = new Set((store.get("hiddenTags") || []).map((k) => (/^[oa]:/.test(k) ? k : "o:" + k)));
+  loadRoles();
+  try { await loadTagIndex(); }
+  catch (e) {
+    console.warn(e);
+    S.fallback = true;
+    setStatus("Tag data: unavailable, using live search", "bad");
+    await showTagFileHelp(e);
+  }
+  resolveRoles();
+  renderProfile();
+  await loadDeck();
+  if (store.get("tagMode") === "flavor") $("modeSeg").querySelector('[data-mode="flavor"]').click();
+})();
+</script>
+</body>
+</html>
