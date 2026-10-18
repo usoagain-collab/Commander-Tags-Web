@@ -32,7 +32,11 @@ The GitHub repository is connected to a Supabase project. Ask David for the proj
 
 - **Next.js + TypeScript**, hosted on **Vercel** (free tier).
 - **Supabase**: Postgres plus Auth (Discord and Google sign-in), with row-level security on every user table.
-- **Daily import job**: a scheduled server job, never in the browser.
+- **Daily import job**: a scheduled server job, never in the browser. Decided Oct 17, 2026:
+  - Runs as a **GitHub Actions scheduled workflow**. Vercel's free tier kills functions after about 60 s, which is too short for a full load.
+  - Loads with a **direct Postgres connection and `COPY`** (`SUPABASE_DB_URL`), not the Supabase REST API.
+  - **Tag tables rebuild inside one transaction** (clear, reload, commit) so removed tags disappear and readers never see a half-load. `cards` is upserted, because decks reference `oracle_id`.
+- Node.js 24 LTS. Supabase clients live in `src/lib/supabase/` (`client.ts` browser, `server.ts` per-user server, `admin.ts` service role, server-only).
 - Card images load straight from Scryfall's image CDN. Credit Scryfall on every page.
 
 ## Scryfall data facts (learned the hard way in the prototype)
