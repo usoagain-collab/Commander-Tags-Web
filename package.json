@@ -14,11 +14,11 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
-    "next": "15.5.4",
+    "next": "15.5.27",
     "pg": "^8.23.1",
     "pg-copy-streams": "^7.0.0",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "react": "19.1.9",
+    "react-dom": "19.1.9",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
@@ -30,7 +30,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.4",
+    "eslint-config-next": "15.5.27",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
