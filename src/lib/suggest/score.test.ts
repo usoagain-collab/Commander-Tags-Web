@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ThemeTag } from "@/lib/tags/themes";
-import { DEFAULT_SUGGEST, popularity, scorePool, type PoolCard, type SuggestSettings } from "./score";
+import { DEFAULT_SUGGEST, popularity, readSuggestSettings, scorePool, type PoolCard, type SuggestSettings } from "./score";
 
 const card = (name: string, tags: string[], rank: number | null, price: number | null = 1): PoolCard => ({
   oracle_id: name,
@@ -92,5 +92,17 @@ describe("scorePool", () => {
   it("leaves out dismissed cards", () => {
     const r = scorePool(pool, ctx({}, { dismissed: new Set(["On-theme staple"]) }));
     expect(r.map((x) => x.card.name)).not.toContain("On-theme staple");
+  });
+});
+
+describe("readSuggestSettings", () => {
+  it("fills defaults and clamps bad values", () => {
+    expect(readSuggestSettings(null)).toEqual(DEFAULT_SUGGEST);
+    expect(readSuggestSettings({ style: "gems", priceCap: 500, weights: { pop: -3, fit: "x" } })).toEqual({
+      style: "gems",
+      priceCap: 100,
+      weights: { fit: DEFAULT_SUGGEST.weights.fit, pop: -1, price: DEFAULT_SUGGEST.weights.price },
+    });
+    expect(readSuggestSettings({ style: "random" }).style).toBe("best");
   });
 });

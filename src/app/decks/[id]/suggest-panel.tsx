@@ -5,7 +5,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Board, CardSummary } from "@/lib/deck/model";
-import { scorePool, STYLE_LABELS, type PoolCard, type ScoreContext, type Scored } from "@/lib/suggest/score";
+import {
+  scorePool,
+  STYLE_LABELS,
+  type PoolCard,
+  type ScoreContext,
+  type Scored,
+  type SuggestSettings,
+  type SuggestStyle,
+} from "@/lib/suggest/score";
 import { Panel } from "./deck-text-panel";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
@@ -30,9 +38,13 @@ type Props = {
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary) => void;
   onClose: () => void;
+  /** Phase 4b: change the deck's suggestion style (saved per deck). */
+  onSettings: (s: SuggestSettings) => void;
+  saveError: string | null;
 };
 
-export function SuggestPanel({ source, identity, deckIds, isInDeck, score, roleNames, hasCommander, onAdd, onPreview, onClose }: Props) {
+export function SuggestPanel(props: Props) {
+  const { source, identity, deckIds, isInDeck, score, roleNames, hasCommander, onAdd, onPreview, onClose } = props;
   const supabase = useMemo(() => createClient(), []);
   const [pool, setPool] = useState<PoolCard[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,14 +81,19 @@ export function SuggestPanel({ source, identity, deckIds, isInDeck, score, roleN
 
   return (
     <Panel title={`Suggestions: ${source.label}`} onClose={onClose}>
-      <p className="text-sm opacity-70">
-        {STYLE_LABELS[score.settings.style]}: ranked by how well each card&apos;s tags fit this deck, then by how often it&apos;s played.
-        {!hasCommander && " No commander yet, so every color is allowed."}
-      </p>
+      <StyleControls settings={score.settings} onChange={props.onSettings} />
+      {props.saveError && <p className="mt-1 text-sm text-red-600">{props.saveError}</p>}
+      {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       {!error && pool === null && <p className="mt-3 text-sm opacity-60">Finding cards…</p>}
       {pool !== null && rows.length === 0 && (
-        <p className="mt-3 text-sm opacity-60">No new cards found for this in your colors.</p>
+        <p className="mt-3 text-sm opacity-60">
+          {pool.length && score.settings.style === "budget"
+            ? "Nothing under this price cap. Try raising it."
+            : pool.length && score.settings.style === "gems"
+              ? "No lesser-played cards share this deck's themes. Try Best fit."
+              : "No new cards found for this in your colors."}
+        </p>
       )}
       {rows.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
@@ -118,6 +135,9 @@ function SuggestionCard({
           {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "no price"} ·{" "}
           {card.edhrec_rank ? `EDHREC #${card.edhrec_rank.toLocaleString()}` : "unranked"}
         </p>
+        <p className="text-[11px] tabular-nums opacity-50" title="How well it fits this deck, and how often it's played (0-100)">
+          fit {Math.round(row.fit * 100)} · played {Math.round(row.pop * 100)}
+        </p>
         <div className="mt-1 flex flex-wrap gap-1">
           {row.fills.map((k) => (
             <span key={k} className="rounded-full bg-green-700/15 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-300">
@@ -141,5 +161,86 @@ function SuggestionCard({
         </button>
       </div>
     </li>
+  );
+}
+
+const STYLE_HELP: Record<SuggestStyle, string> = {
+  best: "Cards that fit your themes, proven ones first.",
+  gems: "Cards that fit your themes that few decks play.",
+  budget: "Cards that fit, under your price cap, cheaper ones higher.",
+  custom: "Set how much fit, popularity and price count.",
+};
+const PRICE_STEPS = [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 50, 100];
+
+function StyleControls({ settings, onChange }: { settings: SuggestSettings; onChange: (s: SuggestSettings) => void }) {
+  const capIndex = PRICE_STEPS.reduce((best, v, i) => (Math.abs(v - settings.priceCap) < Math.abs(PRICE_STEPS[best] - settings.priceCap) ? i : best), 0);
+  const w = settings.weights;
+  const setW = (patch: Partial<SuggestSettings["weights"]>) => onChange({ ...settings, weights: { ...w, ...patch } });
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Suggestion style">
+        {(Object.keys(STYLE_LABELS) as SuggestStyle[]).map((st) => (
+          <button
+            key={st}
+            type="button"
+            role="radio"
+            aria-checked={settings.style === st}
+            title={STYLE_HELP[st]}
+            onClick={() => onChange({ ...settings, style: st })}
+            className={`min-h-11 rounded-lg border px-3 ${
+              settings.style === st ? "border-foreground bg-foreground font-medium text-background" : "border-foreground/20 hover:bg-foreground/10"
+            }`}
+          >
+            {STYLE_LABELS[st]}
+          </button>
+        ))}
+      </div>
+      <p className="opacity-70">{STYLE_HELP[settings.style]}</p>
+      {settings.style === "budget" && (
+        <label className="flex max-w-md items-center gap-3">
+          <span className="shrink-0">Price cap</span>
+          <input
+            type="range"
+            min={0}
+            max={PRICE_STEPS.length - 1}
+            value={capIndex}
+            onChange={(e) => onChange({ ...settings, priceCap: PRICE_STEPS[Number(e.target.value)] })}
+            aria-label="Price cap"
+            className="h-8 min-w-0 flex-1 accent-foreground"
+          />
+          <span className="w-14 shrink-0 tabular-nums">${settings.priceCap < 1 ? settings.priceCap.toFixed(2) : settings.priceCap}</span>
+        </label>
+      )}
+      {settings.style === "custom" && (
+        <div className="grid max-w-xl gap-1">
+          <Slider label="Fit" left="ignore" right="matters most" min={0} max={1} value={w.fit} onChange={(v) => setW({ fit: v })} />
+          <Slider label="Popularity" left="less played" right="more played" min={-1} max={1} value={w.pop} onChange={(v) => setW({ pop: v })} />
+          <Slider label="Cheap" left="ignore" right="cheaper first" min={0} max={1} value={w.price} onChange={(v) => setW({ price: v })} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Slider(props: { label: string; left: string; right: string; min: number; max: number; value: number; onChange: (v: number) => void }) {
+  return (
+    <label className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3">
+      <span>{props.label}</span>
+      <input
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={0.05}
+        value={props.value}
+        onChange={(e) => props.onChange(Number(e.target.value))}
+        aria-label={`${props.label} weight`}
+        className="h-8 accent-foreground"
+      />
+      <span />
+      <span className="-mt-1 flex justify-between text-[11px] opacity-60">
+        <span>{props.left}</span>
+        <span>{props.right}</span>
+      </span>
+    </label>
   );
 }

@@ -66,7 +66,8 @@ import { DropOverlay } from "./drop-overlay";
 import { HistoryPanel } from "./history-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
-import { DEFAULT_SUGGEST, type PoolCard } from "@/lib/suggest/score";
+import { type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
+import { useSuggestSettings } from "@/lib/suggest/use-suggest-settings";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
@@ -153,6 +154,7 @@ type Props = {
   userId: string | null;
   roleTargets: Record<string, number>;
   customRoles: CustomRole[];
+  suggestSettings: SuggestSettings;
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
 
@@ -167,6 +169,7 @@ export function DeckEditor({
   userId,
   roleTargets,
   customRoles,
+  suggestSettings,
   profileDefaults,
 }: Props) {
   const [state, dispatch] = useReducer(reducer, {
@@ -431,6 +434,7 @@ export function DeckEditor({
     ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: roleTagSet, hidden }).slice(0, 15)
     : [];
   const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
+  const suggestStyle = useSuggestSettings(deck.id, suggestSettings, readOnly);
   const openSuggest = (source: SuggestSource) => {
     setSuggestFor(source);
     setPanel("suggest");
@@ -724,8 +728,10 @@ export function DeckEditor({
               keysOf: (c: PoolCard) => (trees ? cardKeys({ oracle: c.tags, art: [], commander: false, land: false }, themeSettings.specific, trees) : []),
               rolesOf: (c: PoolCard) => rolesOf(c, c.tags, roles),
               under: new Set(roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key)),
-              settings: DEFAULT_SUGGEST,
+              settings: suggestStyle.settings,
             }}
+            onSettings={suggestStyle.setSettings}
+            saveError={suggestStyle.saveError}
             onAdd={addWithNotice}
             onPreview={setPreview}
             onClose={() => setPanel(null)}
