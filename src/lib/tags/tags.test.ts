@@ -18,6 +18,10 @@ const payload: TagTreePayload = {
     ["reanimate", "reanimate", 11, [7]], // 8
     ["reanimate-creature", "reanimate creature", 559, [8]], // 9
     ["draw", "draw", 0, []], // 10
+    ["card-advantage", "card advantage", 58, []], // 11
+    ["consult-onto-battlefield", "consult onto battlefield", 300, [11]], // 12
+    ["pure-draw", "pure draw", 900, [10]], // 13
+    ["land-ramp", "land ramp", 490, [2]], // 14
   ],
 };
 const tree = new TagTree(payload);
@@ -81,6 +85,20 @@ describe("roles", () => {
   it("doesn't count a card that only transforms into a land", () => {
     // Legion's Landing // Adanto: counts_as_land is false for transform cards.
     expect(rolesOf(card("Legendary Enchantment // Legendary Land", false), [], roles)).toEqual([]);
+  });
+
+  it("counts a land-fetching 'onto the battlefield' card as Ramp only", () => {
+    // Clifftop Lookout: consult-onto-battlefield (under card advantage) + land-ramp.
+    expect(rolesOf(card("Creature — Frog Scout"), ["consult-onto-battlefield", "land-ramp"], roles)).toEqual(["ramp"]);
+  });
+
+  it("still counts a ramp card that really draws for both", () => {
+    // Uro: pure-draw + land-ramp.
+    expect(rolesOf(card("Legendary Creature — Elder Giant"), ["pure-draw", "land-ramp"], roles)).toEqual(["ramp", "draw"]);
+  });
+
+  it("keeps 'onto the battlefield' as card advantage when the card isn't ramp", () => {
+    expect(rolesOf(card("Sorcery"), ["consult-onto-battlefield"], roles)).toEqual(["draw"]);
   });
 
   it("returns no roles for an untagged card", () => {

@@ -111,6 +111,7 @@ The editor matches what people like about Moxfield and fixes its known complaint
 | ~~Printing picker~~ | **Moved to v2** (Oct 18, 2026). v1 uses each card's default printing and its art tags | Standard |
 | Card sheet | Tap or click any card (name in text view, image in visual views) to open it straight away: big image, large action buttons, its roles and tags. A bottom sheet on phones, a window with Prev / Next on desktop. No tiny icons on top of card images | Moxfield's ⋯ on the image is hard to hit on mobile |
 | Card details | Rules text, P/T or loyalty, both faces, legality in every format, and rulings, fetched live from Scryfall. The card's tags take the place of buy links | Asked for; tags are this app's point |
+| My tags | Your own labels on cards ("Combo", "Win con"…), several per card, added from the card sheet. Each is **this deck only** or **account-wide**: an account-wide tag and where it's applied follow the card into every deck (tag Sol Ring "Staple" once, it's a Staple everywhere). A "Show my tags" switch, Group by My tags, click to highlight, rename / recolor / change scope / delete | Moxfield-style tags, asked for by David (Oct 19, 2026) |
 | Tokens list | Tokens the deck can create | Standard, helps playtesting |
 | Share link | Read-only link; decks are private, unlisted or public | Needed for friend tests |
 | Autosave | Every change saves instantly; undo with Ctrl+Z | Feels good to use |

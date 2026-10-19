@@ -5,9 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { rankTags } from "@/lib/search/query";
 import { roleNameFromLabel, roleStatus, statusText, type CustomRole } from "@/lib/tags/role-settings";
 import type { ResolvedRole } from "@/lib/tags/roles";
+import type { TagTree } from "@/lib/tags/tree";
 
 type Props = {
   roles: ResolvedRole[];
+  tree: TagTree | null;
   counts: Record<string, number>;
   readOnly: boolean;
   highlight: string | null;
@@ -50,20 +52,23 @@ export function RoleProfile(props: Props) {
         {roles.map((r) => {
           const count = counts[r.key] ?? 0;
           const status = roleStatus(count, r.target);
-          const max = r.land ? 45 : 25;
+          const max = r.land ? 50 : 30; // David, Oct 19, 2026
           const active = props.highlight === `role:${r.key}`;
           return (
-            <li key={r.key}>
-              <div className="flex items-baseline justify-between gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={() => props.onHighlight(r.key)}
-                  aria-pressed={active}
-                  title={r.land ? "Cards that can be played as a land (including MDFCs)" : `Tags: ${r.slugs?.join(", ")} and everything under them`}
-                  className={`min-h-8 truncate text-left font-medium hover:underline ${active ? "underline decoration-amber-500 decoration-2" : ""}`}
-                >
-                  {r.name}
-                </button>
+            <li key={r.key} className="relative">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex min-w-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => props.onHighlight(r.key)}
+                    aria-pressed={active}
+                    title="Highlight the cards that fill this role"
+                    className={`min-h-8 truncate text-left font-medium hover:underline ${active ? "underline decoration-amber-500 decoration-2" : ""}`}
+                  >
+                    {r.name}
+                  </button>
+                  <InfoTip role={r} tree={props.tree} />
+                </span>
                 <span className="shrink-0 tabular-nums">
                   {count} / {r.target} <span className={`text-xs ${TEXT[status]}`}>{statusText(count, r.target)}</span>
                 </span>
@@ -149,6 +154,71 @@ export function RoleProfile(props: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The ⓘ next to a role: what it counts and which tags it uses. Hover on desktop; tap on a phone (there's no
+ * hover there). The tap area is 32px even though the icon is small (CLAUDE.md: Mobile matters).
+ */
+/** "a", "a or b", "a, b or c" */
+const orList = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items.at(-1)}`);
+
+function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
+  const [open, setOpen] = useState(false);
+  const id = `role-info-${role.key}`;
+  const label = (s: string) => tree?.label(s) ?? s;
+
+  const roots = (role.slugs ?? []).filter((s) => tree?.has(s) ?? true);
+  const subtags = role.tagSet ? [...role.tagSet].filter((s) => !roots.includes(s)) : [];
+  const examples = tree
+    ? [...subtags].sort((a, b) => (tree.info(b)?.size ?? 0) - (tree.info(a)?.size ?? 0)).slice(0, 4).map(label)
+    : [];
+  const about = role.about ?? (role.custom ? `A role you made from the ${label(roots[0] ?? "")} tag.` : "");
+
+  return (
+    <span className="relative" onPointerLeave={(e) => e.pointerType === "mouse" && setOpen(false)}>
+      <button
+        type="button"
+        aria-label={`How ${role.name} is counted`}
+        aria-expanded={open}
+        aria-controls={id}
+        onPointerEnter={(e) => e.pointerType === "mouse" && setOpen(true)}
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center"
+      >
+        <span
+          aria-hidden
+          className="flex h-4 w-4 items-center justify-center rounded-full border border-foreground/40 text-[10px] font-semibold italic leading-none opacity-70"
+        >
+          i
+        </span>
+      </button>
+      {open && (
+        <span
+          id={id}
+          role="tooltip"
+          className="absolute left-0 top-full z-30 mt-1 block w-64 max-w-[80vw] rounded-md border border-foreground/15 bg-background p-3 text-xs leading-relaxed shadow-lg"
+        >
+          {about && <span className="block">{about}</span>}
+          {!role.land && roots.length > 0 && (
+            <span className="mt-2 block opacity-80">
+              Counts cards tagged <strong>{orList(roots.map(label))}</strong> on Scryfall Tagger
+              {subtags.length > 0 && (
+                <>
+                  , plus the {subtags.length} tag{subtags.length === 1 ? "" : "s"} under {roots.length === 1 ? "it" : "them"}
+                  {examples.length > 0 && <> (such as {examples.join(", ")})</>}
+                </>
+              )}
+              .
+            </span>
+          )}
+          {role.exclude && <span className="mt-2 block opacity-80">Cards that are also {role.exclude === "wipes" ? "board wipes" : role.exclude} don&apos;t count here.</span>}
+        </span>
+      )}
+    </span>
   );
 }
 

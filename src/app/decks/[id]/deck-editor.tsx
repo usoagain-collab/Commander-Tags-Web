@@ -281,6 +281,7 @@ export function DeckEditor({
   const renderProfile = (hideTitle = false) => (
     <RoleProfile
       hideTitle={hideTitle}
+      tree={tags.tree}
       roles={roles}
       counts={counts}
       readOnly={readOnly}
