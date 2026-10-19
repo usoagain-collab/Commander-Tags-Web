@@ -19,6 +19,8 @@ export type DeckItem = {
   myTags: MyTag[];
   /** The category was set by hand (step 3f). */
   manual: boolean;
+  /** Bulk edit (step 3g): undefined when not selecting, otherwise whether this card is selected. */
+  selected?: boolean;
 };
 export type ViewSection = {
   key: string;
@@ -35,7 +37,8 @@ type Props = {
   collapsed: Set<string>;
   readOnly: boolean;
   onToggle: (key: string) => void;
-  onOpen: (line: DeckLine) => void;
+  /** Click or tap on a card. The event carries Shift/Ctrl for bulk selection (step 3g). */
+  onOpen: (line: DeckLine, e?: React.MouseEvent) => void;
   onHover: (line: DeckLine) => void;
   onQuantity: (line: DeckLine, n: number) => void;
   /**
@@ -153,7 +156,7 @@ export function DeckView(props: Props) {
                     <li key={it.line.card.oracle_id}>
                       <Tile
                         item={it}
-                        onOpen={() => props.onOpen(it.line)}
+                        onOpen={(e) => props.onOpen(it.line, e)}
                         onHover={() => props.onHover(it.line)}
                         drag={dragProps(it.line, !!props.onCardDrop)}
                       />
@@ -189,7 +192,7 @@ export function DeckView(props: Props) {
                     key={it.line.card.oracle_id}
                     item={it}
                     readOnly={props.readOnly}
-                    onOpen={() => props.onOpen(it.line)}
+                    onOpen={(e) => props.onOpen(it.line, e)}
                     onHover={() => props.onHover(it.line)}
                     onQuantity={(n) => props.onQuantity(it.line, n)}
                     drag={dragProps(it.line, !!props.onCardDrop)}
@@ -263,7 +266,17 @@ function Heading({
 }
 
 /** A card image tile (Visual grid). Badges sit beside the image's edge, never as tiny buttons on it. */
-function Tile({ item, onOpen, onHover, drag }: { item: DeckItem; onOpen: () => void; onHover: () => void; drag: ReturnType<typeof dragProps> }) {
+function Tile({
+  item,
+  onOpen,
+  onHover,
+  drag,
+}: {
+  item: DeckItem;
+  onOpen: (e: React.MouseEvent) => void;
+  onHover: () => void;
+  drag: ReturnType<typeof dragProps>;
+}) {
   const { card, quantity } = item.line;
   return (
     <button
@@ -273,12 +286,14 @@ function Tile({ item, onOpen, onHover, drag }: { item: DeckItem; onOpen: () => v
       onMouseEnter={onHover}
       onFocus={onHover}
       title={`Open ${card.name}`}
+      aria-pressed={item.selected}
       className={`relative block w-full rounded-[5%/3.6%] text-left ${
-        item.highlighted ? "ring-4 ring-amber-400" : "hover:ring-2 hover:ring-foreground/30"
+        item.selected ? "ring-4 ring-blue-500" : item.highlighted ? "ring-4 ring-amber-400" : "hover:ring-2 hover:ring-foreground/30"
       }`}
     >
       <CardImage name={card.name} src={card.image_normal} />
       <TileBadges item={item} quantity={quantity} />
+      <SelectedMark selected={item.selected} />
       {/* Under the image, not on it: the whole tile stays the one tap target. */}
       <MyTagChips tags={item.myTags} className="pointer-events-none mt-1" />
     </button>
@@ -293,19 +308,36 @@ function Stack({ section, onOpen, onHover, onCardDrop }: { section: ViewSection 
         <li key={it.line.card.oracle_id} style={{ marginTop: i === 0 ? 0 : "-118%" }} className="relative hover:z-10 focus-within:z-10">
           <button
             type="button"
-            onClick={() => onOpen(it.line)}
+            onClick={(e) => onOpen(it.line, e)}
             onMouseEnter={() => onHover(it.line)}
             onFocus={() => onHover(it.line)}
             {...dragProps(it.line, !!onCardDrop)}
             title={`Open ${it.line.card.name}`}
-            className={`relative block w-full rounded-[5%/3.6%] ${it.highlighted ? "ring-4 ring-amber-400" : ""}`}
+            aria-pressed={it.selected}
+            className={`relative block w-full rounded-[5%/3.6%] ${it.selected ? "ring-4 ring-blue-500" : it.highlighted ? "ring-4 ring-amber-400" : ""}`}
           >
             <CardImage name={it.line.card.name} src={it.line.card.image_normal} />
             <TileBadges item={it} quantity={it.line.quantity} />
+            <SelectedMark selected={it.selected} />
           </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A check in the card's name bar while selecting. A label only: the whole card is the tap target. */
+function SelectedMark({ selected }: { selected?: boolean }) {
+  if (selected === undefined) return null;
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute left-1.5 top-[7%] flex h-6 w-6 items-center justify-center rounded-full border-2 text-sm font-bold ${
+        selected ? "border-blue-500 bg-blue-500 text-white" : "border-white/80 bg-black/50"
+      }`}
+    >
+      {selected ? "✓" : ""}
+    </span>
   );
 }
 

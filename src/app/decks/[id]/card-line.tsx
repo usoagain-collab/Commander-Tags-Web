@@ -7,7 +7,7 @@ import { MyTagChips } from "./my-tags-ui";
 type Props = {
   item: DeckItem;
   readOnly: boolean;
-  onOpen: () => void;
+  onOpen: (e: React.MouseEvent) => void;
   onHover: () => void;
   onQuantity: (n: number) => void;
   /** Drag-to-category handlers (Group by Role on desktop), or nothing. */
@@ -16,7 +16,8 @@ type Props = {
 
 /** One card in Text view. The name opens the card sheet; quick −/+/✕ sit at the end on wider screens. */
 export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: Props) {
-  const { line, warnings, untagged, highlighted, extraRoles, myTags, manual } = item;
+  const { line, warnings, untagged, highlighted, extraRoles, myTags, manual, selected } = item;
+  const selecting = selected !== undefined;
   const { card, board, quantity } = line;
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
 
@@ -25,14 +26,25 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
       {...drag}
       onMouseEnter={onHover}
       className={`group flex items-center gap-2 rounded px-1.5 text-sm ${
-        highlighted ? "bg-amber-400/20 ring-1 ring-amber-500/60" : "hover:bg-foreground/5"
+        selected ? "bg-blue-500/15 ring-1 ring-blue-500/60" : highlighted ? "bg-amber-400/20 ring-1 ring-amber-500/60" : "hover:bg-foreground/5"
       }`}
     >
+      {selecting && (
+        <span
+          aria-hidden
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs font-bold ${
+            selected ? "border-blue-500 bg-blue-500 text-white" : "border-foreground/40"
+          }`}
+        >
+          {selected ? "✓" : ""}
+        </span>
+      )}
       <span className="w-6 shrink-0 text-right tabular-nums opacity-70">{quantity}</span>
       <button
         type="button"
         onClick={onOpen}
         onFocus={onHover}
+        aria-pressed={selected}
         className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left"
         title={`Open ${card.name}`}
       >
@@ -68,7 +80,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
       </span>
 
       {/* Quick actions for mouse users. On phones everything lives in the card sheet instead (bigger targets). */}
-      {!readOnly && (
+      {!readOnly && !selecting && (
         <span className="hidden shrink-0 gap-1 opacity-40 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 sm:flex">
           {multi && (
             <>
