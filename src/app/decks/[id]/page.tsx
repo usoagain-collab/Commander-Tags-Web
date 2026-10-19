@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { entryKey, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
+import { readViewSettings } from "@/lib/deck/grouping";
 import { DeckEditor } from "./deck-editor";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -31,12 +32,21 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   for (const r of rows ?? []) entries[entryKey(r.board as Board, r.oracle_id as string)] = r.quantity as number;
   const cards = Object.fromEntries(((summaries ?? []) as CardSummary[]).map((c) => [c.oracle_id, c]));
 
+  // The user's remembered View / Group / Sort (and, later, tag panel settings).
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("tag_view").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const tagView = (profile?.tag_view ?? {}) as Record<string, unknown>;
+
   return (
     <DeckEditor
       deck={{ id: deck.id as string, name: deck.name as string }}
       initialEntries={entries}
       initialCards={cards}
       readOnly={deck.owner_id !== user?.id}
+      initialView={readViewSettings(tagView)}
+      savedTagView={tagView}
+      userId={user?.id ?? null}
     />
   );
 }
