@@ -224,7 +224,7 @@ export function ExportPanel({ deckName, entries, cards, onClose }: ExportProps) 
   );
 }
 
-function Panel({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Panel({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <section className="mt-6 rounded-lg border border-foreground/15 p-4">
       <div className="mb-2 flex items-center justify-between">

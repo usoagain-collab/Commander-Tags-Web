@@ -62,6 +62,7 @@ import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
+import { HistoryPanel } from "./history-panel";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
@@ -215,7 +216,7 @@ export function DeckEditor({
     [save, say, state.categories],
   );
 
-  const [panel, setPanel] = useState<"search" | "import" | "export" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | null>(null);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -637,6 +638,11 @@ export function DeckEditor({
           <HeaderButton active={panel === "export"} onClick={() => setPanel(panel === "export" ? null : "export")}>
             Export
           </HeaderButton>
+          {!readOnly && (
+            <HeaderButton active={panel === "history"} onClick={() => setPanel(panel === "history" ? null : "history")}>
+              History
+            </HeaderButton>
+          )}
         </div>
         {!readOnly && (
           <div className="flex items-center gap-3 text-sm">
@@ -664,6 +670,22 @@ export function DeckEditor({
         />
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
+      {panel === "history" && !readOnly && (
+        <HistoryPanel
+          deckId={deck.id}
+          current={{ entries, categories }}
+          cards={cards}
+          savedTick={status.state === "saved" ? state.past.length + state.future.length * 10000 : null}
+          canSnapshot={status.state === "saved"}
+          onRestore={(plan, newCards) => {
+            if (!plan.ok) return say(plan.reason);
+            dispatch({ type: "apply", change: plan.change, cards: newCards });
+            save(toSavePayload(plan.change));
+            say(`${plan.change.label}: done. Your previous deck was saved as a version; Ctrl+Z undoes the restore.`);
+          }}
+          onClose={() => setPanel(null)}
+        />
+      )}
       {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />}
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[250px_minmax(0,1fr)_300px]">

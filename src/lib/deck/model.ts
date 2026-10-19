@@ -43,7 +43,14 @@ export type CategoryChange = { oracle_id: string; board: Board; from: string | n
 /** A My tag put on (true) or taken off (false) a card (step 3f). */
 export type TagCardChange = { tag_id: string; oracle_id: string; from: boolean; to: boolean };
 /** One edit, and one undo step. Card counts, plus any category or My tag changes made with it. */
-export type Change = { label: string; rows: RowChange[]; categories?: CategoryChange[]; tagCards?: TagCardChange[] };
+export type Change = {
+  label: string;
+  rows: RowChange[];
+  categories?: CategoryChange[];
+  tagCards?: TagCardChange[];
+  /** Restoring a version (step 3h): save the current deck as a version with this name before applying. */
+  snapshot?: string;
+};
 /** Manual categories, keyed like entries (`board|oracle_id`). Missing = automatic. */
 export type Categories = Record<string, string>;
 /** My tags on each card: oracle_id -> tag ids. */
@@ -111,6 +118,7 @@ export type SavePayload = {
   rows: { oracle_id: string; board: Board; quantity: number }[];
   categories: { oracle_id: string; board: Board; category: string | null }[];
   tag_cards: { tag_id: string; oracle_id: string; on: boolean }[];
+  snapshot_name?: string;
 };
 export function toSavePayload(change: Change, direction: "forward" | "back" = "forward"): SavePayload {
   const fwd = direction === "forward";
@@ -118,6 +126,7 @@ export function toSavePayload(change: Change, direction: "forward" | "back" = "f
     rows: toSaveRows(change, direction),
     categories: (change.categories ?? []).map((c) => ({ oracle_id: c.oracle_id, board: c.board, category: fwd ? c.to : c.from })),
     tag_cards: (change.tagCards ?? []).map((t) => ({ tag_id: t.tag_id, oracle_id: t.oracle_id, on: fwd ? t.to : t.from })),
+    ...(fwd && change.snapshot ? { snapshot_name: change.snapshot } : {}),
   };
 }
 
