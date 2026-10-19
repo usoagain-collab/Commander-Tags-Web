@@ -25,6 +25,7 @@ import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
 import { CardLine } from "./card-line";
 import { CardSearch } from "./card-search";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
+import { DropOverlay } from "./drop-overlay";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 
 type State = {
@@ -174,6 +175,11 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
   const main = groupByType(linesFor(entries, cards, "main"));
   const maybe = linesFor(entries, cards, "maybe").sort((a, b) => a.card.name.localeCompare(b.card.name));
 
+  /** Adds a card found outside the deck list (search results, drag from Scryfall) and confirms it. */
+  const addWithNotice = (card: CardSummary, board: Board) => {
+    if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`);
+  };
+
   const lineProps = (line: ReturnType<typeof linesFor>[number]) => ({
     line,
     readOnly,
@@ -185,6 +191,7 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-6">
+      {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link href="/decks" className="text-sm opacity-70 hover:underline">
@@ -249,9 +256,7 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
           entries={entries}
           identity={identity}
           commanderName={commanders.length === 1 ? commanders[0].card.name : commanders.length ? "your commanders" : null}
-          onAdd={(card, board) => {
-            if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`);
-          }}
+          onAdd={addWithNotice}
           onPreview={setPreview}
           onClose={() => setPanel(null)}
         />
