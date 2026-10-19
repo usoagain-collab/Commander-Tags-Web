@@ -76,11 +76,22 @@ export function TopTags(props: Props) {
           No shared {settings.mode} themes yet. A tag shows up here once two or more cards share it.
         </p>
       ) : (
-        <ul className="space-y-0.5">
+        <>
+          {/* A visible key, since phones can't hover the ★ to see its tooltip. */}
+          {themes.some((t) => t.pinned) && (
+            <p className="text-xs opacity-60">
+              <span className="text-amber-600" aria-hidden>
+                ★
+              </span>{" "}
+              = your commander&apos;s tags, listed first and counted double
+            </p>
+          )}
+          <ul className="space-y-0.5">
           {themes.map((t) => (
             <TagRow key={t.key} tag={t} {...props} />
           ))}
-        </ul>
+          </ul>
+        </>
       )}
 
       {props.hidden.length > 0 && (
