@@ -12,6 +12,13 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
+    rules: {
+      // Card images and mana symbols load straight from Scryfall's CDN (CLAUDE.md). Next's <Image> would
+      // re-host them through Vercel's image optimizer and use up the free-tier quota for no gain.
+      "@next/next/no-img-element": "off",
+    },
+  },
+  {
     ignores: [
       "node_modules/**",
       ".next/**",
