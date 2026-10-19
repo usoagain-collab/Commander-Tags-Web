@@ -23,6 +23,7 @@ import {
 } from "@/lib/deck/model";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
 import { CardLine } from "./card-line";
+import { ExportPanel, ImportPanel } from "./deck-text-panel";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 
 type State = {
@@ -33,7 +34,7 @@ type State = {
 };
 
 type Action =
-  | { type: "apply"; change: Change; card?: CardSummary }
+  | { type: "apply"; change: Change; cards?: CardSummary[] }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -44,7 +45,9 @@ function reducer(state: State, action: Action): State {
     case "apply":
       return {
         entries: applyChange(state.entries, action.change),
-        cards: action.card ? { ...state.cards, [action.card.oracle_id]: action.card } : state.cards,
+        cards: action.cards
+          ? { ...state.cards, ...Object.fromEntries(action.cards.map((c) => [c.oracle_id, c])) }
+          : state.cards,
         past: [...state.past, action.change].slice(-HISTORY_LIMIT),
         future: [], // a new edit clears redo, like any editor
       };
@@ -102,8 +105,21 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
         if (plan.reason !== "No change.") say(plan.reason);
         return;
       }
-      dispatch({ type: "apply", change: plan.change, card });
+      dispatch({ type: "apply", change: plan.change, cards: card ? [card] : undefined });
       save(toSaveRows(plan.change));
+    },
+    [save, say],
+  );
+
+  const [panel, setPanel] = useState<"import" | "export" | null>(null);
+
+  /** A whole import is one change: one save call, one undo step. */
+  const applyImport = useCallback(
+    (change: Change, newCards: CardSummary[]) => {
+      dispatch({ type: "apply", change, cards: newCards });
+      save(toSaveRows(change));
+      setPanel(null);
+      say(`${change.label}. Ctrl+Z undoes the whole import.`);
     },
     [save, say],
   );
@@ -179,6 +195,22 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
             {identity && <> · identity {identity.size ? [...identity].join("") : "colorless"}</>}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          {!readOnly && (
+            <button
+              onClick={() => setPanel(panel === "import" ? null : "import")}
+              className="rounded-md border border-foreground/20 px-2.5 py-1"
+            >
+              Import
+            </button>
+          )}
+          <button
+            onClick={() => setPanel(panel === "export" ? null : "export")}
+            className="rounded-md border border-foreground/20 px-2.5 py-1"
+          >
+            Export
+          </button>
+        </div>
         {!readOnly && (
           <div className="flex items-center gap-3 text-sm">
             <SaveIndicator status={status} onRetry={retry} />
@@ -201,6 +233,13 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
           </div>
         )}
       </div>
+
+      {panel === "import" && !readOnly && (
+        <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />
+      )}
+      {panel === "export" && (
+        <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />
+      )}
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_280px]">
         <div className="min-w-0">
