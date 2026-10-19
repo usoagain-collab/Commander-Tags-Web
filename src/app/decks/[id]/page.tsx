@@ -4,6 +4,7 @@ import { entryKey, type Board, type CardSummary, type Categories, type Entries }
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets } from "@/lib/tags/role-settings";
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
+import { readSuggestSettings } from "@/lib/suggest/score";
 import { DeckEditor } from "./deck-editor";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +23,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   const { data: deck } = await supabase
     .from("decks")
-    .select("id, name, owner_id, role_targets, custom_roles")
+    .select("id, name, owner_id, role_targets, custom_roles, suggest_settings")
     .eq("id", id)
     .maybeSingle();
   if (!deck) notFound();
@@ -59,6 +60,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       userId={user?.id ?? null}
       roleTargets={readTargets(deck.role_targets)}
       customRoles={readCustomRoles(deck.custom_roles)}
+      suggestSettings={readSuggestSettings(deck.suggest_settings)}
       profileDefaults={{
         targets: { ...DEFAULT_ROLE_TARGETS, ...readTargets(profile?.default_role_targets) },
         custom: readCustomRoles(profile?.custom_roles),

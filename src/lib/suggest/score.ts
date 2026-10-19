@@ -91,3 +91,21 @@ export function scorePool(pool: PoolCard[], ctx: ScoreContext): Scored[] {
   if (settings.style === "gems") out = out.filter((r) => r.fitRaw > 0 || r.fills.length > 0);
   return out.sort((a, b) => b.score - a.score || a.card.name.localeCompare(b.card.name)).slice(0, ctx.limit ?? 24);
 }
+
+const clamp = (n: unknown, lo: number, hi: number, fallback: number) =>
+  typeof n === "number" && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+
+/** decks.suggest_settings, read defensively (it's JSON from the database). Empty = defaults. */
+export function readSuggestSettings(saved: unknown): SuggestSettings {
+  const s = (saved ?? {}) as Partial<{ style: unknown; priceCap: unknown; weights: Partial<Record<keyof SuggestWeights, unknown>> }>;
+  const w = s.weights ?? {};
+  return {
+    style: typeof s.style === "string" && s.style in STYLE_LABELS ? (s.style as SuggestStyle) : DEFAULT_SUGGEST.style,
+    priceCap: clamp(s.priceCap, 0.25, 100, DEFAULT_SUGGEST.priceCap),
+    weights: {
+      fit: clamp(w.fit, 0, 1, DEFAULT_SUGGEST.weights.fit),
+      pop: clamp(w.pop, -1, 1, DEFAULT_SUGGEST.weights.pop),
+      price: clamp(w.price, 0, 1, DEFAULT_SUGGEST.weights.price),
+    },
+  };
+}
