@@ -3,23 +3,32 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
+  applyCategories,
   applyChange,
+  applyTagCards,
   BOARD_LABELS,
+  dropTagFromChanges,
+  entryKey,
+  keepCategories,
   deckIdentity,
   deckSize,
   linesFor,
   outsideIdentity,
   planAdd,
+  planCategory,
   planMove,
   planSetQuantity,
-  toSaveRows,
+  planTagCards,
+  toSavePayload,
   totalPrice,
   type Board,
   type CardSummary,
+  type Categories,
   type Change,
   type DeckLine,
   type Entries,
   type Plan,
+  type TagCards,
 } from "@/lib/deck/model";
 import { groupLines, readViewSettings, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
@@ -41,6 +50,8 @@ import {
 } from "@/lib/tags/themes";
 import { roleNameFromLabel } from "@/lib/tags/role-settings";
 import { assignSubgroups, landSubgroup, subgroupCandidates, subgroupTitle } from "@/lib/tags/role-subgroups";
+import { myTagHighlight, tagsOfCard, type MyTag } from "@/lib/tags/my-tags";
+import { useMyTags } from "@/lib/tags/use-my-tags";
 import { createClient } from "@/lib/supabase/client";
 import { CardPanel } from "./card-panel";
 import { CardSearch } from "./card-search";
@@ -49,6 +60,7 @@ import { ExportPanel, ImportPanel } from "./deck-text-panel";
 import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { DropOverlay } from "./drop-overlay";
+import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
 import { highlightValue, TopTags } from "./top-tags";
@@ -56,6 +68,8 @@ import { SummaryBar } from "./summary-bar";
 
 type State = {
   entries: Entries;
+  categories: Categories; // manual category per row (step 3f)
+  tagCards: TagCards; // My tags per card (step 3f)
   cards: Record<string, CardSummary>;
   past: Change[]; // undo stack
   future: Change[]; // redo stack
@@ -64,7 +78,9 @@ type State = {
 type Action =
   | { type: "apply"; change: Change; cards?: CardSummary[] }
   | { type: "undo" }
-  | { type: "redo" };
+  | { type: "redo" }
+  | { type: "loadTagCards"; tagCards: TagCards }
+  | { type: "dropTag"; tagId: string };
 
 const HISTORY_LIMIT = 200;
 
@@ -73,6 +89,8 @@ function reducer(state: State, action: Action): State {
     case "apply":
       return {
         entries: applyChange(state.entries, action.change),
+        categories: applyCategories(state.categories, action.change),
+        tagCards: applyTagCards(state.tagCards, action.change),
         cards: action.cards
           ? { ...state.cards, ...Object.fromEntries(action.cards.map((c) => [c.oracle_id, c])) }
           : state.cards,
@@ -85,6 +103,8 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         entries: applyChange(state.entries, change, "back"),
+        categories: applyCategories(state.categories, change, "back"),
+        tagCards: applyTagCards(state.tagCards, change, "back"),
         past: state.past.slice(0, -1),
         future: [...state.future, change],
       };
@@ -95,9 +115,22 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         entries: applyChange(state.entries, change),
+        categories: applyCategories(state.categories, change),
+        tagCards: applyTagCards(state.tagCards, change),
         past: [...state.past, change],
         future: state.future.slice(0, -1),
       };
+    }
+    case "loadTagCards":
+      return { ...state, tagCards: action.tagCards };
+    case "dropTag": {
+      // A deleted tag comes off every card, and undo/redo must not try to put it back.
+      const tagCards: TagCards = {};
+      for (const [id, tags] of Object.entries(state.tagCards)) {
+        const keep = tags.filter((t) => t !== action.tagId);
+        if (keep.length) tagCards[id] = keep;
+      }
+      return { ...state, tagCards, past: dropTagFromChanges(state.past, action.tagId), future: dropTagFromChanges(state.future, action.tagId) };
     }
   }
 }
@@ -105,6 +138,7 @@ function reducer(state: State, action: Action): State {
 type Props = {
   deck: { id: string; name: string };
   initialEntries: Entries;
+  initialCategories: Categories;
   initialCards: Record<string, CardSummary>;
   readOnly: boolean;
   savedTagView: Record<string, unknown>;
@@ -118,6 +152,7 @@ type Props = {
 export function DeckEditor({
   deck,
   initialEntries,
+  initialCategories,
   initialCards,
   readOnly,
   savedTagView,
@@ -129,6 +164,8 @@ export function DeckEditor({
 }: Props) {
   const [state, dispatch] = useReducer(reducer, {
     entries: initialEntries,
+    categories: initialCategories,
+    tagCards: {},
     cards: initialCards,
     past: [],
     future: [],
@@ -159,31 +196,33 @@ export function DeckEditor({
         if (plan.reason !== "No change.") say(plan.reason);
         return false;
       }
-      dispatch({ type: "apply", change: plan.change, cards: card ? [card] : undefined });
-      save(toSaveRows(plan.change));
+      const change = keepCategories(plan.change, state.categories);
+      dispatch({ type: "apply", change, cards: card ? [card] : undefined });
+      save(toSavePayload(change));
       return true;
     },
-    [save, say],
+    [save, say, state.categories],
   );
 
   const [panel, setPanel] = useState<"search" | "import" | "export" | null>(null);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
-    (change: Change, newCards: CardSummary[]) => {
+    (plain: Change, newCards: CardSummary[]) => {
+      const change = keepCategories(plain, state.categories);
       dispatch({ type: "apply", change, cards: newCards });
-      save(toSaveRows(change));
+      save(toSavePayload(change));
       setPanel(null);
       say(`${change.label}. Ctrl+Z undoes the whole import.`);
     },
-    [save, say],
+    [save, say, state.categories],
   );
 
   const undo = useCallback(() => {
     const change = state.past.at(-1);
     if (!change) return;
     dispatch({ type: "undo" });
-    save(toSaveRows(change, "back"));
+    save(toSavePayload(change, "back"));
     say(`Undid: ${change.label}`);
   }, [state.past, save, say]);
 
@@ -191,7 +230,7 @@ export function DeckEditor({
     const change = state.future.at(-1);
     if (!change) return;
     dispatch({ type: "redo" });
-    save(toSaveRows(change));
+    save(toSavePayload(change));
     say(`Redid: ${change.label}`);
   }, [state.future, save, say]);
 
@@ -219,7 +258,13 @@ export function DeckEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [readOnly, undo, redo]);
 
-  const { entries, cards } = state;
+  const { entries, cards, categories, tagCards } = state;
+
+  // ---------- My tags (step 3f) ----------
+  const myTags = useMyTags(deck.id, !readOnly && !!userId, (loaded) => dispatch({ type: "loadTagCards", tagCards: loaded }));
+  const showMyTags = prefs.showMyTags !== false;
+  const myTagsOfCard = (oracleId: string) => tagsOfCard(tagCards, oracleId, myTags.tags);
+  const toggleMyTag = (t: MyTag, onCards: CardSummary[], on: boolean) => run(planTagCards(tagCards, t.id, t.name, onCards, on));
 
   // ---------- tags and roles ----------
   // Tags for every card we know about, plus whatever is being previewed (a search result, say).
@@ -238,9 +283,18 @@ export function DeckEditor({
     (card: CardSummary) => rolesOf(card, tags.oracleTags[card.oracle_id], roles),
     [tags.oracleTags, roles],
   );
-  const matchesHighlight = (card: CardSummary) => {
+  /** Roles a deck row counts toward: its manual category when set (step 3f), otherwise its tags. */
+  const lineRoleKeys = (l: DeckLine) => {
+    const c = categories[entryKey(l.board, l.card.oracle_id)];
+    if (c === "none") return [];
+    if (c && roles.some((r) => r.key === c)) return [c];
+    return roleKeysOf(l.card);
+  };
+  const matchesHighlight = (line: DeckLine) => {
+    const card = line.card;
     if (!highlight) return false;
-    if (highlight.startsWith("role:")) return roleKeysOf(card).includes(highlight.slice(5));
+    if (highlight.startsWith("role:")) return lineRoleKeys(line).includes(highlight.slice(5));
+    if (highlight.startsWith("my:")) return (tagCards[card.oracle_id] ?? []).includes(highlight.slice(3));
     if (highlight.startsWith("art:")) return (tags.artTags[card.oracle_id] ?? []).some(([s]) => `art:${s}` === highlight);
     return (tags.oracleTags[card.oracle_id] ?? []).includes(highlight);
   };
@@ -248,6 +302,8 @@ export function DeckEditor({
   const highlightLabel = highlight
     ? highlight.startsWith("role:")
       ? (roles.find((r) => `role:${r.key}` === highlight)?.name ?? highlight.slice(5))
+      : highlight.startsWith("my:")
+      ? (myTags.tags.find((t) => myTagHighlight(t.id) === highlight)?.name ?? "a deleted tag")
       : highlight.startsWith("art:")
       ? (Object.values(tags.artTags).flat().find(([s]) => `art:${s}` === highlight)?.[1] ?? highlight.slice(4))
       : (tags.tree?.label(highlight) ?? highlight)
@@ -275,8 +331,10 @@ export function DeckEditor({
       warnings: warningsFor(line),
       // Basic lands and most lands have no function tags; only flag spells.
       untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
-      highlighted: matchesHighlight(line.card),
-      extraRoles: Math.max(0, roleKeysOf(line.card).length - 1),
+      highlighted: matchesHighlight(line),
+      extraRoles: Math.max(0, lineRoleKeys(line).length - 1),
+      myTags: showMyTags ? myTagsOfCard(id) : [],
+      manual: !!categories[entryKey(line.board, id)],
     };
   };
   // Role subgroups (step 3e): for each role, which subgroup each card that fills it goes in.
@@ -285,13 +343,15 @@ export function DeckEditor({
     for (const r of roles) {
       if (r.land || !r.tagSet) continue;
       const items = mainLines
-        .filter((l) => roleKeysOf(l.card).includes(r.key))
+        .filter((l) => lineRoleKeys(l).includes(r.key))
         .map((l) => ({ id: l.card.oracle_id, candidates: subgroupCandidates(tags.oracleTags[l.card.oracle_id] ?? [], r, tags.tree!) }));
       subgroupMaps.set(r.key, assignSubgroups(items));
     }
   }
   const roleContext = {
-    rolesOf: (l: DeckLine) => roleKeysOf(l.card),
+    rolesOf: lineRoleKeys,
+    myTagsOf: (l: DeckLine) =>
+      myTagsOfCard(l.card.oracle_id).map((t) => ({ key: t.id, title: t.name, order: myTags.tags.indexOf(t) })),
     roleOrder: roles.map((r) => ({ key: r.key, name: r.name })),
     subgroupOf: (l: DeckLine, roleKey: string) => {
       if (roles.find((r) => r.key === roleKey)?.land) return landSubgroup(l.card);
@@ -300,7 +360,34 @@ export function DeckEditor({
     },
   };
   // Role counts cover the 100-card deck: commander(s) plus mainboard.
-  const counts = roleCounts([...commanders, ...mainLines], (l) => roleKeysOf(l.card));
+  const counts = roleCounts([...commanders, ...mainLines], lineRoleKeys);
+  // How many cards in the deck (commander + mainboard) carry each My tag.
+  const myTagCounts: Record<string, number> = {};
+  for (const l of [...commanders, ...companions, ...mainLines])
+    for (const id of tagCards[l.card.oracle_id] ?? []) myTagCounts[id] = (myTagCounts[id] ?? 0) + l.quantity;
+  const renderMyTags = (hideTitle = false) => (
+    <MyTagsPanel
+      hideTitle={hideTitle}
+      tags={myTags.tags}
+      counts={myTagCounts}
+      highlight={highlight}
+      show={showMyTags}
+      readOnly={readOnly}
+      loading={!myTags.loaded}
+      onShow={(show) => updatePrefs({ showMyTags: show })}
+      onHighlight={(t) => toggleHighlight(myTagHighlight(t.id))}
+      onUpdate={myTags.update}
+      onDelete={async (t) => {
+        const problem = await myTags.remove(t.id);
+        if (!problem) {
+          dispatch({ type: "dropTag", tagId: t.id });
+          if (highlight === myTagHighlight(t.id)) setHighlight(null);
+          say(`Deleted the tag "${t.name}".`);
+        }
+        return problem;
+      }}
+    />
+  );
   const underTarget = roles.filter((r) => roleStatus(counts[r.key] ?? 0, r.target) === "under").length;
 
   // ---------- top tags (Phase 3d) ----------
@@ -409,10 +496,29 @@ export function DeckEditor({
   useEffect(() => {
     if (sheet && sheetIndex < 0) setSheet(null); // the card was removed
   }, [sheet, sheetIndex]);
+  const previewLine = preview ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === preview.oracle_id) : undefined;
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
   const step = (by: number) => {
     if (!order.length || sheetIndex < 0) return;
     openLine(order[(sheetIndex + by + order.length) % order.length]);
+  };
+
+  /**
+   * Drag-to-category (Group by Role, desktop): dropping a mainboard card on a role group puts it there. Dropping
+   * it on the group its tags already give it clears the override; "Other" means no role.
+   */
+  const dropOnRole = (ref: { oracle_id: string; board: string }, sectionKey: string) => {
+    const line = mainLines.find((l) => l.card.oracle_id === ref.oracle_id);
+    if (!line) return;
+    const groupKey = sectionKey.replace(/^main:/, "").split("/")[0];
+    const target = groupKey === "other" ? "none" : groupKey;
+    if (target !== "none" && !roles.some((r) => r.key === target)) return;
+    const auto = roleKeysOf(line.card);
+    const autoGroup = auto.find((k) => k !== "lands") ?? auto[0] ?? "none";
+    const to = target === autoGroup ? null : target;
+    const name = to === "none" ? "no role" : (roles.find((r) => r.key === to)?.name ?? "automatic");
+    if (run(planCategory(categories, line.card, "main", to, name)))
+      say(to ? `Put ${line.card.name} in ${name}. Ctrl+Z undoes it.` : `${line.card.name} is back to automatic.`);
   };
 
   /** Adds a card found outside the deck list (search results, drag from Scryfall) and confirms it. */
@@ -482,6 +588,7 @@ export function DeckEditor({
           <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">
             {renderProfile()}
             <div className="mt-6 border-t border-foreground/10 pt-4">{renderTopTags()}</div>
+            {!readOnly && <div className="mt-6 border-t border-foreground/10 pt-4">{renderMyTags()}</div>}
           </div>
         </aside>
 
@@ -523,6 +630,20 @@ export function DeckEditor({
             <div className="px-3 pb-3">{renderTopTags(true)}</div>
           </details>
           {!readOnly && (
+            <details className="group mb-4 rounded-lg border border-foreground/15 xl:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-sm font-medium">
+                <span>
+                  My tags
+                  {myTags.tags.length > 0 && <span className="ml-2 text-xs font-normal opacity-60">{myTags.tags.length}</span>}
+                </span>
+                <span aria-hidden className="transition-transform group-open:rotate-90">
+                  ›
+                </span>
+              </summary>
+              <div className="px-3 pb-3">{renderMyTags(true)}</div>
+            </details>
+          )}
+          {!readOnly && (
             <QuickAdd ref={quickAdd} onAdd={(card, board) => run(planAdd(entries, card, board), card)} onPreview={setPreview} />
           )}
           <p aria-live="polite" className="mt-2 min-h-5 text-sm text-amber-700 dark:text-amber-400">
@@ -538,7 +659,7 @@ export function DeckEditor({
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-amber-400/15 px-3 py-2 text-sm">
               {highlight.startsWith("role:") ? "Highlighting cards that fill" : "Highlighting cards tagged"}{" "}
               <strong>{highlightLabel}</strong> (
-              {order.filter((l) => matchesHighlight(l.card)).length} in this deck)
+              {order.filter((l) => matchesHighlight(l)).length} in this deck)
               <button onClick={() => setHighlight(null)} className="ml-auto min-h-8 rounded border border-foreground/20 px-2 text-xs">
                 Clear
               </button>
@@ -570,6 +691,7 @@ export function DeckEditor({
                 onOpen={openLine}
                 onHover={(l) => setPreview(l.card)}
                 onQuantity={(l, n) => run(planSetQuantity(entries, l.card, l.board, n))}
+                onCardDrop={view.group === "role" && !readOnly && roles.length > 0 ? dropOnRole : undefined}
               />
             )}
           </div>
@@ -579,7 +701,16 @@ export function DeckEditor({
           <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6">
             <CardPanel
               card={preview}
-              roleKeys={preview ? roleKeysOf(preview) : []}
+              roleKeys={previewLine ? lineRoleKeys(previewLine) : preview ? roleKeysOf(preview) : []}
+              extra={
+                preview && (
+                  <PanelMyTags
+                    tags={myTagsOfCard(preview.oracle_id)}
+                    highlight={highlight}
+                    onHighlight={(t) => toggleHighlight(myTagHighlight(t.id))}
+                  />
+                )
+              }
               roles={roles}
               tags={tags}
               highlight={highlight}
@@ -602,7 +733,34 @@ export function DeckEditor({
           index={sheetIndex}
           total={order.length}
           warnings={warningsFor(sheetLine)}
-          roleKeys={roleKeysOf(sheetLine.card)}
+          roleKeys={lineRoleKeys(sheetLine)}
+          extra={
+            readOnly ? null : (
+              <>
+                {(sheetLine.board === "main" || sheetLine.board === "commander") && roles.length > 0 && (
+                  <CategoryPicker
+                    value={categories[entryKey(sheetLine.board, sheetLine.card.oracle_id)] ?? null}
+                    automatic={roleKeysOf(sheetLine.card).map((k) => roles.find((r) => r.key === k)?.name ?? k)}
+                    roles={roles.map((r) => ({ key: r.key, name: r.name }))}
+                    onChange={(key, name) => run(planCategory(categories, sheetLine.card, sheetLine.board, key, name))}
+                  />
+                )}
+                {userId && (
+                  <SheetMyTags
+                    tags={myTags.tags}
+                    onCard={new Set(tagCards[sheetLine.card.oracle_id] ?? [])}
+                    onToggle={(t, on) => toggleMyTag(t, [sheetLine.card], on)}
+                    onCreate={async (name, scope) => {
+                      const made = await myTags.create(name, scope);
+                      if (typeof made === "string") return made;
+                      toggleMyTag(made, [sheetLine.card], true);
+                      return null;
+                    }}
+                  />
+                )}
+              </>
+            )
+          }
           roles={roles}
           tags={tags}
           highlight={highlight}

@@ -116,3 +116,20 @@ describe("role subgroups", () => {
     expect(g.map((s) => s.title)).toEqual(["Ramp"]);
   });
 });
+
+describe("group by My tags (3f)", () => {
+  it("puts a card under each of its tags, untagged cards last", () => {
+    const mk = (name: string) => line(name);
+    const a = mk("Alpha"), b = mk("Beta"), c = mk("Gamma");
+    const tagsOf: Record<string, { key: string; title: string; order: number }[]> = {
+      Alpha: [{ key: "1", title: "Combo", order: 0 }, { key: "2", title: "Staple", order: 1 }],
+      Beta: [{ key: "2", title: "Staple", order: 1 }],
+    };
+    const sections = groupLines([a, b, c], "mytags", "name", { rolesOf: () => [], roleOrder: [], myTagsOf: (l) => tagsOf[l.card.name] ?? [] });
+    expect(sections.map((s) => [s.title, s.lines.map((l) => l.card.name)])).toEqual([
+      ["Combo", ["Alpha"]],
+      ["Staple", ["Alpha", "Beta"]],
+      ["No tag", ["Gamma"]],
+    ]);
+  });
+});

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyCategories,
   applyChange,
+  applyTagCards,
+  dropTagFromChanges,
+  keepCategories,
+  planCategory,
+  planTagCards,
+  toSavePayload,
   deckIdentity,
   deckSize,
   groupByType,
@@ -176,5 +183,65 @@ describe("reading the deck", () => {
     expect(outsideIdentity(bolt, identity)).toBe(true);
     expect(outsideIdentity(solRing, identity)).toBe(false);
     expect(outsideIdentity(bolt, deckIdentity({}, cards))).toBe(false); // no commander yet: no warnings
+  });
+});
+
+describe("manual categories (3f)", () => {
+  it("sets and clears a category as one undoable change", () => {
+    const plan = planCategory({}, solRing, "main", "draw", "Card advantage");
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const on = applyCategories({}, plan.change);
+    expect(on).toEqual({ "main|sol-ring": "draw" });
+    expect(applyCategories(on, plan.change, "back")).toEqual({});
+    expect(toSavePayload(plan.change).categories).toEqual([{ oracle_id: "sol-ring", board: "main", category: "draw" }]);
+    expect(toSavePayload(plan.change, "back").categories).toEqual([{ oracle_id: "sol-ring", board: "main", category: null }]);
+    expect(planCategory(on, solRing, "main", "draw", "Card advantage").ok).toBe(false);
+  });
+
+  it("brings the category back when a removal is undone", () => {
+    const cats = { "main|sol-ring": "draw" };
+    const plan = planRemove({ "main|sol-ring": 1 }, solRing, "main");
+    if (!plan.ok) throw new Error("plan failed");
+    const change = keepCategories(plan.change, cats);
+    expect(applyCategories(cats, change)).toEqual({});
+    const back = toSavePayload(change, "back");
+    expect(back.rows).toEqual([{ oracle_id: "sol-ring", board: "main", quantity: 1 }]);
+    expect(back.categories).toEqual([{ oracle_id: "sol-ring", board: "main", category: "draw" }]);
+  });
+
+  it("keeps the category when a card moves boards", () => {
+    const cats = { "main|sol-ring": "draw" };
+    const plan = planMove({ "main|sol-ring": 1 }, solRing, "main", "maybe");
+    if (!plan.ok) throw new Error("plan failed");
+    const change = keepCategories(plan.change, cats);
+    expect(applyCategories(cats, change)).toEqual({ "maybe|sol-ring": "draw" });
+    expect(applyCategories(applyCategories(cats, change), change, "back")).toEqual(cats);
+  });
+});
+
+describe("My tags on cards (3f)", () => {
+  it("tags several cards in one change and skips ones already tagged", () => {
+    const tc = { "sol-ring": ["t1"] };
+    const plan = planTagCards(tc, "t1", "Staple", [solRing, forest], true);
+    if (!plan.ok) throw new Error("plan failed");
+    expect(plan.change.tagCards).toEqual([{ tag_id: "t1", oracle_id: "forest", from: false, to: true }]);
+    const after = applyTagCards(tc, plan.change);
+    expect(after).toEqual({ "sol-ring": ["t1"], forest: ["t1"] });
+    expect(applyTagCards(after, plan.change, "back")).toEqual(tc);
+    expect(toSavePayload(plan.change).tag_cards).toEqual([{ tag_id: "t1", oracle_id: "forest", on: true }]);
+  });
+
+  it("untags, and says No change when nothing would change", () => {
+    const off = planTagCards({ "sol-ring": ["t1", "t2"] }, "t1", "Staple", [solRing], false);
+    if (!off.ok) throw new Error("plan failed");
+    expect(applyTagCards({ "sol-ring": ["t1", "t2"] }, off.change)).toEqual({ "sol-ring": ["t2"] });
+    expect(planTagCards({}, "t1", "Staple", [solRing], false)).toEqual({ ok: false, reason: "No change." });
+  });
+
+  it("drops a deleted tag from undo history, and steps that become empty", () => {
+    const a = { label: "a", rows: [], tagCards: [{ tag_id: "t1", oracle_id: "x", from: false, to: true }] };
+    const b = { label: "b", rows: [{ oracle_id: "x", board: "main" as const, from: 0, to: 1 }], tagCards: [{ tag_id: "t1", oracle_id: "x", from: false, to: true }] };
+    expect(dropTagFromChanges([a, b], "t1")).toEqual([{ ...b, tagCards: [] }]);
   });
 });

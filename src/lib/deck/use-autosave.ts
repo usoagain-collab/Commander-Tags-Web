@@ -1,18 +1,17 @@
 "use client";
 
-// Autosave: every edit is queued and sent to the database in order, one call per edit.
+// Autosave: every edit (card counts, categories and My tags: one SavePayload) is queued and sent to the database in order, one call per edit.
 // The screen updates immediately (optimistic); if a save fails, the queue stops, keeps the unsaved edits,
 // and shows an error with a Retry button, so nothing is silently lost or applied out of order.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Board } from "./model";
+import type { SavePayload } from "./model";
 
-export type SaveRow = { oracle_id: string; board: Board; quantity: number };
 export type SaveStatus = { state: "saved" | "saving" | "error"; error?: string; pending: number };
 
 export function useAutosave(deckId: string) {
   const supabase = useMemo(() => createClient(), []);
-  const queue = useRef<SaveRow[][]>([]);
+  const queue = useRef<SavePayload[]>([]);
   const running = useRef(false);
   const failed = useRef(false);
   const [status, setStatus] = useState<SaveStatus>({ state: "saved", pending: 0 });
@@ -23,7 +22,13 @@ export function useAutosave(deckId: string) {
     failed.current = false;
     while (queue.current.length > 0) {
       setStatus({ state: "saving", pending: queue.current.length });
-      const { error } = await supabase.rpc("apply_deck_changes", { p_deck: deckId, p_changes: queue.current[0] });
+      const next = queue.current[0];
+      const { error } = await supabase.rpc("apply_deck_changes", {
+        p_deck: deckId,
+        p_changes: next.rows,
+        p_categories: next.categories,
+        p_tag_cards: next.tag_cards,
+      });
       if (error) {
         running.current = false;
         failed.current = true;
@@ -37,8 +42,8 @@ export function useAutosave(deckId: string) {
   }, [deckId, supabase]);
 
   const save = useCallback(
-    (rows: SaveRow[]) => {
-      queue.current.push(rows);
+    (payload: SavePayload) => {
+      queue.current.push(payload);
       if (failed.current) {
         // While a save is failing, keep queueing but wait for Retry, so edits stay in order.
         setStatus((s) => ({ ...s, pending: queue.current.length }));

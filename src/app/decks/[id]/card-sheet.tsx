@@ -27,6 +27,8 @@ type Props = {
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
+  /** Category picker and My tags (step 3f), shown above the card's roles and tags. */
+  extra?: React.ReactNode;
 };
 
 /**
@@ -183,6 +185,8 @@ export function CardSheet(props: Props) {
             {!readOnly && panel === "decks" && (
               <OtherDecks deckId={props.deckId} line={line} onDone={() => setPanel("main")} />
             )}
+
+            {props.extra}
 
             <CardTags
               card={card}
