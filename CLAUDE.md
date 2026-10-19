@@ -27,7 +27,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 5. Bracket targeting | Not started |
 | 6. Playtester | Not started |
 | 7. Friend test | Not started |
-| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing, multiplayer playtesting) |
+| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down) |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
 
