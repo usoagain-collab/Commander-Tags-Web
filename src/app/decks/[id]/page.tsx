@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { entryKey, type Board, type CardSummary, type Categories, type Entries } from "@/lib/deck/model";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets } from "@/lib/tags/role-settings";
+import { fetchSummaries } from "@/lib/deck/fetch-summaries";
 import { DeckEditor } from "./deck-editor";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -30,14 +31,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   const { data: rows, error: rowsError } = await supabase.from("deck_cards").select("oracle_id, board, quantity, category").eq("deck_id", id);
   if (rowsError) throw new Error(`Couldn't load the deck's cards: ${rowsError.message}`);
   const oracleIds = [...new Set((rows ?? []).map((r) => r.oracle_id as string))];
-  // In batches: the ids go in the request's address, and ~400 of them (a big maybeboard) is longer than the
-  // server accepts. A failed batch must stop the page, not show an empty deck that autosave could then overwrite.
-  const batches = [];
-  for (let i = 0; i < oracleIds.length; i += 100) batches.push(oracleIds.slice(i, i + 100));
-  const results = await Promise.all(batches.map((ids) => supabase.from("card_summaries").select("*").in("oracle_id", ids)));
-  const failed = results.find((r) => r.error);
-  if (failed?.error) throw new Error(`Couldn't load card details: ${failed.error.message}`);
-  const summaries = results.flatMap((r) => (r.data ?? []) as CardSummary[]);
+  const summaries = await fetchSummaries(supabase, oracleIds);
 
   const entries: Entries = {};
   const categories: Categories = {};

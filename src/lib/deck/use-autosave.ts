@@ -28,6 +28,7 @@ export function useAutosave(deckId: string) {
         p_changes: next.rows,
         p_categories: next.categories,
         p_tag_cards: next.tag_cards,
+        p_snapshot_name: next.snapshot_name ?? null,
       });
       if (error) {
         running.current = false;
