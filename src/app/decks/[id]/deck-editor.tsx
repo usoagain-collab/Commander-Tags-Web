@@ -45,6 +45,7 @@ import {
   splitKey,
   themeSettingsToSaved,
   themeTags,
+  cardKeys,
   treeCard,
   type ThemeCard,
   type ThemeTag,
@@ -64,6 +65,8 @@ import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
 import { HistoryPanel } from "./history-panel";
 import { StatsPanel } from "./stats-panel";
+import { SuggestPanel, type SuggestSource } from "./suggest-panel";
+import { DEFAULT_SUGGEST, type PoolCard } from "@/lib/suggest/score";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
@@ -217,7 +220,7 @@ export function DeckEditor({
     [save, say, state.categories],
   );
 
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | null>(null);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -421,6 +424,32 @@ export function DeckEditor({
   const trees = tags.tree ? { oracle: tags.tree, art: artTree } : null;
   const roleTagSet = new Set(roles.flatMap((r) => (r.tagSet ? [...r.tagSet] : [])));
   const themes: ThemeTag[] = trees ? themeTags(themeCards, { settings: themeSettings, trees, roleTags: roleTagSet, hidden }) : [];
+
+  // ---------- suggestions (Phase 4) ----------
+  // Scored against the deck's top 15 GAMEPLAY themes (pool cards have oracle tags only), Specific or Broad as set.
+  const suggestThemes: ThemeTag[] = trees
+    ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: roleTagSet, hidden }).slice(0, 15)
+    : [];
+  const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
+  const openSuggest = (source: SuggestSource) => {
+    setSuggestFor(source);
+    setPanel("suggest");
+    requestAnimationFrame(() => document.getElementById("suggest-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const suggestForRole = (key: string) => {
+    const r = roles.find((x) => x.key === key);
+    if (!r) return;
+    openSuggest({ label: r.name, slugs: r.tagSet ? [...r.tagSet] : [], lands: !!r.land, roleKey: r.key });
+  };
+  const suggestForTag = (t: ThemeTag) => {
+    if (!tags.tree || t.kind !== "o") return;
+    openSuggest({ label: t.label, slugs: [...tags.tree.descendants([t.slug])] });
+  };
+  const suggestOverall = () => {
+    if (!tags.tree) return;
+    if (!suggestThemes.length) return say("Add a few more cards first: overall suggestions follow the deck's shared themes.");
+    openSuggest({ label: "this deck", slugs: [...tags.tree.descendants(suggestThemes.map((t) => t.slug))] });
+  };
   const keyCounts = deckKeyCounts(themeCards);
   const hiddenList = [...hidden].map((key) => {
     const { kind, slug } = splitKey(key);
@@ -444,6 +473,7 @@ export function DeckEditor({
         toggleHidden(key);
         if (highlight && highlightValue(splitKey(key)) === highlight) setHighlight(null);
       }}
+      onSuggest={readOnly ? undefined : suggestForTag}
       onMakeRole={(t) => {
         roleSettings.setCustom((cs) => [...cs, { slug: t.slug, name: roleNameFromLabel(t.label), target: Math.max(1, t.count) }]);
         say(`Added a "${roleNameFromLabel(t.label)}" role with a target of ${Math.max(1, t.count)}. Adjust it in the role profile.`);
@@ -476,6 +506,7 @@ export function DeckEditor({
         else roleSettings.setTargets((t) => ({ ...t, [key]: n }));
       }}
       onHighlight={(key) => toggleHighlight(`role:${key}`)}
+      onSuggest={readOnly ? undefined : suggestForRole}
       onAddCustom={(role) => roleSettings.setCustom((cs) => [...cs, role])}
       onRemoveCustom={(key) => {
         roleSettings.setCustom((cs) => cs.filter((c) => customKey(c.slug) !== key));
@@ -627,6 +658,11 @@ export function DeckEditor({
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {!readOnly && (
+            <HeaderButton active={panel === "suggest"} onClick={() => (panel === "suggest" ? setPanel(null) : suggestOverall())}>
+              Suggest
+            </HeaderButton>
+          )}
+          {!readOnly && (
             <HeaderButton active={panel === "search"} onClick={() => setPanel(panel === "search" ? null : "search")}>
               Search
             </HeaderButton>
@@ -674,6 +710,28 @@ export function DeckEditor({
         />
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
+      {panel === "suggest" && suggestFor && !readOnly && (
+        <div id="suggest-panel" className="scroll-mt-4">
+          <SuggestPanel
+            source={suggestFor}
+            identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
+            deckIds={[...new Set(Object.keys(entries).map((k) => k.split("|")[1]))]}
+            isInDeck={(id) => Object.keys(entries).some((k) => k.endsWith(`|${id}`))}
+            hasCommander={commanders.length > 0}
+            roleNames={Object.fromEntries(roles.map((r) => [r.key, r.name]))}
+            score={{
+              themes: suggestThemes,
+              keysOf: (c: PoolCard) => (trees ? cardKeys({ oracle: c.tags, art: [], commander: false, land: false }, themeSettings.specific, trees) : []),
+              rolesOf: (c: PoolCard) => rolesOf(c, c.tags, roles),
+              under: new Set(roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key)),
+              settings: DEFAULT_SUGGEST,
+            }}
+            onAdd={addWithNotice}
+            onPreview={setPreview}
+            onClose={() => setPanel(null)}
+          />
+        </div>
+      )}
       {panel === "stats" && (
         <StatsPanel lines={[...commanders, ...companions, ...mainLines]} identity={identity} onClose={() => setPanel(null)} />
       )}

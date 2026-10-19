@@ -17,6 +17,8 @@ type Props = {
   onHighlight: (tag: ThemeTag) => void;
   onToggleHidden: (key: string) => void;
   onMakeRole: (tag: ThemeTag) => void;
+  /** Phase 4: open suggestions for this tag (oracle tags only; the pool has no art tags). */
+  onSuggest?: (tag: ThemeTag) => void;
   hideTitle?: boolean;
 };
 
@@ -163,6 +165,17 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
       >
         ⑂
       </button>
+      {props.onSuggest && tag.kind === "o" && (
+        <button
+          type="button"
+          onClick={() => props.onSuggest!(tag)}
+          aria-label={`Suggest cards with ${tag.label}`}
+          title="Suggest cards with this tag"
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-sm opacity-50 hover:opacity-100"
+        >
+          💡
+        </button>
+      )}
       {!props.readOnly && tag.kind === "o" && !isRole && (
         <button
           type="button"
