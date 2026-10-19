@@ -109,6 +109,27 @@ export class TagTree {
     return [...slugs].sort((a, b) => this.depth(b) - this.depth(a) || this.label(a).localeCompare(this.label(b)));
   }
 
+  /** The first line of ancestry, top-level tag first and this tag last (for the tag tree card). */
+  chain(slug: string): string[] {
+    let i = this.index.get(slug);
+    if (i === undefined) return [slug];
+    const out = [i];
+    const seen = new Set(out);
+    while (this.parents[i].length && out.length < 8) {
+      i = this.parents[i][0];
+      if (seen.has(i)) break;
+      seen.add(i);
+      out.unshift(i);
+    }
+    return out.map((j) => this.slugs[j]);
+  }
+
+  /** Direct sub-tags of a tag. */
+  childrenOf(slug: string): string[] {
+    const i = this.index.get(slug);
+    return i === undefined ? [] : this.children[i].map((c) => this.slugs[c]);
+  }
+
   label(slug: string) {
     const i = this.index.get(slug);
     return i === undefined ? slug : this.labels[i];

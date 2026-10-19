@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { AnchoredPopover, useAnchoredPopover } from "@/components/anchored-popover";
 import { createClient } from "@/lib/supabase/client";
 import { rankTags } from "@/lib/search/query";
 import { roleNameFromLabel, roleStatus, statusText, type CustomRole } from "@/lib/tags/role-settings";
@@ -161,18 +161,14 @@ export function RoleProfile(props: Props) {
 /** "a", "a or b", "a, b or c" */
 const orList = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items.at(-1)}`);
 
-const TIP_WIDTH = 256;
-
 /**
  * The ⓘ next to a role: what it counts and which tags it uses. Hover on desktop; tap on a phone (there's no
- * hover there). The tap area is 32px even though the icon is small (CLAUDE.md: Mobile matters).
- * The tooltip is drawn on top of the page (a portal with fixed position), not inside the role column: that
- * column scrolls, and a scrolling box clips anything that pokes out of it.
+ * hover there). The tap area is 32px even though the icon is small (CLAUDE.md: Mobile matters). The text is an
+ * AnchoredPopover so the scrolling role column can't clip it.
  */
 function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
-  const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
-  const open = pos !== null;
+  const { pos, open, show, hide } = useAnchoredPopover(256, 180);
   const id = `role-info-${role.key}`;
   const label = (s: string) => tree?.label(s) ?? s;
 
@@ -183,28 +179,6 @@ function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
     : [];
   const about = role.about ?? (role.custom ? `A role you made from the ${label(roots[0] ?? "")} tag.` : "");
 
-  function show() {
-    const r = button.current?.getBoundingClientRect();
-    if (!r) return;
-    const width = Math.min(TIP_WIDTH, window.innerWidth - 16);
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-    // Below the icon if there's room for a typical tooltip, otherwise above it.
-    const above = r.bottom + 180 > window.innerHeight && r.top > 180;
-    setPos({ left, top: above ? r.top - 4 : r.bottom + 4, above });
-  }
-  const hide = () => setPos(null);
-
-  // A fixed-position tooltip would drift if the page or column scrolled, so close it instead.
-  useEffect(() => {
-    if (!open) return;
-    window.addEventListener("scroll", hide, true);
-    window.addEventListener("resize", hide);
-    return () => {
-      window.removeEventListener("scroll", hide, true);
-      window.removeEventListener("resize", hide);
-    };
-  }, [open]);
-
   return (
     <>
       <button
@@ -213,9 +187,9 @@ function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
         aria-label={`How ${role.name} is counted`}
         aria-expanded={open}
         aria-controls={id}
-        onPointerEnter={(e) => e.pointerType === "mouse" && show()}
+        onPointerEnter={(e) => e.pointerType === "mouse" && show(button.current)}
         onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
-        onClick={() => (open ? hide() : show())}
+        onClick={() => (open ? hide() : show(button.current))}
         onBlur={hide}
         onKeyDown={(e) => e.key === "Escape" && hide()}
         className="flex h-8 w-8 shrink-0 items-center justify-center"
@@ -227,40 +201,26 @@ function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
           i
         </span>
       </button>
-      {pos &&
-        createPortal(
-          <span
-            id={id}
-            role="tooltip"
-            style={{
-              left: pos.left,
-              top: pos.top,
-              width: Math.min(TIP_WIDTH, window.innerWidth - 16),
-              transform: pos.above ? "translateY(-100%)" : undefined,
-            }}
-            className="pointer-events-none fixed z-[60] block rounded-md border border-foreground/15 bg-background p-3 text-xs leading-relaxed shadow-lg"
-          >
-            {about && <span className="block">{about}</span>}
-            {!role.land && roots.length > 0 && (
-              <span className="mt-2 block opacity-80">
-                Counts cards tagged <strong>{orList(roots.map(label))}</strong> on Scryfall Tagger
-                {subtags.length > 0 && (
-                  <>
-                    , plus the {subtags.length} tag{subtags.length === 1 ? "" : "s"} under {roots.length === 1 ? "it" : "them"}
-                    {examples.length > 0 && <> (such as {examples.join(", ")})</>}
-                  </>
-                )}
-                .
-              </span>
+      <AnchoredPopover pos={pos} id={id}>
+        {about && <span className="block">{about}</span>}
+        {!role.land && roots.length > 0 && (
+          <span className="mt-2 block opacity-80">
+            Counts cards tagged <strong>{orList(roots.map(label))}</strong> on Scryfall Tagger
+            {subtags.length > 0 && (
+              <>
+                , plus the {subtags.length} tag{subtags.length === 1 ? "" : "s"} under {roots.length === 1 ? "it" : "them"}
+                {examples.length > 0 && <> (such as {examples.join(", ")})</>}
+              </>
             )}
-            {role.exclude && (
-              <span className="mt-2 block opacity-80">
-                Cards that are also {role.exclude === "wipes" ? "board wipes" : role.exclude} don&apos;t count here.
-              </span>
-            )}
-          </span>,
-          document.body,
+            .
+          </span>
         )}
+        {role.exclude && (
+          <span className="mt-2 block opacity-80">
+            Cards that are also {role.exclude === "wipes" ? "board wipes" : role.exclude} don&apos;t count here.
+          </span>
+        )}
+      </AnchoredPopover>
     </>
   );
 }

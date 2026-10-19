@@ -21,22 +21,36 @@ import {
   type Entries,
   type Plan,
 } from "@/lib/deck/model";
-import { groupLines, sortLines, type ViewSettings } from "@/lib/deck/grouping";
+import { groupLines, readViewSettings, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
 import { buildRoleDefs, customKey, roleCounts, roleStatus, type CustomRole } from "@/lib/tags/role-settings";
 import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData } from "@/lib/tags/use-tag-data";
+import { useArtTree } from "@/lib/tags/use-art-tree";
+import {
+  aKey,
+  deckKeyCounts,
+  readThemeSettings,
+  splitKey,
+  themeSettingsToSaved,
+  themeTags,
+  treeCard,
+  type ThemeCard,
+  type ThemeTag,
+} from "@/lib/tags/themes";
+import { roleNameFromLabel } from "@/lib/tags/role-settings";
 import { createClient } from "@/lib/supabase/client";
 import { CardPanel } from "./card-panel";
 import { CardSearch } from "./card-search";
 import { CardSheet } from "./card-sheet";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
-import { DeckToolbar, useViewSettings } from "./deck-toolbar";
+import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { DropOverlay } from "./drop-overlay";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
+import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
 
 type State = {
@@ -92,8 +106,8 @@ type Props = {
   initialEntries: Entries;
   initialCards: Record<string, CardSummary>;
   readOnly: boolean;
-  initialView: ViewSettings;
   savedTagView: Record<string, unknown>;
+  hiddenTags: string[];
   userId: string | null;
   roleTargets: Record<string, number>;
   customRoles: CustomRole[];
@@ -105,8 +119,8 @@ export function DeckEditor({
   initialEntries,
   initialCards,
   readOnly,
-  initialView,
   savedTagView,
+  hiddenTags,
   userId,
   roleTargets,
   customRoles,
@@ -124,7 +138,12 @@ export function DeckEditor({
   const [sheet, setSheet] = useState<{ oracle_id: string; board: Board } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [view, setView] = useViewSettings(initialView, savedTagView, userId);
+  // Remembered per user: View / Group / Sort and the top-tags switches (one writer), plus hidden tags.
+  const [prefs, updatePrefs] = useTagViewPrefs(savedTagView, userId);
+  const view = readViewSettings(prefs);
+  const setView = (v: ViewSettings) => updatePrefs(v);
+  const themeSettings = readThemeSettings(prefs);
+  const [hidden, toggleHidden] = useHiddenTags(hiddenTags, userId);
   const quickAdd = useRef<QuickAddHandle>(null);
 
   const say = useCallback((msg: string) => {
@@ -267,6 +286,51 @@ export function DeckEditor({
   const counts = roleCounts([...commanders, ...mainLines], (l) => roleKeysOf(l.card));
   const underTarget = roles.filter((r) => roleStatus(counts[r.key] ?? 0, r.target) === "under").length;
 
+  // ---------- top tags (Phase 3d) ----------
+  const themeCards: ThemeCard[] = [...commanders, ...mainLines].map((l) => ({
+    oracle: tags.oracleTags[l.card.oracle_id] ?? [],
+    art: (tags.artTags[l.card.oracle_id] ?? []).map(([s]) => s),
+    commander: l.board === "commander",
+    land: isLand(l.card.type_line),
+  }));
+  const artTree = useArtTree(
+    themeCards.flatMap((c) => c.art),
+    tags.tree?.artN,
+    themeSettings.mode === "flavor",
+  );
+  const trees = tags.tree ? { oracle: tags.tree, art: artTree } : null;
+  const roleTagSet = new Set(roles.flatMap((r) => (r.tagSet ? [...r.tagSet] : [])));
+  const themes: ThemeTag[] = trees ? themeTags(themeCards, { settings: themeSettings, trees, roleTags: roleTagSet, hidden }) : [];
+  const keyCounts = deckKeyCounts(themeCards);
+  const hiddenList = [...hidden].map((key) => {
+    const { kind, slug } = splitKey(key);
+    const fromArt = Object.values(tags.artTags).flat().find(([s]) => aKey(s) === key)?.[1];
+    return { key, label: kind === "o" ? (tags.tree?.label(slug) ?? slug) : (artTree?.label(slug) ?? fromArt ?? slug) };
+  });
+  const renderTopTags = (hideTitle = false) => (
+    <TopTags
+      hideTitle={hideTitle}
+      themes={themes}
+      settings={themeSettings}
+      loading={!tags.tree || (themeSettings.mode === "flavor" && !artTree && themeCards.some((c) => c.art.length > 0))}
+      readOnly={readOnly}
+      highlight={highlight}
+      hidden={hiddenList}
+      roleSlugs={new Set(roleSettings.custom.map((c) => c.slug))}
+      treeCardFor={(key) => (trees ? treeCard(key, trees, keyCounts) : null)}
+      onSettings={(t) => updatePrefs(themeSettingsToSaved(t))}
+      onHighlight={(t) => toggleHighlight(highlightValue(t))}
+      onToggleHidden={(key) => {
+        toggleHidden(key);
+        if (highlight && highlightValue(splitKey(key)) === highlight) setHighlight(null);
+      }}
+      onMakeRole={(t) => {
+        roleSettings.setCustom((cs) => [...cs, { slug: t.slug, name: roleNameFromLabel(t.label), target: Math.max(1, t.count) }]);
+        say(`Added a "${roleNameFromLabel(t.label)}" role with a target of ${Math.max(1, t.count)}. Adjust it in the role profile.`);
+      }}
+    />
+  );
+
   const saveDefaults = async () => {
     if (!userId) return "Sign in to save defaults.";
     const supabase = createClient();
@@ -391,7 +455,10 @@ export function DeckEditor({
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[250px_minmax(0,1fr)_300px]">
         {/* Wide screens: the role profile gets its own column on the left. */}
         <aside className="hidden xl:block">
-          <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">{renderProfile()}</div>
+          <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">
+            {renderProfile()}
+            <div className="mt-6 border-t border-foreground/10 pt-4">{renderTopTags()}</div>
+          </div>
         </aside>
 
         <div className="min-w-0">
@@ -411,6 +478,25 @@ export function DeckEditor({
               </span>
             </summary>
             <div className="px-3 pb-3">{renderProfile(true)}</div>
+          </details>
+          <details className="group mb-4 rounded-lg border border-foreground/15 xl:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-sm font-medium">
+              <span>
+                Top tags
+                {themes.length > 0 && (
+                  <span className="ml-2 text-xs font-normal opacity-60">
+                    {themes
+                      .slice(0, 3)
+                      .map((t) => t.label)
+                      .join(", ")}
+                  </span>
+                )}
+              </span>
+              <span aria-hidden className="transition-transform group-open:rotate-90">
+                ›
+              </span>
+            </summary>
+            <div className="px-3 pb-3">{renderTopTags(true)}</div>
           </details>
           {!readOnly && (
             <QuickAdd ref={quickAdd} onAdd={(card, board) => run(planAdd(entries, card, board), card)} onPreview={setPreview} />
