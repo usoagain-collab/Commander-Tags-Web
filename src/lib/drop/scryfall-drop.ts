@@ -74,7 +74,11 @@ export function readDrop(data: DataLike): DropRef | null {
   return ref.scryfallId || ref.set || ref.name ? ref : null;
 }
 
-/** True while dragging something that might be a card (not, say, a file from the desktop). */
+/**
+ * True while dragging something that might be a card. Chrome attaches the picture itself as a file when
+ * an image is dragged from another site (types: Files, text/uri-list, text/html), so "Files" alone doesn't
+ * rule a drag out; only a drag with no link, HTML or text at all (a file from the desktop) is ignored.
+ */
 export function looksDroppable(types: readonly string[]) {
-  return !types.includes("Files") && types.some((t) => t === "text/uri-list" || t === "text/html" || t === "text/plain");
+  return types.some((t) => t === "text/uri-list" || t === "text/html" || t === "text/plain");
 }

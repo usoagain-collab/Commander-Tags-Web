@@ -68,4 +68,9 @@ describe("readDrop", () => {
     expect(looksDroppable(["Files"])).toBe(false);
     expect(looksDroppable(["text/uri-list", "text/html"])).toBe(true);
   });
+
+  it("accepts Chrome's image drags, which also carry the picture as a file", () => {
+    // What Chrome reports when a card image is dragged from a scryfall.com tab.
+    expect(looksDroppable(["Files", "text/uri-list", "text/html"])).toBe(true);
+  });
 });
