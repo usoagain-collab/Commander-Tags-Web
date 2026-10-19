@@ -247,6 +247,40 @@ export function planMove(entries: Entries, card: CardSummary, from: Board, to: B
   };
 }
 
+/**
+ * Bulk edit (step 3g): runs one plan per card against the deck as it changes (so copy limits see the earlier
+ * cards' effects), then joins them into one Change: one save, one Ctrl+Z. Cards whose plan is refused are
+ * skipped and their reasons returned.
+ */
+export function planBulk<T>(
+  entries: Entries,
+  items: T[],
+  planOne: (entries: Entries, item: T) => Plan,
+  label: (done: number) => string,
+): { plan: Plan; done: number; skipped: string[] } {
+  let current = entries;
+  const rows = new Map<string, RowChange>();
+  const skipped: string[] = [];
+  let done = 0;
+  for (const item of items) {
+    const p = planOne(current, item);
+    if (!p.ok) {
+      if (p.reason !== "No change.") skipped.push(p.reason);
+      continue;
+    }
+    done++;
+    current = applyChange(current, p.change);
+    for (const r of p.change.rows) {
+      const k = entryKey(r.board, r.oracle_id);
+      const prev = rows.get(k);
+      rows.set(k, prev ? { ...prev, to: r.to } : { ...r });
+    }
+  }
+  const joined = [...rows.values()].filter((r) => r.from !== r.to);
+  const plan: Plan = joined.length ? { ok: true, change: { label: label(done), rows: joined } } : { ok: false, reason: skipped[0] ?? "No change." };
+  return { plan, done, skipped };
+}
+
 const row = (card: CardSummary, board: Board, from: number, to: number): RowChange => ({
   oracle_id: card.oracle_id,
   board,

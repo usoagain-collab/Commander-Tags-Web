@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCategories,
+  planBulk,
   applyChange,
   applyTagCards,
   dropTagFromChanges,
@@ -243,5 +244,42 @@ describe("My tags on cards (3f)", () => {
     const a = { label: "a", rows: [], tagCards: [{ tag_id: "t1", oracle_id: "x", from: false, to: true }] };
     const b = { label: "b", rows: [{ oracle_id: "x", board: "main" as const, from: 0, to: 1 }], tagCards: [{ tag_id: "t1", oracle_id: "x", from: false, to: true }] };
     expect(dropTagFromChanges([a, b], "t1")).toEqual([{ ...b, tagCards: [] }]);
+  });
+});
+
+describe("bulk edit (3g)", () => {
+  it("moves several cards in one change and one undo step", () => {
+    const entries: Entries = { "main|sol-ring": 1, "main|forest": 10, "main|lightning-bolt": 1 };
+    const r = planBulk(entries, [solRing, forest, bolt], (e, c) => planMove(e, c, "main", "maybe"), (n) => `Move ${n} cards`);
+    if (!r.plan.ok) throw new Error("plan failed");
+    expect(r.done).toBe(3);
+    expect(r.plan.change.label).toBe("Move 3 cards");
+    const after = applyChange(entries, r.plan.change);
+    expect(after).toEqual({ "maybe|sol-ring": 1, "maybe|forest": 10, "maybe|lightning-bolt": 1 });
+    expect(applyChange(after, r.plan.change, "back")).toEqual(entries);
+  });
+
+  it("checks copy limits against the deck as it changes, and reports skipped cards", () => {
+    // Sol Ring is on both boards: moving the maybe copy into the main deck would make two.
+    const entries: Entries = { "maybe|sol-ring": 1, "main|sol-ring": 1, "maybe|forest": 2 };
+    const r = planBulk(
+      entries,
+      [{ card: solRing, board: "maybe" as const }, { card: forest, board: "maybe" as const }],
+      (e, it) => planMove(e, it.card, it.board, "main"),
+      (n) => `Move ${n}`,
+    );
+    expect(r.done).toBe(1);
+    expect(r.skipped).toHaveLength(1);
+    if (!r.plan.ok) throw new Error("plan failed");
+    expect(applyChange(entries, r.plan.change)).toEqual({ "maybe|sol-ring": 1, "main|sol-ring": 1, "main|forest": 2 });
+  });
+
+  it("sets copies for cards that allow more, and refuses when nothing changes", () => {
+    const entries: Entries = { "main|forest": 3, "main|sol-ring": 1 };
+    const r = planBulk(entries, [forest, solRing], (e, c) => planSetQuantity(e, c, "main", 8), (n) => `Set ${n}`);
+    expect(r.done).toBe(1);
+    if (!r.plan.ok) throw new Error("plan failed");
+    expect(r.plan.change.rows).toEqual([{ oracle_id: "forest", board: "main", from: 3, to: 8 }]);
+    expect(planBulk({}, [solRing], (e, c) => planRemove(e, c, "main"), () => "x").plan.ok).toBe(false);
   });
 });

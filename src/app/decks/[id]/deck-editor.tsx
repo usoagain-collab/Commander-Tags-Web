@@ -15,6 +15,7 @@ import {
   linesFor,
   outsideIdentity,
   planAdd,
+  planBulk,
   planCategory,
   planMove,
   planSetQuantity,
@@ -59,6 +60,7 @@ import { CardSheet } from "./card-sheet";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
 import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
+import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
@@ -176,6 +178,15 @@ export function DeckEditor({
   const [sheet, setSheet] = useState<{ oracle_id: string; board: Board } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Bulk edit (step 3g): select mode, the selected rows (entry keys), and where a Shift-click range starts.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const anchor = useRef<string | null>(null);
+  const stopSelecting = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Set());
+    anchor.current = null;
+  }, []);
   // Remembered per user: View / Group / Sort and the top-tags switches (one writer), plus hidden tags.
   const [prefs, updatePrefs] = useTagViewPrefs(savedTagView, userId);
   const view = readViewSettings(prefs);
@@ -242,7 +253,9 @@ export function DeckEditor({
       const el = e.target as HTMLElement;
       const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
       const mod = e.ctrlKey || e.metaKey;
-      if (e.key === "/" && !typing) {
+      if (e.key === "Escape" && selecting && !typing) {
+        stopSelecting();
+      } else if (e.key === "/" && !typing) {
         e.preventDefault();
         quickAdd.current?.focus();
       } else if (mod && !typing && e.key.toLowerCase() === "z") {
@@ -256,7 +269,7 @@ export function DeckEditor({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [readOnly, undo, redo]);
+  }, [readOnly, undo, redo, selecting, stopSelecting]);
 
   const { entries, cards, categories, tagCards } = state;
 
@@ -335,6 +348,7 @@ export function DeckEditor({
       extraRoles: Math.max(0, lineRoleKeys(line).length - 1),
       myTags: showMyTags ? myTagsOfCard(id) : [],
       manual: !!categories[entryKey(line.board, id)],
+      selected: selecting ? selected.has(entryKey(line.board, id)) : undefined,
     };
   };
   // Role subgroups (step 3e): for each role, which subgroup each card that fills it goes in.
@@ -498,6 +512,76 @@ export function DeckEditor({
   }, [sheet, sheetIndex]);
   const previewLine = preview ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === preview.oracle_id) : undefined;
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
+  /**
+   * A click on a card. While selecting (or with Ctrl/Cmd) it toggles the card; Shift selects everything between
+   * the last clicked card and this one, in screen order. Otherwise it opens the card sheet.
+   */
+  const clickLine = (l: DeckLine, e?: React.MouseEvent) => {
+    const key = entryKey(l.board, l.card.oracle_id);
+    if (readOnly || !(selecting || e?.shiftKey || e?.ctrlKey || e?.metaKey)) return openLine(l);
+    e?.preventDefault();
+    setSelecting(true);
+    const keys = order.map((o) => entryKey(o.board, o.card.oracle_id));
+    if (e?.shiftKey && anchor.current && keys.includes(anchor.current)) {
+      const [a, b] = [keys.indexOf(anchor.current), keys.indexOf(key)].sort((x, y) => x - y);
+      setSelected((s) => new Set([...s, ...keys.slice(a, b + 1)]));
+    } else {
+      setSelected((s) => {
+        const next = new Set(s);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    }
+    anchor.current = key;
+  };
+  const selectedLines = selecting ? order.filter((o) => selected.has(entryKey(o.board, o.card.oracle_id))) : [];
+  /** Runs a bulk plan and says what happened, including cards that were skipped and why. */
+  const runBulk = (r: { plan: Plan; done: number; skipped: string[] }) => {
+    if (!r.plan.ok) {
+      say(r.plan.reason);
+      return null;
+    }
+    run(r.plan);
+    const skip = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped[0]}${r.skipped.length > 1 ? " …" : ""}` : "";
+    say(`${r.plan.change.label}.${skip} Ctrl+Z undoes it.`);
+    return r.plan.change;
+  };
+  const plural = (n: number) => (n === 1 ? "1 card" : `${n} cards`);
+  const bulkMove = (to: Board) => {
+    const change = runBulk(
+      planBulk(entries, selectedLines, (e, l) => planMove(e, l.card, l.board, to), (n) => `Moved ${plural(n)} to the ${BOARD_LABELS[to].toLowerCase()}`),
+    );
+    if (!change) return;
+    // Keep the moved cards selected on their new board.
+    const after = applyChange(entries, change);
+    setSelected(
+      new Set(
+        selectedLines.map((l) =>
+          after[entryKey(to, l.card.oracle_id)] ? entryKey(to, l.card.oracle_id) : entryKey(l.board, l.card.oracle_id),
+        ),
+      ),
+    );
+  };
+  const bulkCopies = (n: number) =>
+    runBulk(
+      planBulk(
+        entries,
+        selectedLines.filter((l) => l.card.max_copies > 1),
+        (e, l) => planSetQuantity(e, l.card, l.board, n),
+        (done) => `Set ${plural(done)} to ${n} ${n === 1 ? "copy" : "copies"}`,
+      ),
+    );
+  const bulkRemove = () => {
+    if (runBulk(planBulk(entries, selectedLines, (e, l) => planSetQuantity(e, l.card, l.board, 0), (n) => `Removed ${plural(n)}`)))
+      setSelected(new Set());
+  };
+  const bulkTag = (t: MyTag, on: boolean) => {
+    const unique = [...new Map(selectedLines.map((l) => [l.card.oracle_id, l.card])).values()];
+    const plan = planTagCards(tagCards, t.id, t.name, unique, on);
+    if (!plan.ok) say(on ? `All selected cards already have "${t.name}".` : `None of the selected cards have "${t.name}".`);
+    else if (run(plan)) say(`${plan.change.label}. Ctrl+Z undoes it.`);
+  };
   const step = (by: number) => {
     if (!order.length || sheetIndex < 0) return;
     openLine(order[(sheetIndex + by + order.length) % order.length]);
@@ -651,7 +735,20 @@ export function DeckEditor({
           </p>
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-b border-foreground/10 pb-3">
-            <DeckToolbar settings={view} onChange={setView} />
+            <div className="flex flex-wrap items-center gap-3">
+              <DeckToolbar settings={view} onChange={setView} />
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                  aria-pressed={selecting}
+                  title="Select several cards to move, tag or remove them at once (or Ctrl/Shift-click cards)"
+                  className={`min-h-9 rounded-md border px-3 text-sm ${selecting ? "border-blue-500 bg-blue-500 text-white" : "border-foreground/20"}`}
+                >
+                  {selecting ? "Done selecting" : "Select"}
+                </button>
+              )}
+            </div>
             {tags.error && <span className="text-xs text-amber-700 dark:text-amber-400">{tags.error}</span>}
           </div>
 
@@ -671,7 +768,7 @@ export function DeckEditor({
               No commander yet. Add a legendary creature with Ctrl+Enter, or open a card and choose “Make commander”.
             </p>
           )}
-          <div className="mt-4">
+          <div className={`mt-4 ${selecting ? "select-none" : ""}`}>
             {sections.length === 0 ? (
               <p className="px-1.5 text-sm opacity-60">Empty. Add cards above, import a list, or drag cards in from Scryfall.</p>
             ) : (
@@ -688,7 +785,7 @@ export function DeckEditor({
                     return next;
                   })
                 }
-                onOpen={openLine}
+                onOpen={clickLine}
                 onHover={(l) => setPreview(l.card)}
                 onQuantity={(l, n) => run(planSetQuantity(entries, l.card, l.board, n))}
                 onCardDrop={view.group === "role" && !readOnly && roles.length > 0 ? dropOnRole : undefined}
@@ -725,6 +822,26 @@ export function DeckEditor({
       </div>
 
       <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards)} />
+
+      {selecting && !readOnly && (
+        <>
+          {/* Room so the bar never covers the last cards. */}
+          <div aria-hidden className="h-40" />
+          <BulkBar
+            count={selectedLines.length}
+            total={order.length}
+            tags={userId ? myTags.tags : []}
+            canSetCopies={selectedLines.some((l) => l.card.max_copies > 1)}
+            onMove={bulkMove}
+            onTag={bulkTag}
+            onCopies={bulkCopies}
+            onRemove={bulkRemove}
+            onSelectAll={() => setSelected(new Set(order.map((o) => entryKey(o.board, o.card.oracle_id))))}
+            onClear={() => setSelected(new Set())}
+            onDone={stopSelecting}
+          />
+        </>
+      )}
 
       {sheetLine && (
         <CardSheet
