@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { entryKey, type CardSummary, type Entries } from "./model";
 import { EXPORT_FORMATS, exportDeck, parseDeckText, planImport, type ExportFormat } from "./text-format";
@@ -72,7 +73,7 @@ describe("parsing real-world lists", () => {
   });
 
   it("matches split cards however they are written", () => {
-    for (const written of ["Fire // Ice", "Fire/// Ice", "Fire//Ice", "Fire"]) {
+    for (const written of ["Fire // Ice", "Fire/// Ice", "Fire//Ice", "Fire/Ice", "Fire"]) {
       expect(importText(`1 ${written}`).entries[k("main", fireIce.oracle_id)]).toBe(1);
     }
   });
@@ -91,6 +92,24 @@ describe("parsing real-world lists", () => {
   it("reads companion sections", () => {
     const { entries } = importText("Companion\n1 Lurrus of the Dream-Den\n\nDeck\n1 Sol Ring\n");
     expect(entries[k("companion", lurrus.oracle_id)]).toBe(1);
+  });
+});
+
+describe("David's Omo list (docs/test-data, Moxfield plain-text export)", () => {
+  const text = readFileSync(new URL("../../../docs/test-data/omo-moxfield-plain.txt", import.meta.url), "utf8");
+  const { lines, ignored } = parseDeckText(text);
+
+  it("reads 100 cards with nothing ignored", () => {
+    expect(ignored).toEqual([]);
+    expect(lines.reduce((n, l) => n + l.quantity, 0)).toBe(100);
+  });
+
+  it("finds Omo after the last blank line as the commander candidate", () => {
+    expect(lines.filter((l) => l.commanderCandidate).map((l) => l.name)).toEqual(["Omo, Queen of Vesuva"]);
+  });
+
+  it("turns the single-slash Room name into a face-separated name", () => {
+    expect(lines.map((l) => l.name)).toContain("Walk-In Closet // Forgotten Cellar");
   });
 });
 
