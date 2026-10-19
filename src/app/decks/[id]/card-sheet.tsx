@@ -7,6 +7,7 @@ import { addCardToDeck } from "@/lib/deck/add-to-deck";
 import { BOARD_LABELS, type Board, type DeckLine } from "@/lib/deck/model";
 import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagData } from "@/lib/tags/use-tag-data";
+import { CommanderLegality, LegalityAndRulings, RulesText, useCardDetails } from "./card-details";
 import { CardTags } from "./card-tags";
 
 type Props = {
@@ -39,7 +40,10 @@ export function CardSheet(props: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<"main" | "decks">("main");
   const [copied, setCopied] = useState(false);
+  const [face, setFace] = useState(0);
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
+  const { details, error, retry } = useCardDetails(card.oracle_id);
+  const image = details?.flippable ? details.faces[face]?.image : card.image_normal;
 
   // Keyboard: Esc closes, arrow keys step through the deck. Lock page scroll while open.
   useEffect(() => {
@@ -58,7 +62,10 @@ export function CardSheet(props: Props) {
     };
   }, [onClose, onPrev, onNext]);
 
-  useEffect(() => setPanel("main"), [card.oracle_id, board]);
+  useEffect(() => {
+    setPanel("main");
+    setFace(0);
+  }, [card.oracle_id, board]);
 
   async function copyName() {
     await navigator.clipboard.writeText(card.name);
@@ -77,7 +84,7 @@ export function CardSheet(props: Props) {
         aria-modal="true"
         aria-label={card.name}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl sm:max-w-3xl sm:rounded-2xl sm:p-6"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl sm:max-w-4xl sm:rounded-2xl sm:p-6"
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -103,17 +110,26 @@ export function CardSheet(props: Props) {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-[minmax(0,260px)_1fr]">
-          <div className="mx-auto w-full max-w-[300px]">
-            {card.image_normal ? (
+          <div className="mx-auto w-full max-w-[300px] space-y-2">
+            {image ? (
               <img
-                src={card.image_normal}
-                alt={card.name}
+                src={image}
+                alt={details?.flippable ? details.faces[face].name : card.name}
                 width={300}
                 height={418}
                 className="w-full rounded-[4.75%/3.5%] shadow-lg"
               />
             ) : (
               <div className="flex aspect-[63/88] items-center justify-center rounded-xl border p-4 text-center">{card.name}</div>
+            )}
+            {details?.flippable && (
+              <button
+                type="button"
+                onClick={() => setFace((f) => (f + 1) % details.faces.length)}
+                className="min-h-11 w-full rounded-lg border border-foreground/20 text-sm"
+              >
+                ⟲ Flip to {details.faces[(face + 1) % details.faces.length].name}
+              </button>
             )}
           </div>
 
@@ -129,12 +145,15 @@ export function CardSheet(props: Props) {
                 {BOARD_LABELS[board]}
                 {card.price_usd != null && <> · ${Number(card.price_usd).toFixed(2)} each</>}
               </p>
+              <CommanderLegality details={details} />
               {warnings.map((w) => (
                 <p key={w} className="mt-1 text-sm text-amber-700 dark:text-amber-400">
                   ⚠ {w}
                 </p>
               ))}
             </div>
+
+            <RulesText details={details} error={error} onRetry={retry} />
 
             {!readOnly && panel === "main" && (
               <div className="grid grid-cols-2 gap-2">
@@ -174,8 +193,10 @@ export function CardSheet(props: Props) {
               onTag={props.onTag}
             />
 
+            <LegalityAndRulings details={details} />
+
             <a
-              href={`https://scryfall.com/search?q=${encodeURIComponent(`!"${card.name}"`)}`}
+              href={details?.scryfallUri ?? `https://scryfall.com/search?q=${encodeURIComponent(`!"${card.name}"`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block text-xs underline opacity-70"
