@@ -32,6 +32,8 @@ const card = (name: string, extra: Partial<CardSummary> = {}): CardSummary => ({
   game_changer: false,
   max_copies: 1,
   can_be_commander: false,
+  layout: "normal",
+  counts_as_land: false,
   ...extra,
 });
 
@@ -151,13 +153,13 @@ describe("reading the deck", () => {
     expect(typeSection("Artifact Land")).toBe("Land");
   });
 
-  it("groups the mainboard by type, cheapest first", () => {
+  it("groups the mainboard by type, lands last, cheapest first", () => {
     let e = run({}, planAdd({}, solRing, "main"));
     e = run(e, planSetQuantity(e, forest, "main", 2));
     const groups = groupByType(linesFor(e, cards, "main"));
     expect(groups.map((g) => [g.section, g.count])).toEqual([
-      ["Land", 2],
       ["Artifact", 1],
+      ["Land", 2],
     ]);
   });
 

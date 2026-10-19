@@ -1,5 +1,7 @@
 // How the mainboard is laid out: the View / Group / Sort toolbar (Phase 3a).
-import { TYPE_SECTIONS, typeSection, type DeckLine } from "./model";
+import { TYPE_DISPLAY_ORDER, typeSection, type DeckLine } from "./model";
+
+const LANDS_KEY = "lands";
 import { isLand } from "@/lib/tags/roles";
 
 export type ViewMode = "text" | "grid" | "stacks";
@@ -56,13 +58,15 @@ export function groupLines(lines: DeckLine[], group: GroupBy, sort: SortBy, role
     const land = isLand(line.card.type_line);
     if (group === "type") {
       const s = typeSection(line.card.type_line);
-      const order = s === "Other" ? TYPE_SECTIONS.length : TYPE_SECTIONS.indexOf(s);
-      put(s, s, order, line);
+      put(s, s, TYPE_DISPLAY_ORDER.indexOf(s), line);
     } else if (group === "role") {
-      // Grouped by the first role the card fills (a card can fill several; the editor shows "+N roles").
-      const first = roles?.rolesOf(line)[0];
+      // Grouped by the first non-land role the card fills (a card can fill several; the editor shows
+      // "+N roles"), so an MDFC like Sink into Stupor sits with its spell role. Lands go at the bottom.
+      const filled = roles?.rolesOf(line) ?? [];
+      const first = filled.find((k) => k !== LANDS_KEY) ?? filled[0];
       const idx = roles?.roleOrder.findIndex((r) => r.key === first) ?? -1;
-      if (idx >= 0) put(first!, roles!.roleOrder[idx].name, idx, line);
+      if (first === LANDS_KEY) put(LANDS_KEY, roles!.roleOrder[idx]?.name ?? "Lands", 2000, line);
+      else if (idx >= 0) put(first!, roles!.roleOrder[idx].name, idx, line);
       else put("other", "Other", 1000, line);
     } else if (group === "mv") {
       if (land) put("lands", "Lands", 100, line);

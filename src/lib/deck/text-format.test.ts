@@ -19,6 +19,8 @@ const card = (name: string, extra: Partial<CardSummary> = {}): CardSummary => ({
   game_changer: false,
   max_copies: 1,
   can_be_commander: false,
+  layout: "normal",
+  counts_as_land: false,
   ...extra,
 });
 
