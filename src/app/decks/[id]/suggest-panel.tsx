@@ -4,6 +4,7 @@
 // against the deck's theme tags and under-target roles (src/lib/suggest/score.ts), and shows why each card fits.
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchSummaries } from "@/lib/deck/fetch-summaries";
 import type { Board, CardSummary } from "@/lib/deck/model";
 import {
   scorePool,
@@ -41,6 +42,10 @@ type Props = {
   /** Phase 4b: change the deck's suggestion style (saved per deck). */
   onSettings: (s: SuggestSettings) => void;
   saveError: string | null;
+  /** Phase 4c: cards marked "Not for this deck". */
+  dismissed: Set<string>;
+  onDismiss: (card: CardSummary) => void;
+  onRestore: (oracleId: string) => void;
 };
 
 export function SuggestPanel(props: Props) {
@@ -75,7 +80,7 @@ export function SuggestPanel(props: Props) {
   const rows: Scored[] = pool
     ? scorePool(
         pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))),
-        score,
+        { ...score, dismissed: props.dismissed },
       )
     : [];
 
@@ -98,11 +103,53 @@ export function SuggestPanel(props: Props) {
       {rows.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
           {rows.map((r) => (
-            <SuggestionCard key={r.card.oracle_id} row={r} roleNames={roleNames} onAdd={onAdd} onPreview={onPreview} />
+            <SuggestionCard key={r.card.oracle_id} row={r} roleNames={roleNames} onAdd={onAdd} onPreview={onPreview} onDismiss={props.onDismiss} />
           ))}
         </ul>
       )}
+      {props.dismissed.size > 0 && <DismissedList ids={[...props.dismissed]} pool={pool ?? []} onRestore={props.onRestore} />}
     </Panel>
+  );
+}
+
+/** "Show dismissed (N)": the cards marked Not for this deck, each with Bring back. */
+function DismissedList({ ids, pool, onRestore }: { ids: string[]; pool: PoolCard[]; onRestore: (id: string) => void }) {
+  const supabase = useMemo(() => createClient(), []);
+  const [open, setOpen] = useState(false);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const known: Record<string, string> = { ...Object.fromEntries(pool.map((c) => [c.oracle_id, c.name])), ...names };
+  const missing = ids.filter((id) => !known[id]);
+
+  useEffect(() => {
+    if (!open || !missing.length) return;
+    fetchSummaries(supabase, missing)
+      .then((found) => setNames((n) => ({ ...n, ...Object.fromEntries(found.map((c) => [c.oracle_id, c.name])) })))
+      .catch(() => undefined);
+    // Look names up once per opening; ids missing from our data just show as "Unknown card".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, supabase]);
+
+  return (
+    <div className="mt-4 border-t border-foreground/10 pt-3 text-sm">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="min-h-11 rounded-lg px-2 opacity-70 hover:opacity-100">
+        {open ? "Hide" : "Show"} dismissed ({ids.length})
+      </button>
+      {open && (
+        <ul className="mt-1 flex flex-wrap gap-2">
+          {ids
+            .map((id) => ({ id, name: known[id] ?? "Unknown card" }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(({ id, name }) => (
+              <li key={id} className="flex items-center gap-1 rounded-lg border border-foreground/15 pl-3">
+                <span>{name}</span>
+                <button type="button" onClick={() => onRestore(id)} className="min-h-11 rounded-r-lg px-3 text-xs underline opacity-70 hover:opacity-100">
+                  Bring back
+                </button>
+              </li>
+            ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -111,11 +158,13 @@ function SuggestionCard({
   roleNames,
   onAdd,
   onPreview,
+  onDismiss,
 }: {
   row: Scored;
   roleNames: Record<string, string>;
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary) => void;
+  onDismiss: (card: CardSummary) => void;
 }) {
   const { card } = row;
   return (
@@ -158,6 +207,14 @@ function SuggestionCard({
         </button>
         <button type="button" onClick={() => onAdd(card, "maybe")} className="min-h-11 whitespace-nowrap rounded-lg border border-foreground/20 px-1 text-sm">
           + Maybe
+        </button>
+        <button
+          type="button"
+          onClick={() => onDismiss(card)}
+          title="Don't suggest this card for this deck again"
+          className="col-span-2 min-h-11 rounded-lg px-2 text-xs opacity-60 hover:bg-foreground/10 hover:opacity-100"
+        >
+          Not for this deck
         </button>
       </div>
     </li>

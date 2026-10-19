@@ -68,6 +68,7 @@ import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
 import { type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
 import { useSuggestSettings } from "@/lib/suggest/use-suggest-settings";
+import { useDismissed } from "@/lib/suggest/use-dismissed";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
@@ -155,6 +156,7 @@ type Props = {
   roleTargets: Record<string, number>;
   customRoles: CustomRole[];
   suggestSettings: SuggestSettings;
+  dismissedSuggestions: string[];
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
 
@@ -170,6 +172,7 @@ export function DeckEditor({
   roleTargets,
   customRoles,
   suggestSettings,
+  dismissedSuggestions,
   profileDefaults,
 }: Props) {
   const [state, dispatch] = useReducer(reducer, {
@@ -435,6 +438,7 @@ export function DeckEditor({
     : [];
   const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
   const suggestStyle = useSuggestSettings(deck.id, suggestSettings, readOnly);
+  const dismissed = useDismissed(deck.id, dismissedSuggestions, readOnly);
   const openSuggest = (source: SuggestSource) => {
     setSuggestFor(source);
     setPanel("suggest");
@@ -731,7 +735,13 @@ export function DeckEditor({
               settings: suggestStyle.settings,
             }}
             onSettings={suggestStyle.setSettings}
-            saveError={suggestStyle.saveError}
+            saveError={suggestStyle.saveError ?? dismissed.saveError}
+            dismissed={dismissed.dismissed}
+            onDismiss={(card) => {
+              dismissed.dismiss(card.oracle_id);
+              say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
+            }}
+            onRestore={dismissed.restore}
             onAdd={addWithNotice}
             onPreview={setPreview}
             onClose={() => setPanel(null)}
