@@ -23,8 +23,8 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 1. Data foundation | Done (merged Oct 18, 2026). Daily import runs from GitHub Actions at 22:30 UTC |
 | 2. Core editor | Done (merged Oct 19, 2026): sign-in + decks, quick add / boards / autosave / undo, import/export, card search, drag from Scryfall |
 | 3. Tag layer | Done (merged Oct 19, 2026): 3a views + card panel + card sheet, 3b card details, 3c role profile, 3d top tags, 3e quick wins, 3f my tags + category override, 3g bulk edit, 3h version history, 3i stats |
-| 4. Suggestions | **In progress**, plan agreed Oct 19, 2026 (see "Phase 4 plan" below): 4a engine + panel (merged), 4b ranking styles (merged), **4c dismiss + EDHREC check** (built) |
-| 5. Bracket targeting | Not started |
+| 4. Suggestions | Done (merged Oct 19, 2026): 4a engine + panel, 4b ranking styles, 4c dismiss + EDHREC check |
+| 5. Bracket targeting | **In progress**, plan agreed Oct 19, 2026 (see "Phase 5 plan" below): **5a data + rules**, 5b editor (target, estimate, alerts, badges), 5c suggestion filter |
 | 6. Playtester | Not started |
 | 7. Friend test | Not started |
 | v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down) |
@@ -69,6 +69,14 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 - **Built in 4c:** migration 0014 `decks.dismissed_suggestions` (uuid[]), `use-dismissed.ts`; each suggestion has **Not for this deck**, and "Show dismissed (N)" at the bottom of the panel lists them with Bring back. **EDHREC check** (results in `docs/spec.md` → "Suggestion check against EDHREC"): David chose to treat vague tags as noise (added to `MECHANIC_NOISE`: unique type line, multiple targets, attacking matters-self, repeatable crime, per-player, donate token, activated ability, triggered ability) and to require **2+ shared themes for Hidden gems**. Overall Suggest asks for the exact theme slugs in Specific mode (descendants only in Broad); the panel retries once when the database times out on a cold start (PostgREST stops at about 8 s).
 - **Dev server gotcha:** after editing a module the page imports deep down (e.g. `src/lib/suggest/score.ts`), Fast Refresh sometimes keeps the old copy. If behavior doesn't match the tests, stop dev, `rm -rf .next`, start again.
 - **Known limit:** `card_tags_for(ids)` reads at most 400 ids, so a deck with more than 400 distinct cards loses tags for the rest.
+
+## Phase 5 plan (agreed Oct 19, 2026)
+
+- **Rules (Oct 2026; tutor limits were removed in the Oct 2025 update):** Game Changers 0 / 0 / up to 3 / any / any for brackets 1-5; mass land denial only in 4-5; extra turns none in 1, "a few, not chained" in 2-3, any in 4-5; two-card combos none in 1-2, "not early-game" in 3, any in 4-5. Stored as data in one config file, not hard-coded.
+- **Data:** Game Changers = `cards.game_changer` (53, from Scryfall daily); mass land denial = oracle tag `mass-land-denial`; extra turns = oracle tag `extra-turn`; **two-card combos imported daily** from Commander Spellbook (David chose this over live API calls): the import job streams `json.commanderspellbook.com/variants.json` (~693 MB) and keeps only 2-card combos.
+- **David's choices:** "a few" extra-turn cards = **up to 2** (3+ puts the deck at 4+); a combo Spellbook tags **Ruthless counts as 4+**, any other 2-card combo as at least 3; **default target = 3 (Upgraded)** for existing decks and new decks until changed.
+- The estimate shows only what the cards prove ("2 or lower", "at least 3", "4+") and never claims 5 (cEDH is intent, not a card list).
+- Steps: **5a** combo table + import, `decks.target_bracket`, rules config, tested evaluator (show David the schema first); **5b** target picker (deck creation and header), estimated-bracket badge, banner naming what crossed the line, card badges, nothing blocked; **5c** suggestions that would break the target hidden by default, with a "Show cards above my bracket" toggle.
 
 The GitHub repository is connected to a Supabase project and a Vercel project. Ask David for keys when you need them; he enters secrets himself.
 
