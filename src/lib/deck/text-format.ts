@@ -90,7 +90,9 @@ export function parseDeckText(text: string): ParseResult {
     const quantity = m ? parseInt(m[1], 10) : 1;
     let name = (m ? m[2] : line)
       .replace(/\s+\([A-Za-z0-9]{2,8}\)(\s+\S+)?\s*$/, "") // " (C21) 263", " (PLST) C21-263"
-      .replace(/\s*\/{2,3}\s*/g, " // ") // "Fire///Ice", "Fire//Ice" -> "Fire // Ice"
+      // Face separators: "Fire///Ice", "Fire//Ice", and Moxfield's plain export "Walk-In Closet/Forgotten Cellar"
+      // all become "Fire // Ice". No real card has a single slash in its name, so this is safe.
+      .replace(/\s*\/{1,3}\s*/g, " // ")
       .trim();
     name = name.replace(/\s+/g, " ");
 
