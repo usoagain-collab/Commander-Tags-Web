@@ -40,6 +40,7 @@ import {
   type ThemeTag,
 } from "@/lib/tags/themes";
 import { roleNameFromLabel } from "@/lib/tags/role-settings";
+import { assignSubgroups, landSubgroup, subgroupCandidates, subgroupTitle } from "@/lib/tags/role-subgroups";
 import { createClient } from "@/lib/supabase/client";
 import { CardPanel } from "./card-panel";
 import { CardSearch } from "./card-search";
@@ -278,9 +279,25 @@ export function DeckEditor({
       extraRoles: Math.max(0, roleKeysOf(line.card).length - 1),
     };
   };
+  // Role subgroups (step 3e): for each role, which subgroup each card that fills it goes in.
+  const subgroupMaps = new Map<string, Map<string, string | null>>();
+  if (tags.tree && view.group === "role") {
+    for (const r of roles) {
+      if (r.land || !r.tagSet) continue;
+      const items = mainLines
+        .filter((l) => roleKeysOf(l.card).includes(r.key))
+        .map((l) => ({ id: l.card.oracle_id, candidates: subgroupCandidates(tags.oracleTags[l.card.oracle_id] ?? [], r, tags.tree!) }));
+      subgroupMaps.set(r.key, assignSubgroups(items));
+    }
+  }
   const roleContext = {
     rolesOf: (l: DeckLine) => roleKeysOf(l.card),
     roleOrder: roles.map((r) => ({ key: r.key, name: r.name })),
+    subgroupOf: (l: DeckLine, roleKey: string) => {
+      if (roles.find((r) => r.key === roleKey)?.land) return landSubgroup(l.card);
+      const slug = subgroupMaps.get(roleKey)?.get(l.card.oracle_id);
+      return slug && tags.tree ? { key: slug, title: subgroupTitle(slug, tags.tree) } : null;
+    },
   };
   // Role counts cover the 100-card deck: commander(s) plus mainboard.
   const counts = roleCounts([...commanders, ...mainLines], (l) => roleKeysOf(l.card));
@@ -371,13 +388,18 @@ export function DeckEditor({
   const sections: ViewSection[] = [
     ...(commanders.length ? [{ key: "commander", title: BOARD_LABELS.commander, lines: sortLines(commanders, "name") }] : []),
     ...(companions.length ? [{ key: "companion", title: BOARD_LABELS.companion, lines: companions }] : []),
-    ...groupLines(mainLines, view.group, view.sort, roleContext).map((s) => ({ ...s, key: `main:${s.key}` })),
+    ...groupLines(mainLines, view.group, view.sort, roleContext).map((s) => ({
+      ...s,
+      key: `main:${s.key}`,
+      parent: s.parent ? { ...s.parent, key: `main:${s.parent.key}` } : undefined,
+    })),
     ...(maybeLines.length ? [{ key: "maybe", title: BOARD_LABELS.maybe, lines: sortLines(maybeLines, view.sort) }] : []),
-  ].map((s) => ({
+  ].map((s: { key: string; title: string; lines: DeckLine[]; parent?: ViewSection["parent"] }) => ({
     key: s.key,
     title: s.title,
     count: s.lines.reduce((n, l) => n + l.quantity, 0),
     items: s.lines.map(decorate),
+    parent: s.parent,
   }));
 
   // The card sheet steps through cards in screen order.
@@ -447,6 +469,8 @@ export function DeckEditor({
           onAdd={addWithNotice}
           onPreview={setPreview}
           onClose={() => setPanel(null)}
+          hideInDeck={prefs.searchHideInDeck === true}
+          onHideInDeck={(hide) => updatePrefs({ searchHideInDeck: hide })}
         />
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}

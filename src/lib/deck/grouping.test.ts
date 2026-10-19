@@ -81,3 +81,38 @@ describe("saved view settings", () => {
     expect(readViewSettings({ view: "grid", group: "bogus" })).toEqual({ view: "grid", group: "type", sort: "mv" });
   });
 });
+
+describe("role subgroups", () => {
+  const rampA = line("Sol Ring", { mana_value: 1 });
+  const rampB = line("Arcane Signet", { mana_value: 2 });
+  const rampC = line("Birds of Paradise", { type_line: "Creature — Bird", mana_value: 1 });
+  const rampD = line("Llanowar Elves", { type_line: "Creature — Elf Druid", mana_value: 1 });
+  const rampE = line("Cultivate", { type_line: "Sorcery", mana_value: 3 });
+  const sub: Record<string, { key: string; title: string } | null> = {
+    "Sol Ring": { key: "mana-rock", title: "Mana rock" },
+    "Arcane Signet": { key: "mana-rock", title: "Mana rock" },
+    "Birds of Paradise": { key: "mana-dork", title: "Mana dork" },
+    "Llanowar Elves": { key: "mana-dork", title: "Mana dork" },
+    Cultivate: null,
+  };
+  const roles = {
+    roleOrder: [{ key: "ramp", name: "Ramp" }],
+    rolesOf: () => ["ramp"],
+    subgroupOf: (l: DeckLine) => sub[l.card.name],
+  };
+
+  it("splits a role into subgroups under it, biggest first, Other last", () => {
+    const g = groupLines([rampA, rampB, rampC, rampD, rampE], "role", "name", roles);
+    expect(g.map((s) => `${s.parent?.title} › ${s.title}:${s.count}`)).toEqual([
+      "Ramp › Mana dork:2",
+      "Ramp › Mana rock:2",
+      "Ramp › Other ramp:1",
+    ]);
+    expect(g[0].parent).toEqual({ key: "ramp", title: "Ramp", count: 5 });
+  });
+
+  it("doesn't split a role that would only have one subgroup", () => {
+    const g = groupLines([rampA, rampB], "role", "name", roles);
+    expect(g.map((s) => s.title)).toEqual(["Ramp"]);
+  });
+});

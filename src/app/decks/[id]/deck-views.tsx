@@ -13,7 +13,14 @@ export type DeckItem = {
   /** Roles beyond the first (the card is grouped under its first role). */
   extraRoles: number;
 };
-export type ViewSection = { key: string; title: string; count: number; items: DeckItem[] };
+export type ViewSection = {
+  key: string;
+  title: string;
+  count: number;
+  items: DeckItem[];
+  /** Role subgroups (step 3e) carry the role they belong to; the role gets its own collapsible heading. */
+  parent?: { key: string; title: string; count: number };
+};
 
 type Props = {
   sections: ViewSection[];
@@ -26,78 +33,146 @@ type Props = {
   onQuantity: (line: DeckLine, n: number) => void;
 };
 
+/**
+ * Sections in screen order, with a role heading inserted before each role's first subgroup. Subgroups of a
+ * collapsed role are left out.
+ */
+function withParents(sections: ViewSection[], collapsed: Set<string>) {
+  const out: ({ type: "parent"; parent: NonNullable<ViewSection["parent"]> } | { type: "section"; section: ViewSection })[] = [];
+  let last: string | undefined;
+  for (const s of sections) {
+    if (s.parent && s.parent.key !== last) out.push({ type: "parent", parent: s.parent });
+    last = s.parent?.key;
+    if (!(s.parent && collapsed.has(s.parent.key))) out.push({ type: "section", section: s });
+  }
+  return out;
+}
+
 /** Renders grouped cards as Text, a Visual grid, or Stacks. Every card is the tap target for its sheet. */
 export function DeckView(props: Props) {
   const { sections, view } = props;
   if (view === "stacks") {
+    // Stacks are columns, so each subgroup is its own column titled "Role › Subgroup".
     return (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
         {sections.map((s) => (
           <div key={s.key} className="min-w-0">
-            <Heading section={s} {...props} />
+            <Heading section={s} {...props} prefix={s.parent?.title} />
             {!props.collapsed.has(s.key) && <Stack section={s} {...props} />}
           </div>
         ))}
       </div>
     );
   }
+  const blocks = withParents(sections, props.collapsed);
   if (view === "grid") {
     return (
       <div className="space-y-5">
-        {sections.map((s) => (
-          <div key={s.key}>
-            <Heading section={s} {...props} />
-            {!props.collapsed.has(s.key) && (
-              <ul className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
-                {s.items.map((it) => (
-                  <li key={it.line.card.oracle_id}>
-                    <Tile item={it} onOpen={() => props.onOpen(it.line)} onHover={() => props.onHover(it.line)} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
+        {blocks.map((b) =>
+          b.type === "parent" ? (
+            <ParentHeading key={`p:${b.parent.key}`} parent={b.parent} {...props} />
+          ) : (
+            <div key={b.section.key} className={b.section.parent ? "pl-3" : ""}>
+              <Heading section={b.section} {...props} sub={!!b.section.parent} />
+              {!props.collapsed.has(b.section.key) && (
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
+                  {b.section.items.map((it) => (
+                    <li key={it.line.card.oracle_id}>
+                      <Tile item={it} onOpen={() => props.onOpen(it.line)} onHover={() => props.onHover(it.line)} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ),
+        )}
       </div>
     );
   }
   return (
     <div className="columns-1 gap-8 xl:columns-2">
-      {sections.map((s) => (
-        <div key={s.key} className="mb-4 break-inside-avoid">
-          <Heading section={s} {...props} />
-          {!props.collapsed.has(s.key) && (
-            <ul>
-              {s.items.map((it) => (
-                <CardLine
-                  key={it.line.card.oracle_id}
-                  item={it}
-                  readOnly={props.readOnly}
-                  onOpen={() => props.onOpen(it.line)}
-                  onHover={() => props.onHover(it.line)}
-                  onQuantity={(n) => props.onQuantity(it.line, n)}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
+      {blocks.map((b) =>
+        b.type === "parent" ? (
+          <div key={`p:${b.parent.key}`} className="break-inside-avoid">
+            <ParentHeading parent={b.parent} {...props} />
+          </div>
+        ) : (
+          <div key={b.section.key} className={`mb-4 break-inside-avoid ${b.section.parent ? "pl-3" : ""}`}>
+            <Heading section={b.section} {...props} sub={!!b.section.parent} />
+            {!props.collapsed.has(b.section.key) && (
+              <ul>
+                {b.section.items.map((it) => (
+                  <CardLine
+                    key={it.line.card.oracle_id}
+                    item={it}
+                    readOnly={props.readOnly}
+                    onOpen={() => props.onOpen(it.line)}
+                    onHover={() => props.onHover(it.line)}
+                    onQuantity={(n) => props.onQuantity(it.line, n)}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        ),
+      )}
     </div>
   );
 }
 
-function Heading({ section, collapsed, onToggle }: { section: ViewSection; collapsed: Set<string>; onToggle: (k: string) => void }) {
+/** A role's own heading above its subgroups; collapsing it hides all of them. */
+function ParentHeading({
+  parent,
+  collapsed,
+  onToggle,
+}: {
+  parent: NonNullable<ViewSection["parent"]>;
+  collapsed: Set<string>;
+  onToggle: (k: string) => void;
+}) {
+  const isOpen = !collapsed.has(parent.key);
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(parent.key)}
+      aria-expanded={isOpen}
+      className="mb-1 flex min-h-9 w-full items-center gap-1.5 border-b border-foreground/10 px-1.5 text-left text-sm font-semibold hover:opacity-100"
+    >
+      <span aria-hidden className={`inline-block transition-transform ${isOpen ? "rotate-90" : ""}`}>
+        ›
+      </span>
+      {parent.title} <span className="font-normal opacity-60">({parent.count})</span>
+    </button>
+  );
+}
+
+function Heading({
+  section,
+  collapsed,
+  onToggle,
+  sub,
+  prefix,
+}: {
+  section: ViewSection;
+  collapsed: Set<string>;
+  onToggle: (k: string) => void;
+  sub?: boolean;
+  prefix?: string;
+}) {
   const isOpen = !collapsed.has(section.key);
   return (
     <button
       type="button"
       onClick={() => onToggle(section.key)}
       aria-expanded={isOpen}
-      className="mb-1 flex min-h-8 w-full items-center gap-1.5 px-1.5 text-left text-xs font-semibold uppercase tracking-wide opacity-70 hover:opacity-100"
+      className={`mb-1 flex min-h-8 w-full items-center gap-1.5 px-1.5 text-left text-xs font-semibold tracking-wide opacity-70 hover:opacity-100 ${
+        sub ? "" : "uppercase"
+      }`}
     >
       <span aria-hidden className={`inline-block transition-transform ${isOpen ? "rotate-90" : ""}`}>
         ›
       </span>
+      {prefix && <span className="font-normal">{prefix} ›</span>}
       {section.title} ({section.count})
     </button>
   );

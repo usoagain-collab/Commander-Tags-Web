@@ -118,7 +118,7 @@ The editor matches what people like about Moxfield and fixes its known complaint
 | Version history | Every deck keeps saved versions. See what changed between two versions (added / removed cards), and restore an old one. Restoring is itself a change, so it can be undone | Moxfield's #2 request (592 votes); Archidekt has it. Added Oct 18, 2026 |
 | Bulk edit | Select several cards (checkboxes or Shift-click), then move them to another board, add or remove a My tag, change quantity or remove them, all at once and as one Ctrl+Z | Moxfield's #5 request (255 votes). Added Oct 18, 2026 |
 | Role subgroups | With Group by Role, each role splits into its subtags (Ramp › mana rocks, mana dorks, land ramp), using the tag tree; each subgroup collapses | Archidekt subcategories request (240 points). Added Oct 18, 2026; step 3e |
-| Big-list performance | A 100-card deck plus a 300-card maybeboard stays smooth: long lists draw only what's on screen | Both sites slow down past about 150–200 cards |
+| Big-list performance | A 100-card deck plus a 300-card maybeboard stays smooth (measured Oct 19, 2026: every switch under ~120 ms on a 400-card deck, so no virtualization yet; if a re-check lags, long lists draw only what's on screen) | Both sites slow down past about 150–200 cards |
 
 ## Playtester
 
