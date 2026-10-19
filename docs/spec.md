@@ -166,6 +166,7 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Collection tracking | Ownership checkmarks, "add to collection", the "unowned" price total (also listed under Out of scope for v1) | Oct 18, 2026 |
 | Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |
 | Change mana cost | Override a card's displayed mana cost for stats (e.g. X spells) | Oct 18, 2026 |
+| Multiplayer playtesting | Playtest against other players (v1's playtester is solo goldfish, phase 6) | Oct 18, 2026 |
 
 ## Not intended
 
