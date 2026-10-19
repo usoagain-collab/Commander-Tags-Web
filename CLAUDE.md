@@ -12,6 +12,8 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 - Medium-length answers: a short summary first, then details he can dig into. No walls of text.
 - He researches big decisions until he's comfortable. For choices that are hard to undo (schema, auth, hosting), lay out the options briefly and recommend one.
 - Never commit secrets. Supabase keys go in `.env.local` (git-ignored). The service-role key is server-only and never reaches the browser.
+- **Out-of-scope ideas: ask, don't decide.** When something outside v1 comes up, ask David whether it goes on the **v2 backlog** or is **not intended**, then record it in `docs/spec.md` (sections "v2 backlog" and "Not intended").
+- Mobile matters: no small tap targets on top of card images (David found Moxfield's ⋯ buggy on phones). Make the whole card the tap target.
 
 ## Status
 
@@ -19,12 +21,22 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | --- | --- |
 | Prototype (single HTML file) | Done. Tag file format, tag tree, role mapping and scoring all confirmed against real Scryfall data |
 | 1. Data foundation | Done (merged Oct 18, 2026). Daily import runs from GitHub Actions at 22:30 UTC |
-| 2. Core editor | **In progress**, one PR per step: 2a sign-in + decks (merged), 2b editor basics (merged), 2c import/export (merged), 2d card search (merged), **2e drag from Scryfall** (built) |
-| 3. Tag layer (roles, sliders, top tags) | Logic exists in the prototype; needs porting |
+| 2. Core editor | Done (merged Oct 19, 2026): sign-in + decks, quick add / boards / autosave / undo, import/export, card search, drag from Scryfall |
+| 3. Tag layer | **In progress**, one PR per step (plan agreed Oct 18, 2026, see "Phase 3 plan" below): **3a views + card panel + card sheet**, 3b card details, 3c role profile, 3d top tags, 3e manual category override, 3f stats |
 | 4. Suggestions | Logic exists in the prototype; needs porting |
 | 5. Bracket targeting | Not started |
 | 6. Playtester | Not started |
 | 7. Friend test | Not started |
+| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing) |
+
+## Phase 3 plan (agreed Oct 18, 2026)
+
+- **Computed in the browser**, ported from the prototype into tested TypeScript modules. The **oracle tag tree** (about 4,600 tags and links) ships as one cached daily file; the deck's card tags (and art tags for its default illustrations) load per deck. Theme score N = distinct tagged cards (oracle) or illustrations (art), as in the prototype.
+- **Layout (wide screens):** left = role profile + top tags; center = deck with a View / Group / Sort toolbar; right = sticky **card panel** (hovered card's image, the roles it fills, its oracle tags deepest first, its art tags; click a tag to highlight matching cards). Narrower screens fold the left column above the deck; phones open cards in a bottom sheet.
+- **Views:** Text, Visual grid, Stacks. **Group:** Type, Role, Mana value, Color. **Sort:** Name, Mana value, Price. Saved per user (`profiles.tag_view`).
+- **Card sheet:** tapping or clicking a card opens it immediately (image first) with big action buttons (commander, main/maybe, quantity, remove, add to another deck, copy name) and its tags; Prev / Next on desktop. Collapsible group headings with counts, quantity badges on tiles, summary bar (size, type counts, price).
+- **Card details (3b):** rules text, P/T, faces, legality, rulings, fetched live from Scryfall; tags instead of buy links.
+- **Roles (3c):** dead slugs dropped. Ramp = ramp, mana-rock, mana-dork, land-ramp; Card advantage = card-advantage, draw; Targeted removal = removal, spot-removal (minus board wipes); Board wipes = sweeper; Protection = protection, gives-protection, protects-permanent, gives-hexproof, gives-indestructible; Recursion = recursion. Slider changes save after a short pause and are not part of Ctrl+Z.
 
 The GitHub repository is connected to a Supabase project and a Vercel project. Ask David for keys when you need them; he enters secrets himself.
 
