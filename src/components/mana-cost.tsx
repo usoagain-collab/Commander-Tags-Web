@@ -3,7 +3,9 @@ const SYMBOL_URL = "https://svgs.scryfall.io/card-symbols/";
 
 export function ManaCost({ cost, size = 14 }: { cost: string | null; size?: number }) {
   if (!cost) return null;
-  const faces = cost.split(" // ");
+  // Transforming cards have no cost on the back face ("{U} // "), so drop empty faces.
+  const faces = cost.split("//").map((f) => f.trim()).filter(Boolean);
+  if (faces.length === 0) return null;
   return (
     <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
       {faces.map((face, i) => (

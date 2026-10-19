@@ -19,7 +19,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | --- | --- |
 | Prototype (single HTML file) | Done. Tag file format, tag tree, role mapping and scoring all confirmed against real Scryfall data |
 | 1. Data foundation | Done (merged Oct 18, 2026). Daily import runs from GitHub Actions at 22:30 UTC |
-| 2. Core editor | **In progress**, one PR per step: 2a sign-in + decks (merged), **2b editor basics** (built: quick add, boards, autosave, undo), 2c import/export, 2d card search, 2e drag from Scryfall |
+| 2. Core editor | **In progress**, one PR per step: 2a sign-in + decks (merged), 2b editor basics (merged), **2c import/export** (built), 2d card search, 2e drag from Scryfall |
 | 3. Tag layer (roles, sliders, top tags) | Logic exists in the prototype; needs porting |
 | 4. Suggestions | Logic exists in the prototype; needs porting |
 | 5. Bracket targeting | Not started |
@@ -53,6 +53,8 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Editor (2b)**: pure deck logic in `src/lib/deck/model.ts` (tested in `model.test.ts`, run `npm test`). Every edit is a `Change` of row counts (from → to), so undo/redo is exact and autosave sends the same rows. Autosave (`use-autosave.ts`) queues edits in order through the `apply_deck_changes` SQL function (one transaction per edit, RLS applies); a failed save stops the queue and shows Retry.
 - **Copy limits** come from the `card_summaries` view (`max_copies`: basics and "any number" 99, Seven Dwarves 7, Nazgûl 9, else 1). Commander/companion boards hold 1. Quick add uses `search_cards()` (trigram index, Commander-legal only).
 - Card images and mana symbols load from Scryfall's CDN with plain `<img>` (ESLint's no-img-element is off on purpose).
+- **Import/export (2c)**: `src/lib/deck/text-format.ts` parses pasted lists (headers, set codes, `1x`, Archidekt `[Commander]` tags, MTGO trailing commander, `SB:`) and exports Moxfield/Archidekt/MTGO/Arena/plain; round-trip tested. Names resolve in one call via `resolve_card_names()` (case- and accent-insensitive, front face of split/DFC cards). A whole import is one `Change`, so one Ctrl+Z reverts it. MTGO has no companion slot: a companion exported to MTGO re-imports as a second commander.
+- **Don't run `npm run build` while `npm run dev` is running**: both write `.next/`, and the dev server loses its CSS. Stop dev, build, `rm -rf .next`, restart dev.
 - Local dev: `npm run dev` (http://localhost:3000; must be port 3000 for sign-in redirects). Supabase redirect URLs include `http://localhost:3000/**` and the Vercel preview pattern.
 
 ## Scryfall data facts (learned the hard way in the prototype)
