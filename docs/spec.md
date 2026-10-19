@@ -98,7 +98,7 @@ The editor matches what people like about Moxfield and fixes its known complaint
 
 | Feature | What it does | Why it's in |
 | --- | --- | --- |
-| Card search | Full Scryfall syntax with `otag:` autocomplete; legality and color identity applied automatically | The main way to find cards, with tags built in |
+| Card search | Full Scryfall syntax with `otag:` autocomplete; legality and color identity applied automatically. Cards already in the deck show their count, and a **Hide cards in deck** toggle removes them from results | The main way to find cards, with tags built in; hiding is Moxfield's #3 request (307 votes) |
 | Quick add | Type-ahead card names; Enter adds the card | Reviews complain about typing full names |
 | Drag from Scryfall | Drop a card image from a Scryfall tab onto the open deck, or onto any deck in your deck list | Moxfield only accepts drops on an open deck; users have asked for more |
 | Import / export | Paste or export text in Moxfield, Archidekt, MTGO and Arena formats | People keep their other tools; zero lock-in |
@@ -115,6 +115,10 @@ The editor matches what people like about Moxfield and fixes its known complaint
 | Tokens list | Tokens the deck can create | Standard, helps playtesting |
 | Share link | Read-only link; decks are private, unlisted or public | Needed for friend tests |
 | Autosave | Every change saves instantly; undo with Ctrl+Z | Feels good to use |
+| Version history | Every deck keeps saved versions. See what changed between two versions (added / removed cards), and restore an old one. Restoring is itself a change, so it can be undone | Moxfield's #2 request (592 votes); Archidekt has it. Added Oct 18, 2026 |
+| Bulk edit | Select several cards (checkboxes or Shift-click), then move them to another board, add or remove a My tag, change quantity or remove them, all at once and as one Ctrl+Z | Moxfield's #5 request (255 votes). Added Oct 18, 2026 |
+| Role subgroups | With Group by Role, each role splits into its subtags (Ramp › mana rocks, mana dorks, land ramp), using the tag tree; each subgroup collapses | Archidekt subcategories request (240 points). Added Oct 18, 2026, for step 3d |
+| Big-list performance | A 100-card deck plus a 300-card maybeboard stays smooth: long lists draw only what's on screen | Both sites slow down past about 150–200 cards |
 
 ## Playtester
 
@@ -189,6 +193,30 @@ Commander Spellbook ─────────┘                      │
 The browser talks only to the web app, and the web app reads only its own database, so building never waits on Scryfall. Two things go to Scryfall directly: card images load from Scryfall's image servers, and the live `otag:` fallback runs for cards not yet in the database.
 
 **Stack:** Next.js and TypeScript for the web app, hosted on Vercel; Supabase for the database and sign-in; the daily import as a scheduled job. All three have free tiers that cover testing.
+
+## Pain points research
+
+Done Oct 18, 2026, from each site's own feedback board (vote counts) and a 2026 comparison review. Reddit blocks automated reading, so it isn't included. The strongest validation: Archidekt users asked for cards to be auto-categorized from Scryfall oracle tags, which is this app's core idea.
+
+| Pain point | Evidence | Status here |
+| --- | --- | --- |
+| No deck version history | Moxfield #2 request, 592 votes, in progress; Archidekt shipped changelogs in 2022 (332 points) | **v1** (David, Oct 18, 2026): Version history |
+| Search shows cards already in the deck | Moxfield #3, 307 votes | Search marks them with a count (built in 2d). **v1:** add the Hide toggle |
+| No bulk edits | Moxfield #5, 255 votes | **v1:** Bulk edit |
+| Categories too flat | Archidekt subcategories, 240 points | **v1, step 3d:** Role subgroups from the tag tree |
+| Sections can't collapse | Moxfield, 136 votes | Built (3a): collapsible group headings |
+| Slows down on big lists | Archidekt large lists, 507 points (slow past about 200 cards); Moxfield loading past about 150 | **v1 requirement:** Big-list performance |
+| Search waits about 1 s per keystroke | Moxfield instant-search request | Quick add uses our own indexed database (2b); keep it under about 150 ms |
+| Re-tagging the same card in every deck | Archidekt auto-categories, 43 points; users asked for Scryfall oracle tags | Core design (roles from tags), plus account-wide My tags (3e) |
+| No combo detection | Moxfield #6, 207 votes (Commander Spellbook) | Planned in phase 5, bracket targeting |
+| Deck price ignores cheaper printings | Moxfield, 161 votes | Not decided. Needs printings, which are on the v2 backlog |
+| Mobile: overlapping buttons, keyboard stays open, no drag, lost work | Archidekt forum, 2020 and 2022 | Built: card sheet with large buttons, whole card is the tap target, autosave. Check that the keyboard closes after Quick add on phones |
+| Ads cover cards in the playtester | Moxfield feedback board | Planned: the playtester never shows ads |
+| Playtester is clunky: cards shift, the battlefield clutters | 2026 review of Archidekt | Design rule for phase 6: cards stay where you put them; lands and tokens group automatically |
+| Collection tracking is weak | Moxfield #1, 624 votes | On the v2 backlog |
+| Print-friendly export; native mobile app | Moxfield, 165 and 140 votes | Out of scope for v1 |
+
+**Sources:** [Moxfield top requests](https://moxfield.nolt.io/top) · [Moxfield instant search](https://moxfield.nolt.io/1181) · [Moxfield loading issues](https://moxfield.nolt.io/1201) · [Moxfield playtest ads](https://moxfield.nolt.io/1645) · [Archidekt changelogs](https://archidekt.com/forum/thread/2320849/1) · [Archidekt large decks](https://archidekt.com/forum/thread/2377567/1) · [Archidekt slowdown](https://archidekt.com/forum/thread/10643647?orderBy=-points&page=1) · [Archidekt subcategories](https://archidekt.com/forum/thread/3298946) · [Archidekt auto-categories](https://archidekt.com/forum/thread/4173294/1) · [Archidekt mobile critique](https://archidekt.com/forum/thread/418475) · [Archidekt phone usability](https://archidekt.com/forum/thread/2324250) · [Grimdeck 2026 comparison](https://grimdeck.com/blog/best-mtg-deck-builder-sites)
 
 ## Prototype findings
 
