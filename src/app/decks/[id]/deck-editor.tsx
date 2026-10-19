@@ -63,6 +63,7 @@ import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
 import { HistoryPanel } from "./history-panel";
+import { StatsPanel } from "./stats-panel";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
@@ -216,7 +217,7 @@ export function DeckEditor({
     [save, say, state.categories],
   );
 
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | null>(null);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -638,6 +639,9 @@ export function DeckEditor({
           <HeaderButton active={panel === "export"} onClick={() => setPanel(panel === "export" ? null : "export")}>
             Export
           </HeaderButton>
+          <HeaderButton active={panel === "stats"} onClick={() => setPanel(panel === "stats" ? null : "stats")}>
+            Stats
+          </HeaderButton>
           {!readOnly && (
             <HeaderButton active={panel === "history"} onClick={() => setPanel(panel === "history" ? null : "history")}>
               History
@@ -670,6 +674,9 @@ export function DeckEditor({
         />
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
+      {panel === "stats" && (
+        <StatsPanel lines={[...commanders, ...companions, ...mainLines]} identity={identity} onClose={() => setPanel(null)} />
+      )}
       {panel === "history" && !readOnly && (
         <HistoryPanel
           deckId={deck.id}

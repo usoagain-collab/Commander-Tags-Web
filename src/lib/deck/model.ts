@@ -32,6 +32,8 @@ export type CardSummary = {
   layout: string;
   /** Playable as a land: a land front face, or a modal double-faced card with a land face (counts toward Lands). */
   counts_as_land: boolean;
+  /** Colors of mana it can make (W U B R G C), for land-source stats (step 3i). */
+  produced_mana?: string[];
 };
 
 /** Copies of each card on each board, keyed by `board|oracle_id`. */
