@@ -19,7 +19,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | --- | --- |
 | Prototype (single HTML file) | Done. Tag file format, tag tree, role mapping and scoring all confirmed against real Scryfall data |
 | 1. Data foundation | Done (merged Oct 18, 2026). Daily import runs from GitHub Actions at 22:30 UTC |
-| 2. Core editor | **In progress**, one PR per step: 2a sign-in + decks (merged), 2b editor basics (merged), 2c import/export (merged), **2d card search** (built), 2e drag from Scryfall |
+| 2. Core editor | **In progress**, one PR per step: 2a sign-in + decks (merged), 2b editor basics (merged), 2c import/export (merged), 2d card search (merged), **2e drag from Scryfall** (built) |
 | 3. Tag layer (roles, sliders, top tags) | Logic exists in the prototype; needs porting |
 | 4. Suggestions | Logic exists in the prototype; needs porting |
 | 5. Bracket targeting | Not started |
@@ -55,6 +55,7 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - Card images and mana symbols load from Scryfall's CDN with plain `<img>` (ESLint's no-img-element is off on purpose).
 - **Import/export (2c)**: `src/lib/deck/text-format.ts` parses pasted lists (headers, set codes, `1x`, Archidekt `[Commander]` tags, MTGO trailing commander, `SB:`) and exports Moxfield/Archidekt/MTGO/Arena/plain; round-trip tested. Names resolve in one call via `resolve_card_names()` (case- and accent-insensitive, front face of split/DFC cards). A whole import is one `Change`, so one Ctrl+Z reverts it. MTGO has no companion slot: a companion exported to MTGO re-imports as a second commander.
 - **Card search (2d)**: `card-search.tsx` sends full Scryfall syntax from the browser (CORS allowed). `buildQuery` in `src/lib/search/query.ts` adds `id<=<commander colors>`, `f:commander` and `game:paper` unless the user already wrote them, and wraps the user's part in parentheses so a top-level `or` can't bypass the filters. Results are matched to `card_summaries` by `oracle_id`; cards not in our data yet can't be added (deck_cards has a foreign key). Scryfall's `warnings` are shown. `otag:`/`function:`/`art:` autocomplete reads our `tags` table.
+- **Drag from Scryfall (2e)**: `src/lib/drop/scryfall-drop.ts` reads a drop (Scryfall card id from the image URL, set/number from the card page link, or the name from alt/plain text); `resolve.ts` turns it into a `CardSummary` (Scryfall API for ids, `resolve_card_names` for names). The deck page shows a drop overlay (main / maybe / commander; elsewhere = main). Each deck in My decks is a drop target that adds to its mainboard with the same rules. Missed drops are blocked so the browser doesn't open the dragged link. The dropped printing isn't stored yet (printing picker is later).
 - **Don't run `npm run build` while `npm run dev` is running**: both write `.next/`, and the dev server loses its CSS. Stop dev, build, `rm -rf .next`, restart dev.
 - Local dev: `npm run dev` (http://localhost:3000; must be port 3000 for sign-in redirects). Supabase redirect URLs include `http://localhost:3000/**` and the Vercel preview pattern.
 

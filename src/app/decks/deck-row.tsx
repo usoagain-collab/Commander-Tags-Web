@@ -3,14 +3,21 @@
 import Link from "next/link";
 import { useState } from "react";
 import { deleteDeck, renameDeck } from "./actions";
+import { useDeckDrop } from "./use-deck-drop";
 
 type Deck = { id: string; name: string; updated_at: string; card_count: number };
 
 export function DeckRow({ deck }: { deck: Deck }) {
   const [mode, setMode] = useState<"view" | "rename" | "confirm-delete">("view");
+  const drop = useDeckDrop(deck.id);
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
+    <li
+      {...drop.handlers}
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-md px-2 py-3 transition-colors ${
+        drop.over ? "bg-foreground/10 outline-2 outline-dashed outline-foreground/50" : ""
+      }`}
+    >
       {mode === "rename" ? (
         <form action={renameDeck} onSubmit={() => setMode("view")} className="flex flex-1 gap-2">
           <input type="hidden" name="id" value={deck.id} />
@@ -34,6 +41,20 @@ export function DeckRow({ deck }: { deck: Deck }) {
           <p className="text-xs opacity-60">
             {deck.card_count} cards · edited {new Date(deck.updated_at).toLocaleString()}
           </p>
+          {drop.status && (
+            <p
+              aria-live="polite"
+              className={`text-xs ${
+                drop.status.tone === "warn"
+                  ? "text-amber-700 dark:text-amber-400"
+                  : drop.status.tone === "ok"
+                    ? "text-green-700 dark:text-green-400"
+                    : "opacity-70"
+              }`}
+            >
+              {drop.status.text}
+            </p>
+          )}
         </div>
       )}
 

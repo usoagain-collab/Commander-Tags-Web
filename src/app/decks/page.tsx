@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createDeck } from "./actions";
 import { DeckRow } from "./deck-row";
+import { DropHint } from "./drop-hint";
 
 export const metadata = { title: "My decks · Commander Tags" };
 
@@ -39,11 +40,12 @@ export default async function DecksPage() {
       </form>
 
       {error && <p className="mt-6 text-sm text-red-600">Couldn&apos;t load your decks: {error.message}</p>}
+      {rows.length > 0 && <DropHint />}
 
       {rows.length === 0 && !error ? (
         <p className="mt-10 opacity-70">No decks yet. Name one above to start.</p>
       ) : (
-        <ul className="mt-6 divide-y divide-foreground/10">
+        <ul className="mt-4 divide-y divide-foreground/10">
           {rows.map((d) => (
             <DeckRow key={d.id} deck={d} />
           ))}
