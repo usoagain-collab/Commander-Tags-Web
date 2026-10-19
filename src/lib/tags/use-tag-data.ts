@@ -4,13 +4,11 @@
 // and each card's tags. Cards added later get their tags fetched as soon as they appear.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { resolveRoles, STANDARD_ROLES, type ResolvedRole } from "./roles";
 import { TagTree, type TagTreePayload } from "./tree";
 
 export type ArtTag = [slug: string, label: string, size: number];
 export type TagData = {
   tree: TagTree | null;
-  roles: ResolvedRole[];
   oracleTags: Record<string, string[]>;
   artTags: Record<string, ArtTag[]>;
   /** Cards whose tags have been fetched (so "no tags" means untagged, not still loading). */
@@ -70,6 +68,5 @@ export function useTagData(oracleIds: string[]): TagData {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, supabase]);
 
-  const roles = useMemo(() => (tree ? resolveRoles(STANDARD_ROLES, tree) : []), [tree]);
-  return { tree, roles, oracleTags, artTags, loaded, error };
+  return { tree, oracleTags, artTags, loaded, error };
 }

@@ -48,16 +48,26 @@ export function resolveRoles(roles: RoleDef[], tree: TagTree): ResolvedRole[] {
   });
 }
 
-/** A land by its front face (modal double-faced spell // land cards count as their front, like the type groups). */
+/** A land by its front face: used for the type groups and to tell pure lands from spell // land MDFCs. */
 export function isLand(typeLine: string) {
   return /\bLand\b/.test(typeLine.split(" // ")[0]);
 }
 
-/** The roles a card fills, in role order. A land fills only Lands, as in the prototype. */
-export function rolesOf(typeLine: string, slugs: string[] | undefined, roles: ResolvedRole[]): string[] {
-  if (isLand(typeLine)) return roles.some((r) => r.land) ? [roles.find((r) => r.land)!.key] : [];
+/** What rolesOf needs to know about a card. counts_as_land comes from the card_summaries view. */
+export type RoleCard = { type_line: string; counts_as_land?: boolean };
+
+/**
+ * The roles a card fills, in role order.
+ * - A land (front face) fills only Lands, as in the prototype.
+ * - A modal double-faced card with a land face fills Lands AND its spell roles: Sink into Stupor //
+ *   Soporific Springs is both removal and a land drop (David, Oct 18, 2026).
+ */
+export function rolesOf(card: RoleCard, slugs: string[] | undefined, roles: ResolvedRole[]): string[] {
+  const landRole = roles.find((r) => r.land);
+  if (isLand(card.type_line)) return landRole ? [landRole.key] : [];
   const tags = slugs ?? [];
   const filled = new Set<string>();
+  if (card.counts_as_land && landRole) filled.add(landRole.key);
   for (const r of roles) {
     if (r.tagSet && tags.some((t) => r.tagSet!.has(t))) filled.add(r.key);
   }

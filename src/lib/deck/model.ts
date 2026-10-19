@@ -28,6 +28,10 @@ export type CardSummary = {
   game_changer: boolean;
   max_copies: number;
   can_be_commander: boolean;
+  /** Scryfall layout: normal, modal_dfc, transform, split, ... */
+  layout: string;
+  /** Playable as a land: a land front face, or a modal double-faced card with a land face (counts toward Lands). */
+  counts_as_land: boolean;
 };
 
 /** Copies of each card on each board, keyed by `board|oracle_id`. */
@@ -159,9 +163,25 @@ export function linesFor(entries: Entries, cards: Record<string, CardSummary>, b
     .map((e) => ({ board: e.board, quantity: e.quantity, card: cards[e.oracle_id] }));
 }
 
-/** Type sections in display order. A card goes in the first section whose type its front face has. */
+/**
+ * Which type section a card files under: the FIRST of these its front face has, so an Artifact Creature is a
+ * Creature and an Artifact Land is a Land. (This is precedence, not display order; see TYPE_DISPLAY_ORDER.)
+ */
 export const TYPE_SECTIONS = ["Land", "Creature", "Planeswalker", "Battle", "Instant", "Sorcery", "Artifact", "Enchantment"] as const;
 export type TypeSection = (typeof TYPE_SECTIONS)[number] | "Other";
+
+/** The order sections appear on screen and in exports: lands at the bottom (David, Oct 18, 2026). */
+export const TYPE_DISPLAY_ORDER: TypeSection[] = [
+  "Creature",
+  "Artifact",
+  "Enchantment",
+  "Sorcery",
+  "Instant",
+  "Planeswalker",
+  "Battle",
+  "Other",
+  "Land",
+];
 
 export function typeSection(typeLine: string): TypeSection {
   const front = typeLine.split(" // ")[0]; // modal double-faced cards file under their front face
@@ -174,8 +194,7 @@ export function groupByType(lines: DeckLine[]): { section: TypeSection; lines: D
     const s = typeSection(line.card.type_line);
     groups.set(s, [...(groups.get(s) ?? []), line]);
   }
-  return [...TYPE_SECTIONS, "Other" as const]
-    .filter((s) => groups.has(s))
+  return TYPE_DISPLAY_ORDER.filter((s) => groups.has(s))
     .map((section) => {
       const sorted = groups
         .get(section)!

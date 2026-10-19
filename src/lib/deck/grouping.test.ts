@@ -20,6 +20,8 @@ const line = (name: string, extra: Partial<CardSummary> = {}, quantity = 1): Dec
     game_changer: false,
     max_copies: 1,
     can_be_commander: false,
+    layout: "normal",
+    counts_as_land: false,
     ...extra,
   },
 });
@@ -33,8 +35,8 @@ const deck = [sol, forest, witness, pucas, big];
 const summary = (g: ReturnType<typeof groupLines>) => g.map((s) => `${s.title}:${s.count}`);
 
 describe("grouping", () => {
-  it("by type, in the editor's type order", () => {
-    expect(summary(groupLines(deck, "type", "name"))).toEqual(["Land:30", "Creature:2", "Instant:1", "Artifact:1"]);
+  it("by type: creatures, artifacts, enchantments, sorceries, instants, then lands at the bottom", () => {
+    expect(summary(groupLines(deck, "type", "name"))).toEqual(["Creature:2", "Artifact:1", "Instant:1", "Land:30"]);
   });
 
   it("by mana value, capping at 7+ and putting lands last", () => {
@@ -45,7 +47,7 @@ describe("grouping", () => {
     expect(summary(groupLines(deck, "color", "name"))).toEqual(["Green:2", "Multicolor:1", "Colorless:1", "Lands:30"]);
   });
 
-  it("by role: first role in role order, then Other", () => {
+  it("by role: roles in order, then Other, then Lands at the bottom", () => {
     const roles = {
       roleOrder: [
         { key: "lands", name: "Lands" },
@@ -55,7 +57,7 @@ describe("grouping", () => {
       rolesOf: (l: DeckLine) =>
         ({ Forest: ["lands"], "Sol Ring": ["ramp"], "Eternal Witness": ["recursion"] })[l.card.name] ?? [],
     };
-    expect(summary(groupLines(deck, "role", "name", roles))).toEqual(["Lands:30", "Ramp:1", "Recursion:1", "Other:2"]);
+    expect(summary(groupLines(deck, "role", "name", roles))).toEqual(["Ramp:1", "Recursion:1", "Other:2", "Lands:30"]);
   });
 });
 

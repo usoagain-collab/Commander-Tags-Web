@@ -49,6 +49,8 @@ describe("TagTree", () => {
 });
 
 describe("roles", () => {
+  const card = (type_line: string, counts_as_land = false) => ({ type_line, counts_as_land });
+
   it("expands each role to its subtree and reports slugs missing from the data", () => {
     const protection = roles.find((r) => r.key === "protection")!;
     expect(protection.missing).toContain("gives-hexproof"); // not in this tiny tree
@@ -56,22 +58,32 @@ describe("roles", () => {
   });
 
   it("finds roles from tags anywhere below the role's tag", () => {
-    expect(rolesOf("Creature — Human Shaman", ["reanimate-creature", "death-trigger"], roles)).toEqual(["recursion"]);
-    expect(rolesOf("Artifact", ["mana-rock"], roles)).toEqual(["ramp"]);
+    expect(rolesOf(card("Creature — Human Shaman"), ["reanimate-creature", "death-trigger"], roles)).toEqual(["recursion"]);
+    expect(rolesOf(card("Artifact"), ["mana-rock"], roles)).toEqual(["ramp"]);
   });
 
   it("doesn't count a board wipe as targeted removal", () => {
-    expect(rolesOf("Sorcery", ["sweeper"], roles)).toEqual(["wipes"]);
-    expect(rolesOf("Instant", ["spot-removal"], roles)).toEqual(["removal"]);
+    expect(rolesOf(card("Sorcery"), ["sweeper"], roles)).toEqual(["wipes"]);
+    expect(rolesOf(card("Instant"), ["spot-removal"], roles)).toEqual(["removal"]);
   });
 
   it("puts lands in Lands only, judged by the front face", () => {
-    expect(rolesOf("Land", ["mana-rock"], roles)).toEqual(["lands"]);
+    expect(rolesOf(card("Land", true), ["mana-rock"], roles)).toEqual(["lands"]);
     expect(isLand("Instant // Land")).toBe(false);
     expect(isLand("Artifact Land")).toBe(true);
   });
 
+  it("counts a spell // land MDFC as a land AND for its spell roles", () => {
+    // Sink into Stupor // Soporific Springs: counts_as_land comes from the card_summaries view.
+    expect(rolesOf(card("Instant // Land", true), ["spot-removal"], roles)).toEqual(["lands", "removal"]);
+  });
+
+  it("doesn't count a card that only transforms into a land", () => {
+    // Legion's Landing // Adanto: counts_as_land is false for transform cards.
+    expect(rolesOf(card("Legendary Enchantment // Legendary Land", false), [], roles)).toEqual([]);
+  });
+
   it("returns no roles for an untagged card", () => {
-    expect(rolesOf("Creature — Bear", undefined, roles)).toEqual([]);
+    expect(rolesOf(card("Creature — Bear"), undefined, roles)).toEqual([]);
   });
 });

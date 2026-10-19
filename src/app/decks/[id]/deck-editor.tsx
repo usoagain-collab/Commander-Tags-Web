@@ -23,8 +23,11 @@ import {
 } from "@/lib/deck/model";
 import { groupLines, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
-import { isLand, rolesOf } from "@/lib/tags/roles";
+import { buildRoleDefs, customKey, roleCounts, roleStatus, type CustomRole } from "@/lib/tags/role-settings";
+import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
+import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData } from "@/lib/tags/use-tag-data";
+import { createClient } from "@/lib/supabase/client";
 import { CardPanel } from "./card-panel";
 import { CardSearch } from "./card-search";
 import { CardSheet } from "./card-sheet";
@@ -33,6 +36,7 @@ import { DeckToolbar, useViewSettings } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { DropOverlay } from "./drop-overlay";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
+import { RoleProfile } from "./role-profile";
 import { SummaryBar } from "./summary-bar";
 
 type State = {
@@ -91,9 +95,23 @@ type Props = {
   initialView: ViewSettings;
   savedTagView: Record<string, unknown>;
   userId: string | null;
+  roleTargets: Record<string, number>;
+  customRoles: CustomRole[];
+  profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
 
-export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initialView, savedTagView, userId }: Props) {
+export function DeckEditor({
+  deck,
+  initialEntries,
+  initialCards,
+  readOnly,
+  initialView,
+  savedTagView,
+  userId,
+  roleTargets,
+  customRoles,
+  profileDefaults,
+}: Props) {
   const [state, dispatch] = useReducer(reducer, {
     entries: initialEntries,
     cards: initialCards,
@@ -190,18 +208,27 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initi
     [cards, preview],
   );
   const tags = useTagData(tagIds);
+
+  // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
+  const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
+  const [defaults, setDefaults] = useState(profileDefaults);
+  const roleDefs = useMemo(() => buildRoleDefs(roleSettings.targets, roleSettings.custom), [roleSettings.targets, roleSettings.custom]);
+  const roles = useMemo(() => (tags.tree ? resolveRoles(roleDefs, tags.tree) : []), [tags.tree, roleDefs]);
   const roleKeysOf = useCallback(
-    (card: CardSummary) => rolesOf(card.type_line, tags.oracleTags[card.oracle_id], tags.roles),
-    [tags.oracleTags, tags.roles],
+    (card: CardSummary) => rolesOf(card, tags.oracleTags[card.oracle_id], roles),
+    [tags.oracleTags, roles],
   );
   const matchesHighlight = (card: CardSummary) => {
     if (!highlight) return false;
+    if (highlight.startsWith("role:")) return roleKeysOf(card).includes(highlight.slice(5));
     if (highlight.startsWith("art:")) return (tags.artTags[card.oracle_id] ?? []).some(([s]) => `art:${s}` === highlight);
     return (tags.oracleTags[card.oracle_id] ?? []).includes(highlight);
   };
   const toggleHighlight = (slug: string) => setHighlight((h) => (h === slug ? null : slug));
   const highlightLabel = highlight
-    ? highlight.startsWith("art:")
+    ? highlight.startsWith("role:")
+      ? (roles.find((r) => `role:${r.key}` === highlight)?.name ?? highlight.slice(5))
+      : highlight.startsWith("art:")
       ? (Object.values(tags.artTags).flat().find(([s]) => `art:${s}` === highlight)?.[1] ?? highlight.slice(4))
       : (tags.tree?.label(highlight) ?? highlight)
     : null;
@@ -234,8 +261,48 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initi
   };
   const roleContext = {
     rolesOf: (l: DeckLine) => roleKeysOf(l.card),
-    roleOrder: tags.roles.map((r) => ({ key: r.key, name: r.name })),
+    roleOrder: roles.map((r) => ({ key: r.key, name: r.name })),
   };
+  // Role counts cover the 100-card deck: commander(s) plus mainboard.
+  const counts = roleCounts([...commanders, ...mainLines], (l) => roleKeysOf(l.card));
+  const underTarget = roles.filter((r) => roleStatus(counts[r.key] ?? 0, r.target) === "under").length;
+
+  const saveDefaults = async () => {
+    if (!userId) return "Sign in to save defaults.";
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ default_role_targets: roleSettings.targets, custom_roles: roleSettings.custom })
+      .eq("id", userId);
+    if (error) return `Couldn't save: ${error.message}`;
+    setDefaults({ targets: roleSettings.targets, custom: roleSettings.custom });
+    return "Saved. New decks will start with these targets.";
+  };
+  const renderProfile = (hideTitle = false) => (
+    <RoleProfile
+      hideTitle={hideTitle}
+      roles={roles}
+      counts={counts}
+      readOnly={readOnly}
+      highlight={highlight}
+      saveError={roleSettings.saveError}
+      onTarget={(key, n) => {
+        if (key.startsWith("c:")) roleSettings.setCustom((cs) => cs.map((c) => (customKey(c.slug) === key ? { ...c, target: n } : c)));
+        else roleSettings.setTargets((t) => ({ ...t, [key]: n }));
+      }}
+      onHighlight={(key) => toggleHighlight(`role:${key}`)}
+      onAddCustom={(role) => roleSettings.setCustom((cs) => [...cs, role])}
+      onRemoveCustom={(key) => {
+        roleSettings.setCustom((cs) => cs.filter((c) => customKey(c.slug) !== key));
+        if (highlight === `role:${key}`) setHighlight(null);
+      }}
+      onSaveDefaults={saveDefaults}
+      onResetDefaults={() => {
+        roleSettings.setTargets(defaults.targets);
+        roleSettings.setCustom(defaults.custom);
+      }}
+    />
+  );
   const sections: ViewSection[] = [
     ...(commanders.length ? [{ key: "commander", title: BOARD_LABELS.commander, lines: sortLines(commanders, "name") }] : []),
     ...(companions.length ? [{ key: "companion", title: BOARD_LABELS.companion, lines: companions }] : []),
@@ -320,8 +387,30 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initi
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
       {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />}
 
-      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[250px_minmax(0,1fr)_300px]">
+        {/* Wide screens: the role profile gets its own column on the left. */}
+        <aside className="hidden xl:block">
+          <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">{renderProfile()}</div>
+        </aside>
+
         <div className="min-w-0">
+          {/* Narrower screens: the same profile, folded above the deck. */}
+          <details className="group mb-4 rounded-lg border border-foreground/15 xl:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-sm font-medium">
+              <span>
+                Role profile
+                {roles.length > 0 && (
+                  <span className={`ml-2 text-xs font-normal ${underTarget ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+                    {underTarget ? `${underTarget} under target` : "all targets met"}
+                  </span>
+                )}
+              </span>
+              <span aria-hidden className="transition-transform group-open:rotate-90">
+                ›
+              </span>
+            </summary>
+            <div className="px-3 pb-3">{renderProfile(true)}</div>
+          </details>
           {!readOnly && (
             <QuickAdd ref={quickAdd} onAdd={(card, board) => run(planAdd(entries, card, board), card)} onPreview={setPreview} />
           )}
@@ -336,7 +425,8 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initi
 
           {highlight && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-amber-400/15 px-3 py-2 text-sm">
-              Highlighting cards tagged <strong>{highlightLabel}</strong> (
+              {highlight.startsWith("role:") ? "Highlighting cards that fill" : "Highlighting cards tagged"}{" "}
+              <strong>{highlightLabel}</strong> (
               {order.filter((l) => matchesHighlight(l.card)).length} in this deck)
               <button onClick={() => setHighlight(null)} className="ml-auto min-h-8 rounded border border-foreground/20 px-2 text-xs">
                 Clear
@@ -379,7 +469,7 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initi
             <CardPanel
               card={preview}
               roleKeys={preview ? roleKeysOf(preview) : []}
-              roles={tags.roles}
+              roles={roles}
               tags={tags}
               highlight={highlight}
               onTag={toggleHighlight}
@@ -402,7 +492,7 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initi
           total={order.length}
           warnings={warningsFor(sheetLine)}
           roleKeys={roleKeysOf(sheetLine.card)}
-          roles={tags.roles}
+          roles={roles}
           tags={tags}
           highlight={highlight}
           readOnly={readOnly}
