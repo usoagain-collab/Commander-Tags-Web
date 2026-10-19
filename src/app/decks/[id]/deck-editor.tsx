@@ -456,7 +456,10 @@ export function DeckEditor({
   const suggestOverall = () => {
     if (!tags.tree) return;
     if (!suggestThemes.length) return say("Add a few more cards first: overall suggestions follow the deck's shared themes.");
-    openSuggest({ label: "this deck", slugs: [...tags.tree.descendants(suggestThemes.map((t) => t.slug))] });
+    // Specific mode scores exact tags only, so ask for exactly those; Broad also matches every sub-tag. (Sub-tags of
+    // broad themes like "triggered ability" made the pool huge and slow without changing the scores.)
+    const slugs = suggestThemes.map((t) => t.slug);
+    openSuggest({ label: "this deck", slugs: themeSettings.specific ? slugs : [...tags.tree.descendants(slugs)] });
   };
   const keyCounts = deckKeyCounts(themeCards);
   const hiddenList = [...hidden].map((key) => {

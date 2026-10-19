@@ -66,10 +66,11 @@ describe("scorePool", () => {
     expect(r[0].shared.map((t) => t.slug)).toEqual(["sacrifice-outlet", "death-trigger"]);
   });
 
-  it("Hidden gems: less-played ranks higher, and cards with no fit are dropped", () => {
+  it("Hidden gems: less-played ranks higher, and only cards sharing 2+ theme tags qualify", () => {
     const r = scorePool(pool, ctx({ style: "gems" }));
     expect(r[0].card.name).toBe("On-theme gem");
     expect(r.map((x) => x.card.name)).not.toContain("Popular off-theme");
+    expect(r.map((x) => x.card.name)).not.toContain("Half fit"); // shares only one tag
   });
 
   it("an under-target role adds 0.12 to fit", () => {

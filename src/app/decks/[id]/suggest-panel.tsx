@@ -60,12 +60,12 @@ export function SuggestPanel(props: Props) {
     setPool(null);
     setError(null);
     (async () => {
-      const { data, error } = await supabase.rpc("suggestion_pool", {
-        p_slugs: source.slugs,
-        p_identity: identity,
-        p_exclude: deckIds,
-        p_lands: !!source.lands,
-      });
+      const ask = () =>
+        supabase.rpc("suggestion_pool", { p_slugs: source.slugs, p_identity: identity, p_exclude: deckIds, p_lands: !!source.lands });
+      let { data, error } = await ask();
+      // The first call after a quiet spell can hit the database's time limit while it loads the tag tables
+      // into memory; the second try runs warm.
+      if (error && /timeout/i.test(error.message) && live) ({ data, error } = await ask());
       if (!live) return;
       if (error) setError(`Couldn't load suggestions: ${error.message}`);
       else setPool((data ?? []) as PoolCard[]);
@@ -223,7 +223,7 @@ function SuggestionCard({
 
 const STYLE_HELP: Record<SuggestStyle, string> = {
   best: "Cards that fit your themes, proven ones first.",
-  gems: "Cards that fit your themes that few decks play.",
+  gems: "Cards sharing at least two of your themes that few decks play.",
   budget: "Cards that fit, under your price cap, cheaper ones higher.",
   custom: "Set how much fit, popularity and price count.",
 };

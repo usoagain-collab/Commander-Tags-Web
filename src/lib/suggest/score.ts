@@ -87,8 +87,9 @@ export function scorePool(pool: PoolCard[], ctx: ScoreContext): Scored[] {
 
   let out = rows;
   if (settings.style === "budget") out = out.filter((r) => r.price != null && r.price <= settings.priceCap);
-  // Hidden gems only shows cards with some fit, so "least played" doesn't mean "random".
-  if (settings.style === "gems") out = out.filter((r) => r.fitRaw > 0 || r.fills.length > 0);
+  // Hidden gems needs at least two shared theme tags, so "least played" doesn't mean "random" (one shared tag
+  // let filler through in the Phase 4c EDHREC check; David, Oct 19, 2026).
+  if (settings.style === "gems") out = out.filter((r) => r.shared.length >= 2);
   return out.sort((a, b) => b.score - a.score || a.card.name.localeCompare(b.card.name)).slice(0, ctx.limit ?? 24);
 }
 
