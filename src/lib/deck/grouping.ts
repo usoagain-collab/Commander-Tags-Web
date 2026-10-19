@@ -5,12 +5,12 @@ const LANDS_KEY = "lands";
 import { isLand } from "@/lib/tags/roles";
 
 export type ViewMode = "text" | "grid" | "stacks";
-export type GroupBy = "type" | "role" | "mv" | "color";
+export type GroupBy = "type" | "role" | "mv" | "color" | "mytags";
 export type SortBy = "name" | "mv" | "price";
 export type ViewSettings = { view: ViewMode; group: GroupBy; sort: SortBy };
 
 export const VIEW_LABELS: Record<ViewMode, string> = { text: "Text", grid: "Visual grid", stacks: "Stacks" };
-export const GROUP_LABELS: Record<GroupBy, string> = { type: "Type", role: "Role", mv: "Mana value", color: "Color" };
+export const GROUP_LABELS: Record<GroupBy, string> = { type: "Type", role: "Role", mv: "Mana value", color: "Color", mytags: "My tags" };
 export const SORT_LABELS: Record<SortBy, string> = { name: "Name", mv: "Mana value", price: "Price" };
 export const DEFAULT_VIEW: ViewSettings = { view: "text", group: "type", sort: "mv" };
 
@@ -52,6 +52,8 @@ export type RoleContext = {
    * A role is only split when it ends up with at least two different subgroups.
    */
   subgroupOf?: (line: DeckLine, roleKey: string) => { key: string; title: string } | null;
+  /** Group by My tags (step 3f): the card's tags, in tag order. A card appears under each of its tags. */
+  myTagsOf?: (line: DeckLine) => { key: string; title: string; order: number }[];
 };
 
 const COLOR_ORDER = ["W", "U", "B", "R", "G"] as const;
@@ -80,6 +82,10 @@ export function groupLines(lines: DeckLine[], group: GroupBy, sort: SortBy, role
       if (first === LANDS_KEY) put(LANDS_KEY, roles!.roleOrder[idx]?.name ?? "Lands", 2000, line);
       else if (idx >= 0) put(first!, roles!.roleOrder[idx].name, idx, line);
       else put("other", "Other", 1000, line);
+    } else if (group === "mytags") {
+      const mine = roles?.myTagsOf?.(line) ?? [];
+      if (!mine.length) put("untagged", "No tag", 1e6, line);
+      for (const t of mine) put(`tag:${t.key}`, t.title, t.order, line);
     } else if (group === "mv") {
       if (land) put("lands", "Lands", 100, line);
       else {

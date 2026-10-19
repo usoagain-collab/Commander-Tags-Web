@@ -2,6 +2,7 @@
 
 import { ManaCost } from "@/components/mana-cost";
 import type { DeckItem } from "./deck-views";
+import { MyTagChips } from "./my-tags-ui";
 
 type Props = {
   item: DeckItem;
@@ -9,16 +10,19 @@ type Props = {
   onOpen: () => void;
   onHover: () => void;
   onQuantity: (n: number) => void;
+  /** Drag-to-category handlers (Group by Role on desktop), or nothing. */
+  drag?: React.HTMLAttributes<HTMLLIElement>;
 };
 
 /** One card in Text view. The name opens the card sheet; quick −/+/✕ sit at the end on wider screens. */
-export function CardLine({ item, readOnly, onOpen, onHover, onQuantity }: Props) {
-  const { line, warnings, untagged, highlighted, extraRoles } = item;
+export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: Props) {
+  const { line, warnings, untagged, highlighted, extraRoles, myTags, manual } = item;
   const { card, board, quantity } = line;
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
 
   return (
     <li
+      {...drag}
       onMouseEnter={onHover}
       className={`group flex items-center gap-2 rounded px-1.5 text-sm ${
         highlighted ? "bg-amber-400/20 ring-1 ring-amber-500/60" : "hover:bg-foreground/5"
@@ -51,6 +55,12 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity }: Props)
             +{extraRoles} role{extraRoles > 1 ? "s" : ""}
           </span>
         )}
+        {manual && (
+          <span title="Category set by you (open the card to change it)" className="shrink-0 text-xs opacity-60">
+            ✎
+          </span>
+        )}
+        <MyTagChips tags={myTags} className="hidden sm:flex" />
       </button>
       <ManaCost cost={card.mana_cost} />
       <span className="hidden w-14 shrink-0 text-right text-xs tabular-nums opacity-60 sm:inline">

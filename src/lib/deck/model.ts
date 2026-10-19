@@ -38,7 +38,16 @@ export type CardSummary = {
 export type Entries = Record<string, number>;
 
 export type RowChange = { oracle_id: string; board: Board; from: number; to: number };
-export type Change = { label: string; rows: RowChange[] };
+/** A manual category (step 3f): a role key, "none" for no role, or null for automatic. */
+export type CategoryChange = { oracle_id: string; board: Board; from: string | null; to: string | null };
+/** A My tag put on (true) or taken off (false) a card (step 3f). */
+export type TagCardChange = { tag_id: string; oracle_id: string; from: boolean; to: boolean };
+/** One edit, and one undo step. Card counts, plus any category or My tag changes made with it. */
+export type Change = { label: string; rows: RowChange[]; categories?: CategoryChange[]; tagCards?: TagCardChange[] };
+/** Manual categories, keyed like entries (`board|oracle_id`). Missing = automatic. */
+export type Categories = Record<string, string>;
+/** My tags on each card: oracle_id -> tag ids. */
+export type TagCards = Record<string, string[]>;
 export type Plan = { ok: true; change: Change } | { ok: false; reason: string };
 
 export const entryKey = (board: Board, oracleId: string) => `${board}|${oracleId}`;
@@ -70,6 +79,99 @@ export function toSaveRows(change: Change, direction: "forward" | "back" = "forw
     board: r.board,
     quantity: direction === "forward" ? r.to : r.from,
   }));
+}
+
+export function applyCategories(categories: Categories, change: Change, direction: "forward" | "back" = "forward"): Categories {
+  if (!change.categories?.length) return categories;
+  const next = { ...categories };
+  for (const c of change.categories) {
+    const v = direction === "forward" ? c.to : c.from;
+    const k = entryKey(c.board, c.oracle_id);
+    if (v) next[k] = v;
+    else delete next[k];
+  }
+  return next;
+}
+
+export function applyTagCards(tagCards: TagCards, change: Change, direction: "forward" | "back" = "forward"): TagCards {
+  if (!change.tagCards?.length) return tagCards;
+  const next = { ...tagCards };
+  for (const t of change.tagCards) {
+    const on = direction === "forward" ? t.to : t.from;
+    const ids = (next[t.oracle_id] ?? []).filter((id) => id !== t.tag_id);
+    if (on) ids.push(t.tag_id);
+    if (ids.length) next[t.oracle_id] = ids;
+    else delete next[t.oracle_id];
+  }
+  return next;
+}
+
+/** Everything one save call sends (apply_deck_changes): card counts, categories, My tags. */
+export type SavePayload = {
+  rows: { oracle_id: string; board: Board; quantity: number }[];
+  categories: { oracle_id: string; board: Board; category: string | null }[];
+  tag_cards: { tag_id: string; oracle_id: string; on: boolean }[];
+};
+export function toSavePayload(change: Change, direction: "forward" | "back" = "forward"): SavePayload {
+  const fwd = direction === "forward";
+  return {
+    rows: toSaveRows(change, direction),
+    categories: (change.categories ?? []).map((c) => ({ oracle_id: c.oracle_id, board: c.board, category: fwd ? c.to : c.from })),
+    tag_cards: (change.tagCards ?? []).map((t) => ({ tag_id: t.tag_id, oracle_id: t.oracle_id, on: fwd ? t.to : t.from })),
+  };
+}
+
+/**
+ * Keeps manual categories through an edit. A removed row takes its category with it, so record that (undo
+ * then brings it back), and a card moved to another board keeps its category there.
+ */
+export function keepCategories(change: Change, categories: Categories): Change {
+  const extra: CategoryChange[] = [];
+  const touched = new Set((change.categories ?? []).map((c) => entryKey(c.board, c.oracle_id)));
+  for (const r of change.rows) {
+    const cat = categories[entryKey(r.board, r.oracle_id)];
+    if (!cat || r.from === 0 || r.to > 0 || touched.has(entryKey(r.board, r.oracle_id))) continue;
+    extra.push({ oracle_id: r.oracle_id, board: r.board, from: cat, to: null });
+    const dest = change.rows.find((d) => d.oracle_id === r.oracle_id && d.board !== r.board && d.from === 0 && d.to > 0);
+    if (dest && !categories[entryKey(dest.board, dest.oracle_id)] && !touched.has(entryKey(dest.board, dest.oracle_id))) {
+      extra.push({ oracle_id: dest.oracle_id, board: dest.board, from: null, to: cat });
+    }
+  }
+  return extra.length ? { ...change, categories: [...(change.categories ?? []), ...extra] } : change;
+}
+
+/** Sets or clears a card's manual category. `name` is what the label shows ("Ramp", "automatic"). */
+export function planCategory(categories: Categories, card: CardSummary, board: Board, to: string | null, name: string): Plan {
+  const from = categories[entryKey(board, card.oracle_id)] ?? null;
+  if (from === to) return { ok: false, reason: "No change." };
+  return {
+    ok: true,
+    change: {
+      label: to ? `Put ${card.name} in ${name}` : `Set ${card.name} back to automatic`,
+      rows: [],
+      categories: [{ oracle_id: card.oracle_id, board, from, to }],
+    },
+  };
+}
+
+/** Puts a My tag on cards, or takes it off. Cards already in that state are skipped. */
+export function planTagCards(tagCards: TagCards, tagId: string, tagName: string, cards: CardSummary[], on: boolean): Plan {
+  const changes = cards
+    .filter((c) => (tagCards[c.oracle_id] ?? []).includes(tagId) !== on)
+    .map((c) => ({ tag_id: tagId, oracle_id: c.oracle_id, from: !on, to: on }));
+  if (!changes.length) return { ok: false, reason: "No change." };
+  const what = cards.length === 1 ? cards[0].name : `${changes.length} cards`;
+  return {
+    ok: true,
+    change: { label: on ? `Tag ${what} "${tagName}"` : `Untag "${tagName}" from ${what}`, rows: [], tagCards: changes },
+  };
+}
+
+/** After a tag is deleted, undo/redo steps must not try to put it back on cards (the save would fail). */
+export function dropTagFromChanges(changes: Change[], tagId: string): Change[] {
+  return changes
+    .map((c) => (c.tagCards?.some((t) => t.tag_id === tagId) ? { ...c, tagCards: c.tagCards.filter((t) => t.tag_id !== tagId) } : c))
+    .filter((c) => c.rows.length || c.categories?.length || c.tagCards?.length);
 }
 
 // ---------- planning edits (checks the rules, returns a Change or a reason it isn't allowed) ----------

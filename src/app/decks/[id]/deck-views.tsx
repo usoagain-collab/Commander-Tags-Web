@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { ViewMode } from "@/lib/deck/grouping";
 import type { DeckLine } from "@/lib/deck/model";
+import type { MyTag } from "@/lib/tags/my-tags";
 import { CardLine } from "./card-line";
+import { MyTagChips } from "./my-tags-ui";
 
 /** A deck line plus what the views show about it. */
 export type DeckItem = {
@@ -12,6 +15,10 @@ export type DeckItem = {
   highlighted: boolean;
   /** Roles beyond the first (the card is grouped under its first role). */
   extraRoles: number;
+  /** My tags to show on the card (empty when "Show on cards" is off). */
+  myTags: MyTag[];
+  /** The category was set by hand (step 3f). */
+  manual: boolean;
 };
 export type ViewSection = {
   key: string;
@@ -31,7 +38,71 @@ type Props = {
   onOpen: (line: DeckLine) => void;
   onHover: (line: DeckLine) => void;
   onQuantity: (line: DeckLine, n: number) => void;
+  /**
+   * Group by Role on desktop (step 3f): drag a mainboard card onto a role group to put it there. Only set when
+   * that's allowed; phones use the Category picker in the card sheet instead.
+   */
+  onCardDrop?: (card: { oracle_id: string; board: string }, sectionKey: string) => void;
 };
+
+/** Our own drag type, so the Scryfall drop overlay (which looks for links and text) ignores these drags. */
+const DRAG_TYPE = "application/x-ctw-card";
+
+/** Makes a mainboard card draggable when drag-to-category is on. */
+export function dragProps(line: DeckLine, enabled: boolean) {
+  if (!enabled || line.board !== "main") return {};
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ oracle_id: line.card.oracle_id, board: line.board }));
+      e.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
+/** A role group that accepts dragged cards; outlined while a card is over it. */
+function DropZone({
+  sectionKey,
+  onCardDrop,
+  className = "",
+  children,
+}: {
+  sectionKey: string;
+  onCardDrop?: Props["onCardDrop"];
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+  if (!onCardDrop || !sectionKey.startsWith("main:")) return <div className={className}>{children}</div>;
+  const ours = (e: React.DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
+  return (
+    <div
+      className={`${className} rounded-md ${over ? "bg-foreground/5 outline-2 outline-dashed outline-foreground/40" : ""}`}
+      onDragOver={(e) => {
+        if (!ours(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        if (!ours(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        try {
+          onCardDrop(JSON.parse(e.dataTransfer.getData(DRAG_TYPE)), sectionKey);
+        } catch {
+          // not one of our drags
+        }
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 /**
  * Sections in screen order, with a role heading inserted before each role's first subgroup. Subgroups of a
@@ -56,10 +127,10 @@ export function DeckView(props: Props) {
     return (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
         {sections.map((s) => (
-          <div key={s.key} className="min-w-0">
+          <DropZone key={s.key} sectionKey={s.key} onCardDrop={props.onCardDrop} className="min-w-0">
             <Heading section={s} {...props} prefix={s.parent?.title} />
             {!props.collapsed.has(s.key) && <Stack section={s} {...props} />}
-          </div>
+          </DropZone>
         ))}
       </div>
     );
@@ -70,20 +141,27 @@ export function DeckView(props: Props) {
       <div className="space-y-5">
         {blocks.map((b) =>
           b.type === "parent" ? (
-            <ParentHeading key={`p:${b.parent.key}`} parent={b.parent} {...props} />
+            <DropZone key={`p:${b.parent.key}`} sectionKey={b.parent.key} onCardDrop={props.onCardDrop}>
+              <ParentHeading parent={b.parent} {...props} />
+            </DropZone>
           ) : (
-            <div key={b.section.key} className={b.section.parent ? "pl-3" : ""}>
+            <DropZone key={b.section.key} sectionKey={b.section.key} onCardDrop={props.onCardDrop} className={b.section.parent ? "pl-3" : ""}>
               <Heading section={b.section} {...props} sub={!!b.section.parent} />
               {!props.collapsed.has(b.section.key) && (
                 <ul className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
                   {b.section.items.map((it) => (
                     <li key={it.line.card.oracle_id}>
-                      <Tile item={it} onOpen={() => props.onOpen(it.line)} onHover={() => props.onHover(it.line)} />
+                      <Tile
+                        item={it}
+                        onOpen={() => props.onOpen(it.line)}
+                        onHover={() => props.onHover(it.line)}
+                        drag={dragProps(it.line, !!props.onCardDrop)}
+                      />
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
+            </DropZone>
           ),
         )}
       </div>
@@ -93,11 +171,16 @@ export function DeckView(props: Props) {
     <div className="columns-1 gap-8 xl:columns-2">
       {blocks.map((b) =>
         b.type === "parent" ? (
-          <div key={`p:${b.parent.key}`} className="break-inside-avoid">
+          <DropZone key={`p:${b.parent.key}`} sectionKey={b.parent.key} onCardDrop={props.onCardDrop} className="break-inside-avoid">
             <ParentHeading parent={b.parent} {...props} />
-          </div>
+          </DropZone>
         ) : (
-          <div key={b.section.key} className={`mb-4 break-inside-avoid ${b.section.parent ? "pl-3" : ""}`}>
+          <DropZone
+            key={b.section.key}
+            sectionKey={b.section.key}
+            onCardDrop={props.onCardDrop}
+            className={`mb-4 break-inside-avoid ${b.section.parent ? "pl-3" : ""}`}
+          >
             <Heading section={b.section} {...props} sub={!!b.section.parent} />
             {!props.collapsed.has(b.section.key) && (
               <ul>
@@ -109,11 +192,12 @@ export function DeckView(props: Props) {
                     onOpen={() => props.onOpen(it.line)}
                     onHover={() => props.onHover(it.line)}
                     onQuantity={(n) => props.onQuantity(it.line, n)}
+                    drag={dragProps(it.line, !!props.onCardDrop)}
                   />
                 ))}
               </ul>
             )}
-          </div>
+          </DropZone>
         ),
       )}
     </div>
@@ -179,11 +263,12 @@ function Heading({
 }
 
 /** A card image tile (Visual grid). Badges sit beside the image's edge, never as tiny buttons on it. */
-function Tile({ item, onOpen, onHover }: { item: DeckItem; onOpen: () => void; onHover: () => void }) {
+function Tile({ item, onOpen, onHover, drag }: { item: DeckItem; onOpen: () => void; onHover: () => void; drag: ReturnType<typeof dragProps> }) {
   const { card, quantity } = item.line;
   return (
     <button
       type="button"
+      {...drag}
       onClick={onOpen}
       onMouseEnter={onHover}
       onFocus={onHover}
@@ -194,12 +279,14 @@ function Tile({ item, onOpen, onHover }: { item: DeckItem; onOpen: () => void; o
     >
       <CardImage name={card.name} src={card.image_normal} />
       <TileBadges item={item} quantity={quantity} />
+      {/* Under the image, not on it: the whole tile stays the one tap target. */}
+      <MyTagChips tags={item.myTags} className="pointer-events-none mt-1" />
     </button>
   );
 }
 
 /** Stacks: each group's cards overlap so only their name bars show; the last card is shown whole. */
-function Stack({ section, onOpen, onHover }: { section: ViewSection } & Pick<Props, "onOpen" | "onHover">) {
+function Stack({ section, onOpen, onHover, onCardDrop }: { section: ViewSection } & Pick<Props, "onOpen" | "onHover" | "onCardDrop">) {
   return (
     <ul className="flex flex-col pb-2">
       {section.items.map((it, i) => (
@@ -209,6 +296,7 @@ function Stack({ section, onOpen, onHover }: { section: ViewSection } & Pick<Pro
             onClick={() => onOpen(it.line)}
             onMouseEnter={() => onHover(it.line)}
             onFocus={() => onHover(it.line)}
+            {...dragProps(it.line, !!onCardDrop)}
             title={`Open ${it.line.card.name}`}
             className={`relative block w-full rounded-[5%/3.6%] ${it.highlighted ? "ring-4 ring-amber-400" : ""}`}
           >
@@ -223,7 +311,7 @@ function Stack({ section, onOpen, onHover }: { section: ViewSection } & Pick<Pro
 
 function CardImage({ name, src }: { name: string; src: string | null }) {
   return src ? (
-    <img src={src} alt={name} loading="lazy" width={244} height={340} className="block w-full rounded-[4.75%/3.5%] shadow" />
+    <img src={src} alt={name} loading="lazy" draggable={false} width={244} height={340} className="block w-full rounded-[4.75%/3.5%] shadow" />
   ) : (
     <span className="flex aspect-[63/88] items-center justify-center rounded-lg border border-foreground/20 bg-foreground/5 p-2 text-center text-xs">
       {name}
