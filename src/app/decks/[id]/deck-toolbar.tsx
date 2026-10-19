@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   GROUP_LABELS,
@@ -12,11 +12,36 @@ import {
   type ViewSettings,
 } from "@/lib/deck/grouping";
 
-/** View / Group / Sort, remembered per user in profiles.tag_view (merged, so later panels can add keys). */
-export function useViewSettings(initial: ViewSettings, savedTagView: Record<string, unknown>, userId: string | null) {
+/**
+ * Everything remembered in profiles.tag_view: View / Group / Sort and the top-tags switches. One writer for the
+ * whole object, so changing one setting can't overwrite another that was changed a moment earlier.
+ */
+export function useTagViewPrefs(savedTagView: Record<string, unknown>, userId: string | null) {
   const supabase = useMemo(() => createClient(), []);
-  const [settings, setSettings] = useState(initial);
-  const saved = useRef(savedTagView);
+  const [prefs, setPrefs] = useState<Record<string, unknown>>(savedTagView);
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!userId) return;
+    // Supabase only sends a query once something awaits it, so the await here is what makes the save happen.
+    const timer = setTimeout(async () => {
+      await supabase.from("profiles").update({ tag_view: prefs }).eq("id", userId);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [prefs, supabase, userId]);
+
+  const update = useCallback((patch: Record<string, unknown>) => setPrefs((p) => ({ ...p, ...patch })), []);
+  return [prefs, update] as const;
+}
+
+/** Hidden tags ("o:<slug>" / "a:<slug>"), saved to profiles.hidden_tags. */
+export function useHiddenTags(initial: string[], userId: string | null) {
+  const supabase = useMemo(() => createClient(), []);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set(initial));
   const first = useRef(true);
 
   useEffect(() => {
@@ -26,13 +51,22 @@ export function useViewSettings(initial: ViewSettings, savedTagView: Record<stri
     }
     if (!userId) return;
     const timer = setTimeout(async () => {
-      saved.current = { ...saved.current, ...settings };
-      await supabase.from("profiles").update({ tag_view: saved.current }).eq("id", userId);
+      await supabase.from("profiles").update({ hidden_tags: [...hidden] }).eq("id", userId);
     }, 400);
     return () => clearTimeout(timer);
-  }, [settings, supabase, userId]);
+  }, [hidden, supabase, userId]);
 
-  return [settings, setSettings] as const;
+  const toggle = useCallback(
+    (key: string) =>
+      setHidden((h) => {
+        const next = new Set(h);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      }),
+    [],
+  );
+  return [hidden, toggle] as const;
 }
 
 export function DeckToolbar({ settings, onChange }: { settings: ViewSettings; onChange: (s: ViewSettings) => void }) {

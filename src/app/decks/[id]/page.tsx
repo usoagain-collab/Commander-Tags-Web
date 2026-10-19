@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { entryKey, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
-import { readViewSettings } from "@/lib/deck/grouping";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets } from "@/lib/tags/role-settings";
 import { DeckEditor } from "./deck-editor";
@@ -40,7 +39,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   // The user's remembered View / Group / Sort (and, later, tag panel settings), and their default role targets.
   const { data: profile } = user
-    ? await supabase.from("profiles").select("tag_view, default_role_targets, custom_roles").eq("id", user.id).maybeSingle()
+    ? await supabase.from("profiles").select("tag_view, default_role_targets, custom_roles, hidden_tags").eq("id", user.id).maybeSingle()
     : { data: null };
   const tagView = (profile?.tag_view ?? {}) as Record<string, unknown>;
 
@@ -50,8 +49,8 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       initialEntries={entries}
       initialCards={cards}
       readOnly={deck.owner_id !== user?.id}
-      initialView={readViewSettings(tagView)}
       savedTagView={tagView}
+      hiddenTags={(profile?.hidden_tags as string[] | undefined) ?? []}
       userId={user?.id ?? null}
       roleTargets={readTargets(deck.role_targets)}
       customRoles={readCustomRoles(deck.custom_roles)}
