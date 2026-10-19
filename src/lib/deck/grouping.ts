@@ -24,7 +24,14 @@ export function readViewSettings(saved: unknown): ViewSettings {
   };
 }
 
-export type Section = { key: string; title: string; lines: DeckLine[]; count: number };
+export type Section = {
+  key: string;
+  title: string;
+  lines: DeckLine[];
+  count: number;
+  /** Set on role subgroups: the role this subgroup belongs to (step 3e). */
+  parent?: { key: string; title: string; count: number };
+};
 
 export function sortLines(lines: DeckLine[], sort: SortBy): DeckLine[] {
   const byName = (a: DeckLine, b: DeckLine) => a.card.name.localeCompare(b.card.name);
@@ -40,6 +47,11 @@ export type RoleContext = {
   /** Role keys a card fills, in role order (see rolesOf). */
   rolesOf: (line: DeckLine) => string[];
   roleOrder: { key: string; name: string }[];
+  /**
+   * Optional role subgroups: which subgroup a card goes in within a role, or null for "Other <role>".
+   * A role is only split when it ends up with at least two different subgroups.
+   */
+  subgroupOf?: (line: DeckLine, roleKey: string) => { key: string; title: string } | null;
 };
 
 const COLOR_ORDER = ["W", "U", "B", "R", "G"] as const;
@@ -84,10 +96,26 @@ export function groupLines(lines: DeckLine[], group: GroupBy, sort: SortBy, role
     }
   }
 
+  const total = (ls: DeckLine[]) => ls.reduce((n, l) => n + l.quantity, 0);
   return [...buckets.entries()]
     .sort(([, a], [, b]) => a.order - b.order)
-    .map(([key, b]) => {
+    .flatMap(([key, b]): Section[] => {
       const sorted = sortLines(b.lines, sort);
-      return { key, title: b.title, lines: sorted, count: sorted.reduce((n, l) => n + l.quantity, 0) };
+      const whole: Section = { key, title: b.title, lines: sorted, count: total(sorted) };
+      if (group !== "role" || key === "other" || !roles?.subgroupOf) return [whole];
+
+      // Split the role into subgroups (Ramp › Mana rock, Mana dork…), "Other …" last.
+      const subs = new Map<string, { title: string; lines: DeckLine[] }>();
+      for (const line of sorted) {
+        const sg = roles.subgroupOf(line, key) ?? { key: "other", title: `Other ${b.title.toLowerCase()}` };
+        const entry = subs.get(sg.key) ?? { title: sg.title, lines: [] };
+        entry.lines.push(line);
+        subs.set(sg.key, entry);
+      }
+      if (subs.size < 2) return [whole];
+      const parent = { key, title: b.title, count: whole.count };
+      return [...subs.entries()]
+        .sort(([ka, a], [kb, b2]) => Number(ka === "other") - Number(kb === "other") || total(b2.lines) - total(a.lines) || a.title.localeCompare(b2.title))
+        .map(([sk, sub]) => ({ key: `${key}/${sk}`, title: sub.title, lines: sub.lines, count: total(sub.lines), parent }));
     });
 }

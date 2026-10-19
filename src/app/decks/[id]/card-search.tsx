@@ -39,9 +39,12 @@ type Props = {
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary | null) => void;
   onClose: () => void;
+  /** "Hide cards in deck" (remembered with the other view settings). */
+  hideInDeck: boolean;
+  onHideInDeck: (hide: boolean) => void;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
@@ -178,6 +181,14 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
 
   const inDeck = (id: string) =>
     (entries[entryKey("commander", id)] ?? 0) + (entries[entryKey("main", id)] ?? 0) + (entries[entryKey("companion", id)] ?? 0);
+  // Moxfield's #3 request: optionally hide results that are already in the deck. Filtered here rather than
+  // in the Scryfall query, which can't know what's in this deck.
+  const isInDeck = (sf: ScryfallCard) => {
+    const id = oracleIdOf(sf);
+    return !!id && inDeck(id) > 0;
+  };
+  const shown = hideInDeck ? results.filter((sf) => !isInDeck(sf)) : results;
+  const hiddenCount = results.length - shown.length;
 
   return (
     <section className="mt-6 rounded-lg border border-foreground/15 p-4">
@@ -256,6 +267,10 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           <input type="checkbox" checked={legalOnly} onChange={(e) => setLegalOnly(e.target.checked)} />
           Commander-legal paper cards
         </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={hideInDeck} onChange={(e) => onHideInDeck(e.target.checked)} />
+          Hide cards in deck
+        </label>
         <span className="opacity-70">
           Type <code>otag:</code> or <code>art:</code> for tag suggestions ·{" "}
           <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="underline">
@@ -278,10 +293,16 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       ))}
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       {total === 0 && !error && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
+      {hideInDeck && hiddenCount > 0 && (
+        <p className="mt-2 text-xs opacity-60">
+          {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} already in your deck hidden
+          {shown.length === 0 && nextPage ? " · Show more to see the next page" : ""}
+        </p>
+      )}
 
-      {results.length > 0 && (
+      {shown.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-          {results.map((sf) => {
+          {shown.map((sf) => {
             const id = oracleIdOf(sf);
             const card = id ? summaries[id] : undefined;
             const have = id ? inDeck(id) : 0;

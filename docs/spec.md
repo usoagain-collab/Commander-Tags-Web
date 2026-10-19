@@ -117,8 +117,8 @@ The editor matches what people like about Moxfield and fixes its known complaint
 | Autosave | Every change saves instantly; undo with Ctrl+Z | Feels good to use |
 | Version history | Every deck keeps saved versions. See what changed between two versions (added / removed cards), and restore an old one. Restoring is itself a change, so it can be undone | Moxfield's #2 request (592 votes); Archidekt has it. Added Oct 18, 2026 |
 | Bulk edit | Select several cards (checkboxes or Shift-click), then move them to another board, add or remove a My tag, change quantity or remove them, all at once and as one Ctrl+Z | Moxfield's #5 request (255 votes). Added Oct 18, 2026 |
-| Role subgroups | With Group by Role, each role splits into its subtags (Ramp › mana rocks, mana dorks, land ramp), using the tag tree; each subgroup collapses | Archidekt subcategories request (240 points). Added Oct 18, 2026; 3d merged first, so it needs a new step |
-| Big-list performance | A 100-card deck plus a 300-card maybeboard stays smooth: long lists draw only what's on screen | Both sites slow down past about 150–200 cards |
+| Role subgroups | With Group by Role, each role splits into its subtags (Ramp › mana rocks, mana dorks, land ramp), using the tag tree; each subgroup collapses | Archidekt subcategories request (240 points). Added Oct 18, 2026; step 3e |
+| Big-list performance | A 100-card deck plus a 300-card maybeboard stays smooth (measured Oct 19, 2026: every switch under ~120 ms on a 400-card deck, so no virtualization yet; if a re-check lags, long lists draw only what's on screen) | Both sites slow down past about 150–200 cards |
 
 ## Playtester
 
@@ -200,12 +200,12 @@ Done Oct 18, 2026, from each site's own feedback board (vote counts) and a 2026 
 
 | Pain point | Evidence | Status here |
 | --- | --- | --- |
-| No deck version history | Moxfield #2 request, 592 votes, in progress; Archidekt shipped changelogs in 2022 (332 points) | **v1** (David, Oct 18, 2026): Version history |
-| Search shows cards already in the deck | Moxfield #3, 307 votes | Search marks them with a count (built in 2d). **v1:** add the Hide toggle |
-| No bulk edits | Moxfield #5, 255 votes | **v1:** Bulk edit |
-| Categories too flat | Archidekt subcategories, 240 points | **v1:** Role subgroups from the tag tree (step to be set; 3d merged first) |
+| No deck version history | Moxfield #2 request, 592 votes, in progress; Archidekt shipped changelogs in 2022 (332 points) | **v1, step 3h:** Version history |
+| Search shows cards already in the deck | Moxfield #3, 307 votes | Search marks them with a count (built in 2d). **v1, step 3e:** add the Hide toggle |
+| No bulk edits | Moxfield #5, 255 votes | **v1, step 3g:** Bulk edit |
+| Categories too flat | Archidekt subcategories, 240 points | **v1, step 3e:** Role subgroups from the tag tree |
 | Sections can't collapse | Moxfield, 136 votes | Built (3a): collapsible group headings |
-| Slows down on big lists | Archidekt large lists, 507 points (slow past about 200 cards); Moxfield loading past about 150 | **v1 requirement:** Big-list performance |
+| Slows down on big lists | Archidekt large lists, 507 points (slow past about 200 cards); Moxfield loading past about 150 | **v1 requirement:** Big-list performance (measured in 3e, re-checked before the friend test) |
 | Search waits about 1 s per keystroke | Moxfield instant-search request | Quick add uses our own indexed database (2b); keep it under about 150 ms |
 | Re-tagging the same card in every deck | Archidekt auto-categories, 43 points; users asked for Scryfall oracle tags | Core design (roles from tags), plus account-wide My tags (3e) |
 | No combo detection | Moxfield #6, 207 votes (Commander Spellbook) | Planned in phase 5, bracket targeting |

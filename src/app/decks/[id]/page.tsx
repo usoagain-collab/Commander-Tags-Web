@@ -27,11 +27,17 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   if (!deck) notFound();
 
   // Two queries: the deck's rows, then the card details for just those cards.
-  const { data: rows } = await supabase.from("deck_cards").select("oracle_id, board, quantity").eq("deck_id", id);
+  const { data: rows, error: rowsError } = await supabase.from("deck_cards").select("oracle_id, board, quantity").eq("deck_id", id);
+  if (rowsError) throw new Error(`Couldn't load the deck's cards: ${rowsError.message}`);
   const oracleIds = [...new Set((rows ?? []).map((r) => r.oracle_id as string))];
-  const { data: summaries } = oracleIds.length
-    ? await supabase.from("card_summaries").select("*").in("oracle_id", oracleIds)
-    : { data: [] as CardSummary[] };
+  // In batches: the ids go in the request's address, and ~400 of them (a big maybeboard) is longer than the
+  // server accepts. A failed batch must stop the page, not show an empty deck that autosave could then overwrite.
+  const batches = [];
+  for (let i = 0; i < oracleIds.length; i += 100) batches.push(oracleIds.slice(i, i + 100));
+  const results = await Promise.all(batches.map((ids) => supabase.from("card_summaries").select("*").in("oracle_id", ids)));
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(`Couldn't load card details: ${failed.error.message}`);
+  const summaries = results.flatMap((r) => (r.data ?? []) as CardSummary[]);
 
   const entries: Entries = {};
   for (const r of rows ?? []) entries[entryKey(r.board as Board, r.oracle_id as string)] = r.quantity as number;
