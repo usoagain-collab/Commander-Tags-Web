@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   applyChange,
   BOARD_LABELS,
   deckIdentity,
   deckSize,
-  groupByType,
   linesFor,
   outsideIdentity,
   planAdd,
@@ -18,15 +17,23 @@ import {
   type Board,
   type CardSummary,
   type Change,
+  type DeckLine,
   type Entries,
   type Plan,
 } from "@/lib/deck/model";
+import { groupLines, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
-import { CardLine } from "./card-line";
+import { isLand, rolesOf } from "@/lib/tags/roles";
+import { useTagData } from "@/lib/tags/use-tag-data";
+import { CardPanel } from "./card-panel";
 import { CardSearch } from "./card-search";
+import { CardSheet } from "./card-sheet";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
+import { DeckToolbar, useViewSettings } from "./deck-toolbar";
+import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { DropOverlay } from "./drop-overlay";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
+import { SummaryBar } from "./summary-bar";
 
 type State = {
   entries: Entries;
@@ -81,9 +88,12 @@ type Props = {
   initialEntries: Entries;
   initialCards: Record<string, CardSummary>;
   readOnly: boolean;
+  initialView: ViewSettings;
+  savedTagView: Record<string, unknown>;
+  userId: string | null;
 };
 
-export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Props) {
+export function DeckEditor({ deck, initialEntries, initialCards, readOnly, initialView, savedTagView, userId }: Props) {
   const [state, dispatch] = useReducer(reducer, {
     entries: initialEntries,
     cards: initialCards,
@@ -93,6 +103,10 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
   const { status, save, retry } = useAutosave(deck.id);
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<CardSummary | null>(null);
+  const [sheet, setSheet] = useState<{ oracle_id: string; board: Board } | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [view, setView] = useViewSettings(initialView, savedTagView, userId);
   const quickAdd = useRef<QuickAddHandle>(null);
 
   const say = useCallback((msg: string) => {
@@ -149,7 +163,7 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
     if (readOnly) return;
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement;
-      const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+      const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
       const mod = e.ctrlKey || e.metaKey;
       if (e.key === "/" && !typing) {
         e.preventDefault();
@@ -168,29 +182,92 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
   }, [readOnly, undo, redo]);
 
   const { entries, cards } = state;
+
+  // ---------- tags and roles ----------
+  // Tags for every card we know about, plus whatever is being previewed (a search result, say).
+  const tagIds = useMemo(
+    () => [...new Set([...Object.keys(cards), ...(preview ? [preview.oracle_id] : [])])],
+    [cards, preview],
+  );
+  const tags = useTagData(tagIds);
+  const roleKeysOf = useCallback(
+    (card: CardSummary) => rolesOf(card.type_line, tags.oracleTags[card.oracle_id], tags.roles),
+    [tags.oracleTags, tags.roles],
+  );
+  const matchesHighlight = (card: CardSummary) => {
+    if (!highlight) return false;
+    if (highlight.startsWith("art:")) return (tags.artTags[card.oracle_id] ?? []).some(([s]) => `art:${s}` === highlight);
+    return (tags.oracleTags[card.oracle_id] ?? []).includes(highlight);
+  };
+  const toggleHighlight = (slug: string) => setHighlight((h) => (h === slug ? null : slug));
+  const highlightLabel = highlight
+    ? highlight.startsWith("art:")
+      ? (Object.values(tags.artTags).flat().find(([s]) => `art:${s}` === highlight)?.[1] ?? highlight.slice(4))
+      : (tags.tree?.label(highlight) ?? highlight)
+    : null;
+
+  // ---------- what's on screen ----------
   const identity = deckIdentity(entries, cards);
   const size = deckSize(entries);
   const commanders = linesFor(entries, cards, "commander");
   const companions = linesFor(entries, cards, "companion");
-  const main = groupByType(linesFor(entries, cards, "main"));
-  const maybe = linesFor(entries, cards, "maybe").sort((a, b) => a.card.name.localeCompare(b.card.name));
+  const mainLines = linesFor(entries, cards, "main");
+  const maybeLines = linesFor(entries, cards, "maybe");
+
+  const warningsFor = (line: DeckLine) => {
+    const w: string[] = [];
+    if (!line.card.commander_legal) w.push("Not legal in Commander");
+    if (outsideIdentity(line.card, identity)) w.push("Outside your commander's colors");
+    if (line.board === "commander" && !line.card.can_be_commander) w.push("Can't normally be a commander");
+    return w;
+  };
+  const decorate = (line: DeckLine): DeckItem => {
+    const id = line.card.oracle_id;
+    return {
+      line,
+      warnings: warningsFor(line),
+      // Basic lands and most lands have no function tags; only flag spells.
+      untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
+      highlighted: matchesHighlight(line.card),
+      extraRoles: Math.max(0, roleKeysOf(line.card).length - 1),
+    };
+  };
+  const roleContext = {
+    rolesOf: (l: DeckLine) => roleKeysOf(l.card),
+    roleOrder: tags.roles.map((r) => ({ key: r.key, name: r.name })),
+  };
+  const sections: ViewSection[] = [
+    ...(commanders.length ? [{ key: "commander", title: BOARD_LABELS.commander, lines: sortLines(commanders, "name") }] : []),
+    ...(companions.length ? [{ key: "companion", title: BOARD_LABELS.companion, lines: companions }] : []),
+    ...groupLines(mainLines, view.group, view.sort, roleContext).map((s) => ({ ...s, key: `main:${s.key}` })),
+    ...(maybeLines.length ? [{ key: "maybe", title: BOARD_LABELS.maybe, lines: sortLines(maybeLines, view.sort) }] : []),
+  ].map((s) => ({
+    key: s.key,
+    title: s.title,
+    count: s.lines.reduce((n, l) => n + l.quantity, 0),
+    items: s.lines.map(decorate),
+  }));
+
+  // The card sheet steps through cards in screen order.
+  const order = sections.flatMap((s) => s.items.map((i) => i.line));
+  const sheetIndex = sheet ? order.findIndex((l) => l.card.oracle_id === sheet.oracle_id && l.board === sheet.board) : -1;
+  const sheetLine = sheetIndex >= 0 ? order[sheetIndex] : null;
+  useEffect(() => {
+    if (sheet && sheetIndex < 0) setSheet(null); // the card was removed
+  }, [sheet, sheetIndex]);
+  const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
+  const step = (by: number) => {
+    if (!order.length || sheetIndex < 0) return;
+    openLine(order[(sheetIndex + by + order.length) % order.length]);
+  };
 
   /** Adds a card found outside the deck list (search results, drag from Scryfall) and confirms it. */
   const addWithNotice = (card: CardSummary, board: Board) => {
     if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`);
   };
 
-  const lineProps = (line: ReturnType<typeof linesFor>[number]) => ({
-    line,
-    readOnly,
-    offColor: outsideIdentity(line.card, identity),
-    onPreview: () => setPreview(line.card),
-    onMove: (to: Board) => run(planMove(entries, line.card, line.board, to)),
-    onQuantity: (n: number) => run(planSetQuantity(entries, line.card, line.board, n)),
-  });
-
   return (
-    <main className="mx-auto max-w-6xl px-6 py-6">
+    <main className="mx-auto max-w-7xl px-6 pt-6">
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -198,55 +275,34 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
             ← My decks
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">{deck.name}</h1>
-          <p className="mt-1 text-sm opacity-70">
-            <span className={size === 100 ? "font-medium text-green-700 dark:text-green-400" : ""}>{size} / 100</span>{" "}
-            cards · ${totalPrice(entries, cards).toFixed(2)}
-            {identity && <> · identity {identity.size ? [...identity].join("") : "colorless"}</>}
-          </p>
+          {identity && (
+            <p className="mt-1 text-sm opacity-70">Color identity: {identity.size ? [...identity].join("") : "colorless"}</p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {!readOnly && (
-            <button
-              onClick={() => setPanel(panel === "search" ? null : "search")}
-              className="rounded-md border border-foreground/20 px-2.5 py-1"
-            >
+            <HeaderButton active={panel === "search"} onClick={() => setPanel(panel === "search" ? null : "search")}>
               Search
-            </button>
+            </HeaderButton>
           )}
           {!readOnly && (
-            <button
-              onClick={() => setPanel(panel === "import" ? null : "import")}
-              className="rounded-md border border-foreground/20 px-2.5 py-1"
-            >
+            <HeaderButton active={panel === "import"} onClick={() => setPanel(panel === "import" ? null : "import")}>
               Import
-            </button>
+            </HeaderButton>
           )}
-          <button
-            onClick={() => setPanel(panel === "export" ? null : "export")}
-            className="rounded-md border border-foreground/20 px-2.5 py-1"
-          >
+          <HeaderButton active={panel === "export"} onClick={() => setPanel(panel === "export" ? null : "export")}>
             Export
-          </button>
+          </HeaderButton>
         </div>
         {!readOnly && (
           <div className="flex items-center gap-3 text-sm">
             <SaveIndicator status={status} onRetry={retry} />
-            <button
-              onClick={undo}
-              disabled={state.past.length === 0}
-              title="Undo (Ctrl+Z)"
-              className="rounded-md border border-foreground/20 px-2.5 py-1 disabled:opacity-40"
-            >
+            <HeaderButton onClick={undo} disabled={state.past.length === 0} title="Undo (Ctrl+Z)">
               Undo
-            </button>
-            <button
-              onClick={redo}
-              disabled={state.future.length === 0}
-              title="Redo (Ctrl+Shift+Z)"
-              className="rounded-md border border-foreground/20 px-2.5 py-1 disabled:opacity-40"
-            >
+            </HeaderButton>
+            <HeaderButton onClick={redo} disabled={state.future.length === 0} title="Redo (Ctrl+Shift+Z)">
               Redo
-            </button>
+            </HeaderButton>
           </div>
         )}
       </div>
@@ -261,95 +317,137 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "import" && !readOnly && (
-        <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />
-      )}
-      {panel === "export" && (
-        <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />
-      )}
+      {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
+      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />}
 
-      <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_280px]">
+      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0">
           {!readOnly && (
-            <QuickAdd
-              ref={quickAdd}
-              onAdd={(card, board) => run(planAdd(entries, card, board), card)}
-              onPreview={setPreview}
-            />
+            <QuickAdd ref={quickAdd} onAdd={(card, board) => run(planAdd(entries, card, board), card)} onPreview={setPreview} />
           )}
           <p aria-live="polite" className="mt-2 min-h-5 text-sm text-amber-700 dark:text-amber-400">
             {notice}
           </p>
 
-          <Section title={BOARD_LABELS.commander} count={commanders.length}>
-            {commanders.length === 0 ? (
-              <p className="px-1.5 py-1 text-sm opacity-60">
-                No commander yet. Add a legendary creature with Ctrl+Enter, or use ♛ on a card below.
-              </p>
-            ) : (
-              <ul>{commanders.map((l) => <CardLine key={l.card.oracle_id} {...lineProps(l)} />)}</ul>
-            )}
-          </Section>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-b border-foreground/10 pb-3">
+            <DeckToolbar settings={view} onChange={setView} />
+            {tags.error && <span className="text-xs text-amber-700 dark:text-amber-400">{tags.error}</span>}
+          </div>
 
-          {companions.length > 0 && (
-            <Section title={BOARD_LABELS.companion} count={companions.length}>
-              <ul>{companions.map((l) => <CardLine key={l.card.oracle_id} {...lineProps(l)} />)}</ul>
-            </Section>
+          {highlight && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-amber-400/15 px-3 py-2 text-sm">
+              Highlighting cards tagged <strong>{highlightLabel}</strong> (
+              {order.filter((l) => matchesHighlight(l.card)).length} in this deck)
+              <button onClick={() => setHighlight(null)} className="ml-auto min-h-8 rounded border border-foreground/20 px-2 text-xs">
+                Clear
+              </button>
+            </div>
           )}
 
-          <Section title={BOARD_LABELS.main} count={main.reduce((n, g) => n + g.count, 0)}>
-            {main.length === 0 && <p className="px-1.5 py-1 text-sm opacity-60">Empty. Add cards above.</p>}
-            <div className="columns-1 gap-8 xl:columns-2">
-              {main.map((g) => (
-                <div key={g.section} className="mb-4 break-inside-avoid">
-                  <h3 className="mb-1 px-1.5 text-xs font-semibold uppercase tracking-wide opacity-60">
-                    {g.section} ({g.count})
-                  </h3>
-                  <ul>{g.lines.map((l) => <CardLine key={l.card.oracle_id} {...lineProps(l)} />)}</ul>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          <Section title={BOARD_LABELS.maybe} count={maybe.reduce((n, l) => n + l.quantity, 0)}>
-            {maybe.length === 0 ? (
-              <p className="px-1.5 py-1 text-sm opacity-60">Cards you&apos;re considering. Shift+Enter adds here.</p>
+          {commanders.length === 0 && (
+            <p className="mt-4 px-1.5 text-sm opacity-60">
+              No commander yet. Add a legendary creature with Ctrl+Enter, or open a card and choose “Make commander”.
+            </p>
+          )}
+          <div className="mt-4">
+            {sections.length === 0 ? (
+              <p className="px-1.5 text-sm opacity-60">Empty. Add cards above, import a list, or drag cards in from Scryfall.</p>
             ) : (
-              <ul>{maybe.map((l) => <CardLine key={l.card.oracle_id} {...lineProps(l)} />)}</ul>
+              <DeckView
+                sections={sections}
+                view={view.view}
+                collapsed={collapsed}
+                readOnly={readOnly}
+                onToggle={(k) =>
+                  setCollapsed((c) => {
+                    const next = new Set(c);
+                    if (next.has(k)) next.delete(k);
+                    else next.add(k);
+                    return next;
+                  })
+                }
+                onOpen={openLine}
+                onHover={(l) => setPreview(l.card)}
+                onQuantity={(l, n) => run(planSetQuantity(entries, l.card, l.board, n))}
+              />
             )}
-          </Section>
+          </div>
         </div>
 
         <aside className="hidden lg:block">
-          <div className="sticky top-6">
-            {preview?.image_normal ? (
-              <img
-                src={preview.image_normal}
-                alt={preview.name}
-                width={280}
-                height={390}
-                className="w-full rounded-[4.75%/3.5%] shadow-lg"
-              />
-            ) : (
-              <div className="flex aspect-[63/88] w-full items-center justify-center rounded-xl border border-dashed border-foreground/20 p-6 text-center text-sm opacity-50">
-                {preview ? preview.name : "Hover a card to see it here"}
-              </div>
-            )}
+          <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6">
+            <CardPanel
+              card={preview}
+              roleKeys={preview ? roleKeysOf(preview) : []}
+              roles={tags.roles}
+              tags={tags}
+              highlight={highlight}
+              onTag={toggleHighlight}
+              onOpen={() => {
+                const line = preview && order.find((l) => l.card.oracle_id === preview.oracle_id);
+                if (line) openLine(line);
+              }}
+            />
           </div>
         </aside>
       </div>
+
+      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards)} />
+
+      {sheetLine && (
+        <CardSheet
+          deckId={deck.id}
+          line={sheetLine}
+          index={sheetIndex}
+          total={order.length}
+          warnings={warningsFor(sheetLine)}
+          roleKeys={roleKeysOf(sheetLine.card)}
+          roles={tags.roles}
+          tags={tags}
+          highlight={highlight}
+          readOnly={readOnly}
+          onTag={(slug) => {
+            toggleHighlight(slug);
+            setSheet(null); // show the highlighted cards
+          }}
+          onMove={(to) => {
+            if (run(planMove(entries, sheetLine.card, sheetLine.board, to))) setSheet({ oracle_id: sheetLine.card.oracle_id, board: to });
+          }}
+          onQuantity={(n) => run(planSetQuantity(entries, sheetLine.card, sheetLine.board, n))}
+          onPrev={() => step(-1)}
+          onNext={() => step(1)}
+          onClose={() => setSheet(null)}
+        />
+      )}
     </main>
   );
 }
 
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+function HeaderButton({
+  onClick,
+  active,
+  disabled,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mt-6">
-      <h2 className="mb-2 border-b border-foreground/10 pb-1 font-semibold">
-        {title} <span className="font-normal opacity-60">({count})</span>
-      </h2>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={active}
+      className={`min-h-9 rounded-md border px-3 disabled:opacity-40 ${
+        active ? "border-foreground bg-foreground text-background" : "border-foreground/20"
+      }`}
+    >
       {children}
-    </section>
+    </button>
   );
 }
 

@@ -1,86 +1,85 @@
 "use client";
 
 import { ManaCost } from "@/components/mana-cost";
-import type { Board, DeckLine } from "@/lib/deck/model";
+import type { DeckItem } from "./deck-views";
 
 type Props = {
-  line: DeckLine;
-  offColor: boolean;
+  item: DeckItem;
   readOnly: boolean;
-  onPreview: () => void;
-  onMove: (to: Board) => void;
+  onOpen: () => void;
+  onHover: () => void;
   onQuantity: (n: number) => void;
 };
 
-export function CardLine({ line, offColor, readOnly, onPreview, onMove, onQuantity }: Props) {
+/** One card in Text view. The name opens the card sheet; quick −/+/✕ sit at the end on wider screens. */
+export function CardLine({ item, readOnly, onOpen, onHover, onQuantity }: Props) {
+  const { line, warnings, untagged, highlighted, extraRoles } = item;
   const { card, board, quantity } = line;
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
 
-  const warnings: string[] = [];
-  if (!card.commander_legal) warnings.push("Not legal in Commander");
-  if (offColor) warnings.push("Outside your commander's colors");
-  if (board === "commander" && !card.can_be_commander) warnings.push("Can't normally be a commander");
-
   return (
     <li
-      onMouseEnter={onPreview}
-      onFocus={onPreview}
-      className="group flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-foreground/5"
+      onMouseEnter={onHover}
+      className={`group flex items-center gap-2 rounded px-1.5 text-sm ${
+        highlighted ? "bg-amber-400/20 ring-1 ring-amber-500/60" : "hover:bg-foreground/5"
+      }`}
     >
       <span className="w-6 shrink-0 text-right tabular-nums opacity-70">{quantity}</span>
-      <span className="min-w-0 flex-1 truncate">
-        {card.name}
+      <button
+        type="button"
+        onClick={onOpen}
+        onFocus={onHover}
+        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left"
+        title={`Open ${card.name}`}
+      >
+        <span className="truncate">{card.name}</span>
         {warnings.length > 0 && (
           <span
             title={warnings.join(" · ")}
-            className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+            className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
           >
-            ⚠ {warnings[0]}
+            ⚠<span className="hidden sm:inline"> {warnings[0]}</span>
           </span>
         )}
-      </span>
+        {untagged && (
+          <span title="Scryfall's Tagger has no tags for this card yet" className="shrink-0 rounded bg-foreground/10 px-1.5 py-0.5 text-xs opacity-70">
+            untagged
+          </span>
+        )}
+        {extraRoles > 0 && (
+          <span title="Fills more than one role" className="shrink-0 text-xs opacity-60">
+            +{extraRoles} role{extraRoles > 1 ? "s" : ""}
+          </span>
+        )}
+      </button>
       <ManaCost cost={card.mana_cost} />
-      <span className="w-14 shrink-0 text-right text-xs tabular-nums opacity-60">
+      <span className="hidden w-14 shrink-0 text-right text-xs tabular-nums opacity-60 sm:inline">
         {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "–"}
       </span>
 
+      {/* Quick actions for mouse users. On phones everything lives in the card sheet instead (bigger targets). */}
       {!readOnly && (
-        <span className="flex shrink-0 gap-1 opacity-40 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <span className="hidden shrink-0 gap-1 opacity-40 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 sm:flex">
           {multi && (
             <>
-              <IconButton label={`One fewer ${card.name}`} onClick={() => onQuantity(quantity - 1)}>
+              <QuickButton label={`One fewer ${card.name}`} onClick={() => onQuantity(quantity - 1)}>
                 −
-              </IconButton>
-              <IconButton label={`One more ${card.name}`} onClick={() => onQuantity(quantity + 1)}>
+              </QuickButton>
+              <QuickButton label={`One more ${card.name}`} onClick={() => onQuantity(quantity + 1)}>
                 +
-              </IconButton>
+              </QuickButton>
             </>
           )}
-          {board !== "commander" && card.can_be_commander && (
-            <IconButton label={`Make ${card.name} your commander`} onClick={() => onMove("commander")}>
-              ♛
-            </IconButton>
-          )}
-          {board !== "main" && (
-            <IconButton label={`Move ${card.name} to the mainboard`} onClick={() => onMove("main")}>
-              Main
-            </IconButton>
-          )}
-          {board !== "maybe" && (
-            <IconButton label={`Move ${card.name} to the maybeboard`} onClick={() => onMove("maybe")}>
-              Maybe
-            </IconButton>
-          )}
-          <IconButton label={`Remove ${card.name}`} onClick={() => onQuantity(0)} danger>
+          <QuickButton label={`Remove ${card.name}`} onClick={() => onQuantity(0)} danger>
             ✕
-          </IconButton>
+          </QuickButton>
         </span>
       )}
     </li>
   );
 }
 
-function IconButton({
+function QuickButton({
   label,
   onClick,
   danger,
@@ -97,7 +96,7 @@ function IconButton({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`min-w-6 rounded border border-foreground/15 px-1.5 text-xs leading-5 hover:bg-foreground/10 ${
+      className={`h-7 min-w-7 rounded border border-foreground/15 px-1.5 text-xs hover:bg-foreground/10 ${
         danger ? "text-red-600" : ""
       }`}
     >

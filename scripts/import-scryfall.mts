@@ -229,6 +229,9 @@ async function main() {
       art_tags: artTags.length,
       tag_links: linkRows.length,
       card_tags: cardTagRows.length,
+      // The theme score's N (CLAUDE.md, Phase 3): read by oracle_tag_tree() so it needn't scan 700k rows.
+      tagged_cards: new Set(cardTagRows.map((r) => r[0])).size,
+      tagged_illustrations: new Set(illusTagRows.map((r) => r[0])).size,
       illustration_tags: illusTagRows.length,
       skipped,
       source_updated_at: { oracle_cards: entry("oracle_cards").updated_at, oracle_tags: entry("oracle_tags").updated_at, art_tags: entry("art_tags").updated_at },

@@ -5,7 +5,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { entryKey, planAdd, toSaveRows, type Board, type Entries } from "@/lib/deck/model";
+import { addCardToDeck } from "@/lib/deck/add-to-deck";
 import { looksDroppable, readDrop } from "@/lib/drop/scryfall-drop";
 import { resolveDrop } from "@/lib/drop/resolve";
 
@@ -31,20 +31,8 @@ export function useDeckDrop(deckId: string) {
     if (!found.ok) return show(found.reason, "warn");
     const card = found.card;
 
-    // This deck's current copies of the card, so the singleton and copy-limit rules apply.
-    const { data: rows, error: readError } = await supabase
-      .from("deck_cards")
-      .select("board, quantity")
-      .eq("deck_id", deckId)
-      .eq("oracle_id", card.oracle_id);
-    if (readError) return show(`Couldn't read the deck: ${readError.message}`, "warn");
-    const entries: Entries = {};
-    for (const r of rows ?? []) entries[entryKey(r.board as Board, card.oracle_id)] = r.quantity as number;
-
-    const plan = planAdd(entries, card, "main");
-    if (!plan.ok) return show(plan.reason, "warn");
-    const { error } = await supabase.rpc("apply_deck_changes", { p_deck: deckId, p_changes: toSaveRows(plan.change) });
-    if (error) return show(`Couldn't save: ${error.message}`, "warn");
+    const added = await addCardToDeck(supabase, deckId, card, "main");
+    if (!added.ok) return show(added.reason, "warn");
     show(`Added ${card.name}`, "ok");
     router.refresh(); // updates the card count and "edited" time
   }

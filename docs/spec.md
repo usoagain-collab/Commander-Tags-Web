@@ -108,7 +108,9 @@ The editor matches what people like about Moxfield and fixes its known complaint
 | Maybeboard | Holding area for cards under consideration; suggestions can go straight here | Standard |
 | Stats | Mana curve, color pips against land sources, type breakdown | Standard |
 | Pricing | Today's price per card and the deck total (USD), from Scryfall's daily data | Asked for; no history needed |
-| Printing picker | Choose a card's set and art (also decides its art tags) | Standard |
+| ~~Printing picker~~ | **Moved to v2** (Oct 18, 2026). v1 uses each card's default printing and its art tags | Standard |
+| Card sheet | Tap or click any card (name in text view, image in visual views) to open it straight away: big image, large action buttons, its roles and tags. A bottom sheet on phones, a window with Prev / Next on desktop. No tiny icons on top of card images | Moxfield's ⋯ on the image is hard to hit on mobile |
+| Card details | Rules text, P/T or loyalty, both faces, legality in every format, and rulings, fetched live from Scryfall. The card's tags take the place of buy links | Asked for; tags are this app's point |
 | Tokens list | Tokens the deck can create | Standard, helps playtesting |
 | Share link | Read-only link; decks are private, unlisted or public | Needed for friend tests |
 | Autosave | Every change saves instantly; undo with Ctrl+Z | Feels good to use |
@@ -150,6 +152,27 @@ Decks save to a hosted database tied to a user account, with sign-in through Dis
 - Multiplayer playtesting
 - A native mobile app
 - Paid features
+
+## v2 backlog
+
+Ideas for after v1 is fully working and tested with friends (phase 7). When something new comes up that's out of v1 scope, David decides whether it goes here or under "Not intended".
+
+| Feature | What it means | Added |
+| --- | --- | --- |
+| Card printings | Printing picker and switching printings in a deck (stored in `deck_cards.printing_id`); art tags follow the chosen printing | Oct 18, 2026 |
+| Preferred printing | Remember a favourite printing per card across all your decks (needs printings) | Oct 18, 2026 |
+| Pricing details | Foil vs. normal price, prices per store, price settings, price per printing (v1 keeps today's single price per card and the deck total) | Oct 18, 2026 |
+| Foil version | Mark a card in a deck as foil | Oct 18, 2026 |
+| Collection tracking | Ownership checkmarks, "add to collection", the "unowned" price total (also listed under Out of scope for v1) | Oct 18, 2026 |
+| Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |
+| Change mana cost | Override a card's displayed mana cost for stats (e.g. X spells) | Oct 18, 2026 |
+| Multiplayer playtesting | Playtest against other players (v1's playtester is solo goldfish, phase 6) | Oct 18, 2026 |
+
+## Not intended
+
+Considered and deliberately left out of this project.
+
+- Moxfield's custom formats (Archon, Highlander variants and so on): Moxfield's own rules, with no Scryfall data behind them.
 
 ## Technical architecture
 
