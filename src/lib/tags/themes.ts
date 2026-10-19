@@ -30,6 +30,18 @@ export const MECHANIC_NOISE = new Set([
   "vanilla",
   "french vanilla",
   "reminder text",
+  // Too vague to be a theme: rare enough to weigh a lot, but they say little about what a deck does. They made
+  // Hidden gems suggest filler in the Phase 4c EDHREC check (David, Oct 19, 2026).
+  "unique type line",
+  "multiple targets",
+  "attacking matters self",
+  "repeatable crime",
+  "per player",
+  "donate token",
+  // Ability kinds, like static/keyword/mana ability above: nearly every card has one. With the vague tags gone
+  // they rose to the top themes and drove the picks (City of Brass, Chrome Mox) in the same check.
+  "activated ability",
+  "triggered ability",
 ]);
 /** Oracle tags about names, wording and frame: not gameplay, so they belong with Flavor. */
 export const FLAVOR_ORACLE = new Set(["single english word name", "alliteration", "flavor name", "color break", "illustrated"]);

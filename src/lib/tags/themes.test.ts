@@ -13,12 +13,12 @@ import {
 } from "./themes";
 import { TagTree } from "./tree";
 
-// A tiny oracle tree: triggered ability > death trigger; landfall; ramp; plus noise and flavor tags.
+// A tiny oracle tree: dies matters > death trigger; landfall; ramp; plus noise and flavor tags.
 const oracle = new TagTree({
   n: 1000,
   art_n: 5000,
   tags: [
-    ["triggered-ability", "triggered ability", 9000, []], // 0
+    ["dies-matters", "dies matters", 9000, []], // 0
     ["death-trigger", "death trigger", 590, [0]], // 1
     ["landfall", "landfall", 300, []], // 2
     ["ramp", "ramp", 549, []], // 3
@@ -26,6 +26,8 @@ const oracle = new TagTree({
     ["alliteration", "alliteration", 400, []], // 5 (flavor)
     ["cycle-c15-commander", "cycle-c15-commander", 10, []], // 6 (cycle)
     ["lands-matter", "lands matter", 200, []], // 7
+    ["unique-type-line", "unique type line", 50, []], // 8 (vague: noise since 4c)
+    ["triggered-ability", "triggered ability", 9000, []], // 9 (ability kind: noise since 4c)
   ],
 });
 // Art: frog > amphibian; plus a huge generic tag.
@@ -49,6 +51,12 @@ describe("themeOk", () => {
     expect(themeOk("o:alliteration", "gameplay", trees, none)).toBe(false);
     expect(themeOk("o:alliteration", "flavor", trees, none)).toBe(true);
     expect(themeOk("o:landfall", "flavor", trees, none)).toBe(false);
+  });
+
+  it("drops vague tags and ability kinds (Phase 4c EDHREC check)", () => {
+    expect(themeOk("o:unique-type-line", "gameplay", trees, none)).toBe(false);
+    expect(themeOk("o:triggered-ability", "gameplay", trees, none)).toBe(false);
+    expect(themeOk("o:dies-matters", "gameplay", trees, none)).toBe(true);
   });
 
   it("shows art tags only in Flavor, and not when they're too generic", () => {
@@ -100,9 +108,9 @@ describe("themeTags", () => {
 
   it("Broad rolls tags up to their parents; Specific keeps every tag exactly as applied", () => {
     const broad = themeTags(deck, { settings: settings({ specific: false }), trees, roleTags: none, hidden: none });
-    expect(broad.some((x) => x.slug === "triggered-ability")).toBe(true);
+    expect(broad.some((x) => x.slug === "dies-matters")).toBe(true);
     const specific = themeTags(deck, { settings: settings(), trees, roleTags: none, hidden: none });
-    expect(specific.some((x) => x.slug === "triggered-ability")).toBe(false);
+    expect(specific.some((x) => x.slug === "dies-matters")).toBe(false);
     expect(specific.some((x) => x.slug === "death-trigger")).toBe(true); // never dropped in Specific
   });
 
@@ -131,16 +139,16 @@ describe("themeTags", () => {
 
 describe("tag tree card", () => {
   it("shows parents, the tag, then sub-tags with in-deck counts", () => {
-    const cards = [card(["death-trigger"]), card(["death-trigger"]), card(["triggered-ability"])];
-    const tc = treeCard("o:triggered-ability", trees, deckKeyCounts(cards))!;
+    const cards = [card(["death-trigger"]), card(["death-trigger"]), card(["dies-matters"])];
+    const tc = treeCard("o:dies-matters", trees, deckKeyCounts(cards))!;
     expect(tc.rows.map((r) => [r.label, r.count, !!r.self])).toEqual([
-      ["triggered ability", 1, true],
+      ["dies matters", 1, true],
       ["death trigger", 2, false],
     ]);
   });
 
   it("broad keys include ancestors", () => {
-    expect(cardKeys(card(["death-trigger"]), false, trees).sort()).toEqual(["o:death-trigger", "o:triggered-ability"]);
+    expect(cardKeys(card(["death-trigger"]), false, trees).sort()).toEqual(["o:death-trigger", "o:dies-matters"]);
   });
 });
 

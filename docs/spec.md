@@ -219,6 +219,19 @@ Done Oct 18, 2026, from each site's own feedback board (vote counts) and a 2026 
 
 **Sources:** [Moxfield top requests](https://moxfield.nolt.io/top) · [Moxfield instant search](https://moxfield.nolt.io/1181) · [Moxfield loading issues](https://moxfield.nolt.io/1201) · [Moxfield playtest ads](https://moxfield.nolt.io/1645) · [Archidekt changelogs](https://archidekt.com/forum/thread/2320849/1) · [Archidekt large decks](https://archidekt.com/forum/thread/2377567/1) · [Archidekt slowdown](https://archidekt.com/forum/thread/10643647?orderBy=-points&page=1) · [Archidekt subcategories](https://archidekt.com/forum/thread/3298946) · [Archidekt auto-categories](https://archidekt.com/forum/thread/4173294/1) · [Archidekt mobile critique](https://archidekt.com/forum/thread/418475) · [Archidekt phone usability](https://archidekt.com/forum/thread/2324250) · [Grimdeck 2026 comparison](https://grimdeck.com/blog/best-mtg-deck-builder-sites)
 
+## Suggestion check against EDHREC (Oct 19, 2026)
+
+The spec's success test, run on the Omo test deck (overall suggestions, top 24) against EDHREC's Omo page (13,232 decks).
+
+| | First run (as ported) | After the fix |
+| --- | --- | --- |
+| Best fit | 14/24 also on EDHREC, 10 new. Good picks, plus a few pulled in by vague tags | 13/24 on EDHREC, 11 new: Urborg, Reflections of Littjara, Chronicle of Victory, Snap / Rewind / Unwind, all real Omo synergies EDHREC doesn't list |
+| Hidden gems | 22/24 new, mostly filler (Reckless Pangolin, Street Sweeper) matched on one vague tag | No filler; 15 picks, each sharing 2+ themes |
+
+**Fix (David chose "both"):** vague tags (unique type line, multiple targets, attacking matters-self, repeatable crime, per-player, donate token, plus the ability kinds activated / triggered ability) no longer count as themes, and Hidden gems needs 2+ shared themes.
+
+**Still open:** Hidden gems now overlaps Best fit a lot (few rarely-played cards share two themes), and "single target instant/sorcery" is broad and drives several picks. Worth revisiting with the friend test.
+
 ## Prototype findings
 
 The single-page prototype (`prototype/tag-deck-builder.html`) confirmed the core bet: on a Meren deck, tag-based suggestions surfaced on-theme cards like Yahenni, Erebos and Nemata, with clear reasons on each.
