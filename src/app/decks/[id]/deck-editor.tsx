@@ -23,6 +23,7 @@ import {
 } from "@/lib/deck/model";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
 import { CardLine } from "./card-line";
+import { CardSearch } from "./card-search";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 
@@ -100,18 +101,19 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
 
   /** Run a planned edit: update the screen, remember it for undo, queue it for saving. */
   const run = useCallback(
-    (plan: Plan, card?: CardSummary) => {
+    (plan: Plan, card?: CardSummary): boolean => {
       if (!plan.ok) {
         if (plan.reason !== "No change.") say(plan.reason);
-        return;
+        return false;
       }
       dispatch({ type: "apply", change: plan.change, cards: card ? [card] : undefined });
       save(toSaveRows(plan.change));
+      return true;
     },
     [save, say],
   );
 
-  const [panel, setPanel] = useState<"import" | "export" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | null>(null);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -198,6 +200,14 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {!readOnly && (
             <button
+              onClick={() => setPanel(panel === "search" ? null : "search")}
+              className="rounded-md border border-foreground/20 px-2.5 py-1"
+            >
+              Search
+            </button>
+          )}
+          {!readOnly && (
+            <button
               onClick={() => setPanel(panel === "import" ? null : "import")}
               className="rounded-md border border-foreground/20 px-2.5 py-1"
             >
@@ -234,6 +244,18 @@ export function DeckEditor({ deck, initialEntries, initialCards, readOnly }: Pro
         )}
       </div>
 
+      {panel === "search" && !readOnly && (
+        <CardSearch
+          entries={entries}
+          identity={identity}
+          commanderName={commanders.length === 1 ? commanders[0].card.name : commanders.length ? "your commanders" : null}
+          onAdd={(card, board) => {
+            if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`);
+          }}
+          onPreview={setPreview}
+          onClose={() => setPanel(null)}
+        />
+      )}
       {panel === "import" && !readOnly && (
         <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />
       )}
