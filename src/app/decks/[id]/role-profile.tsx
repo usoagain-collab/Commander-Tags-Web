@@ -17,6 +17,8 @@ type Props = {
   saveError: string | null;
   onTarget: (key: string, target: number) => void;
   onHighlight: (key: string) => void;
+  /** Phase 4: open suggestions for this role. */
+  onSuggest?: (key: string) => void;
   onAddCustom: (role: CustomRole) => void;
   onRemoveCustom: (key: string) => void;
   onSaveDefaults: () => Promise<string>;
@@ -70,8 +72,19 @@ export function RoleProfile(props: Props) {
                   </button>
                   <InfoTip role={r} tree={props.tree} />
                 </span>
-                <span className="shrink-0 tabular-nums">
+                <span className="flex shrink-0 items-center gap-1 tabular-nums">
                   {count} / {r.target} <span className={`text-xs ${TEXT[status]}`}>{statusText(count, r.target)}</span>
+                  {props.onSuggest && (
+                    <button
+                      type="button"
+                      onClick={() => props.onSuggest!(r.key)}
+                      aria-label={`Suggest cards for ${r.name}`}
+                      title={`Suggest cards for ${r.name}`}
+                      className="flex h-8 w-8 items-center justify-center rounded opacity-60 hover:bg-foreground/10 hover:opacity-100"
+                    >
+                      💡
+                    </button>
+                  )}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10" aria-hidden>

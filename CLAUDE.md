@@ -23,7 +23,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 1. Data foundation | Done (merged Oct 18, 2026). Daily import runs from GitHub Actions at 22:30 UTC |
 | 2. Core editor | Done (merged Oct 19, 2026): sign-in + decks, quick add / boards / autosave / undo, import/export, card search, drag from Scryfall |
 | 3. Tag layer | Done (merged Oct 19, 2026): 3a views + card panel + card sheet, 3b card details, 3c role profile, 3d top tags, 3e quick wins, 3f my tags + category override, 3g bulk edit, 3h version history, 3i stats |
-| 4. Suggestions | **In progress**, plan agreed Oct 19, 2026 (see "Phase 4 plan" below): **4a engine + panel**, 4b ranking styles, 4c dismiss + EDHREC check |
+| 4. Suggestions | **In progress**, plan agreed Oct 19, 2026 (see "Phase 4 plan" below): **4a engine + panel** (built), 4b ranking styles, 4c dismiss + EDHREC check |
 | 5. Bracket targeting | Not started |
 | 6. Playtester | Not started |
 | 7. Friend test | Not started |
@@ -64,6 +64,8 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 - **UI (David chose):** a Suggest panel above the deck, like Search (full-width grid, works on phones). Triggers: a 💡 button on each role row and top tag, and a **Suggest** header button for overall picks; clicking the role or tag name still highlights. Each card shows why (fills role, up to 4 shared tags), price, EDHREC rank, and big Add to main / Add to maybe / Not for this deck buttons.
 - **Per deck** (spec): `decks.suggest_settings` (style, price cap, custom weights) and `decks.dismissed_suggestions` (oracle ids), with "Show dismissed".
 - Steps: **4a** pool function + scoring module (tested) + panel with triggers and add; **4b** the four styles, saved per deck; **4c** dismiss + Show dismissed, and a side-by-side check on the Omo deck against EDHREC (the spec's success test). Bracket filtering waits for Phase 5.
+- **Built in 4a:** migration 0012 `suggestion_pool(p_slugs, p_identity, p_exclude, p_lands, p_top 150, p_tail 60)`, plpgsql on purpose (as one SQL statement it got a slow generic plan, 8 s) and with joins rather than `= any(10,000 ids)`. Warm calls take 0.3-0.5 s; the first call after a quiet spell can take ~8 s while the free-tier database loads the tag tables. Scoring in `src/lib/suggest/score.ts` (all four styles, tested; 4a uses Best fit). `suggest-panel.tsx` (two columns on phones), opened by **Suggest** in the header (overall: descendants of the top 15 gameplay themes), 💡 on role rows (`role.tagSet`, Lands via `p_lands`; only cards whose `rolesOf` includes the role, so Targeted removal skips wipes) and 💡 on oracle top tags (the tag plus descendants). Scored against the top 15 gameplay themes even in Flavor mode (pool cards carry oracle tags only). Cards on any board, maybeboard included, are left out. Hovering a suggestion shows it in the card panel.
+- **Known limit:** `card_tags_for(ids)` reads at most 400 ids, so a deck with more than 400 distinct cards loses tags for the rest.
 
 The GitHub repository is connected to a Supabase project and a Vercel project. Ask David for keys when you need them; he enters secrets himself.
 
