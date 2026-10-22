@@ -19,6 +19,9 @@ async function requireUser() {
 export async function createDeck(formData: FormData) {
   const { supabase, user } = await requireUser();
   const name = String(formData.get("name") ?? "").trim().slice(0, 120) || "Untitled deck";
+  // Target bracket (Phase 5b), 1-5; anything else falls back to the default, 3 (Upgraded).
+  const bracket = Number(formData.get("bracket"));
+  const target_bracket = Number.isInteger(bracket) && bracket >= 1 && bracket <= 5 ? bracket : 3;
 
   // New decks start from the user's saved default targets, falling back to the app defaults.
   const { data: profile } = await supabase
@@ -31,6 +34,7 @@ export async function createDeck(formData: FormData) {
     .from("decks")
     .insert({
       name,
+      target_bracket,
       role_targets: { ...DEFAULT_ROLE_TARGETS, ...(profile?.default_role_targets ?? {}) },
       custom_roles: profile?.custom_roles ?? [],
     })
