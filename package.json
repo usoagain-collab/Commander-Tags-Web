@@ -10,7 +10,8 @@
     "db:check": "node --env-file=.env.local scripts/db-check.mjs",
     "db:migrate": "node --env-file=.env.local scripts/db-migrate.mjs",
     "import": "node --env-file-if-exists=.env.local scripts/import-scryfall.mts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "import:combos": "node --env-file-if-exists=.env.local scripts/import-combos.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -30,8 +31,10 @@
     "@types/pg-copy-streams": "^1.2.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/stream-json": "^1.7.8",
     "eslint": "^9",
     "eslint-config-next": "15.5.27",
+    "stream-json": "^1.9.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.3"

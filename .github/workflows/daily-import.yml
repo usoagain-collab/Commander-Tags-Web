@@ -1,4 +1,4 @@
-# Daily Scryfall import: refreshes cards, prices and tags in Supabase.
+# Daily import: refreshes cards, prices and tags from Scryfall, then two-card combos from Commander Spellbook.
 #
 # To switch it on:
 #   1. Merge this file into the default branch (scheduled workflows only run from there).
@@ -43,4 +43,8 @@ jobs:
       - run: npm ci
         if: steps.secret.outputs.ok == 'true'
       - run: npm run import
+        if: steps.secret.outputs.ok == 'true'
+      # Two-card combos from Commander Spellbook (Phase 5a). After the Scryfall import, because combos point
+      # at cards. Streams a ~700 MB file; about 2 minutes.
+      - run: npm run import:combos
         if: steps.secret.outputs.ok == 'true'
