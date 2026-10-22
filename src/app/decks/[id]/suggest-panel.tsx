@@ -15,6 +15,9 @@ import {
   type SuggestSettings,
   type SuggestStyle,
 } from "@/lib/suggest/score";
+import { candidateIssues, type ComboRow, type EvaluateInput, type Finding } from "@/lib/brackets/evaluate";
+import type { BracketNumber } from "@/lib/brackets/rules";
+import { cardFlag } from "./bracket-panel";
 import { Panel } from "./deck-text-panel";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
@@ -46,6 +49,11 @@ type Props = {
   dismissed: Set<string>;
   onDismiss: (card: CardSummary) => void;
   onRestore: (oracleId: string) => void;
+  /**
+   * Phase 5c: cards that would push the deck above its target bracket are hidden unless shown with the toggle.
+   * `deck` is the 100-card deck as the bracket check sees it; `deckIds` are its card ids (for combo lookups).
+   */
+  bracket: { target: BracketNumber; deck: Omit<EvaluateInput, "combos">; deckIds: string[] };
 };
 
 export function SuggestPanel(props: Props) {
@@ -53,11 +61,14 @@ export function SuggestPanel(props: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [pool, setPool] = useState<PoolCard[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [combos, setCombos] = useState<ComboRow[] | null>(null);
+  const [showAbove, setShowAbove] = useState(false);
   const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${identity.join("")}`;
 
   useEffect(() => {
     let live = true;
     setPool(null);
+    setCombos(null);
     setError(null);
     (async () => {
       const ask = () =>
@@ -67,8 +78,15 @@ export function SuggestPanel(props: Props) {
       // into memory; the second try runs warm.
       if (error && /timeout/i.test(error.message) && live) ({ data, error } = await ask());
       if (!live) return;
-      if (error) setError(`Couldn't load suggestions: ${error.message}`);
-      else setPool((data ?? []) as PoolCard[]);
+      if (error) return setError(`Couldn't load suggestions: ${error.message}`);
+      const found = (data ?? []) as PoolCard[];
+      // Combos between the deck and the candidates, so a card that completes one can be held back (5c).
+      const ids = [...new Set([...props.bracket.deckIds, ...found.map((c) => c.oracle_id)])];
+      const c = ids.length ? await supabase.rpc("combos_within", { p_ids: ids }) : { data: [], error: null };
+      if (!live) return;
+      setCombos(c.error ? [] : ((c.data ?? []) as ComboRow[]));
+      if (c.error) setError(`Couldn't check combos, so suggestions may include some: ${c.error.message}`);
+      setPool(found);
     })();
     return () => {
       live = false;
@@ -77,12 +95,21 @@ export function SuggestPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, supabase]);
 
-  const rows: Scored[] = pool
-    ? scorePool(
-        pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))),
-        { ...score, dismissed: props.dismissed },
-      )
-    : [];
+  const target = props.bracket.target;
+  const eligible = pool && combos ? pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))) : [];
+  const deckInput: EvaluateInput = { ...props.bracket.deck, combos: combos ?? [] };
+  const issues = new Map<string, Finding[]>();
+  for (const c of eligible) {
+    const found = candidateIssues(deckInput, { line: { board: "main", quantity: 1, card: c }, tags: c.tags }, target);
+    if (found.length) issues.set(c.oracle_id, found);
+  }
+  const hiddenAbove = eligible.filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id)).length;
+  const rows: Scored[] = scorePool(
+    eligible.filter((c) => showAbove || !issues.has(c.oracle_id)),
+    { ...score, dismissed: props.dismissed },
+  );
+  const flagsOf = (id: string) =>
+    (issues.get(id) ?? []).map((f) => cardFlag(f, id, (x) => pool?.find((c) => c.oracle_id === x)?.name ?? props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ?? "a card in your deck"));
 
   return (
     <Panel title={`Suggestions: ${source.label}`} onClose={onClose}>
@@ -90,8 +117,15 @@ export function SuggestPanel(props: Props) {
       {props.saveError && <p className="mt-1 text-sm text-red-600">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      {!error && pool === null && <p className="mt-3 text-sm opacity-60">Finding cards…</p>}
-      {pool !== null && rows.length === 0 && (
+      {!error && (pool === null || combos === null) && <p className="mt-3 text-sm opacity-60">Finding cards…</p>}
+      {(hiddenAbove > 0 || showAbove) && (
+        <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" checked={showAbove} onChange={(e) => setShowAbove(e.target.checked)} />
+          Show cards above bracket {target}
+          <span className="opacity-60">({hiddenAbove} {showAbove ? "marked" : "hidden"})</span>
+        </label>
+      )}
+      {pool !== null && combos !== null && rows.length === 0 && (
         <p className="mt-3 text-sm opacity-60">
           {pool.length && score.settings.style === "budget"
             ? "Nothing under this price cap. Try raising it."
@@ -103,7 +137,16 @@ export function SuggestPanel(props: Props) {
       {rows.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
           {rows.map((r) => (
-            <SuggestionCard key={r.card.oracle_id} row={r} roleNames={roleNames} onAdd={onAdd} onPreview={onPreview} onDismiss={props.onDismiss} />
+            <SuggestionCard
+              key={r.card.oracle_id}
+              row={r}
+              roleNames={roleNames}
+              above={flagsOf(r.card.oracle_id)}
+              target={target}
+              onAdd={onAdd}
+              onPreview={onPreview}
+              onDismiss={props.onDismiss}
+            />
           ))}
         </ul>
       )}
@@ -159,8 +202,12 @@ function SuggestionCard({
   onAdd,
   onPreview,
   onDismiss,
+  above,
+  target,
 }: {
   row: Scored;
+  above: string[];
+  target: BracketNumber;
   roleNames: Record<string, string>;
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary) => void;
@@ -187,6 +234,11 @@ function SuggestionCard({
         <p className="text-[11px] tabular-nums opacity-50" title="How well it fits this deck, and how often it's played (0-100)">
           fit {Math.round(row.fit * 100)} · played {Math.round(row.pop * 100)}
         </p>
+        {above.map((a) => (
+          <p key={a} className="mt-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+            ⚠ Above bracket {target}: {a}
+          </p>
+        ))}
         <div className="mt-1 flex flex-wrap gap-1">
           {row.fills.map((k) => (
             <span key={k} className="rounded-full bg-green-700/15 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-300">
