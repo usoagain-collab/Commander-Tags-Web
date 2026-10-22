@@ -63,6 +63,10 @@ import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
+import { BracketBadge, BracketBanner, BracketPanel, cardFlag } from "./bracket-panel";
+import { estimateBracket, overTarget } from "@/lib/brackets/evaluate";
+import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
+import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
@@ -157,6 +161,7 @@ type Props = {
   customRoles: CustomRole[];
   suggestSettings: SuggestSettings;
   dismissedSuggestions: string[];
+  targetBracket: BracketNumber;
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
 
@@ -173,6 +178,7 @@ export function DeckEditor({
   customRoles,
   suggestSettings,
   dismissedSuggestions,
+  targetBracket,
   profileDefaults,
 }: Props) {
   const [state, dispatch] = useReducer(reducer, {
@@ -226,7 +232,7 @@ export function DeckEditor({
     [save, say, state.categories],
   );
 
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | null>(null);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -283,6 +289,12 @@ export function DeckEditor({
   }, [readOnly, undo, redo, selecting, stopSelecting]);
 
   const { entries, cards, categories, tagCards } = state;
+
+  // ---------- bracket targeting (Phase 5b) ----------
+  const bracket = useBracketTarget(deck.id, targetBracket, readOnly);
+  // Combos are checked on the 100-card deck (commander, companion, mainboard), not the maybeboard.
+  const deckCardIds = Object.keys(entries).filter((k) => !k.startsWith("maybe|")).map((k) => k.split("|")[1]);
+  const combos = useCombosWithin(deckCardIds);
 
   // ---------- My tags (step 3f) ----------
   const myTags = useMyTags(deck.id, !readOnly && !!userId, (loaded) => dispatch({ type: "loadTagCards", tagCards: loaded }));
@@ -341,8 +353,24 @@ export function DeckEditor({
   const mainLines = linesFor(entries, cards, "main");
   const maybeLines = linesFor(entries, cards, "maybe");
 
+  // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
+  const estimate = tags.tree
+    ? estimateBracket({
+        lines: [...commanders, ...companions, ...mainLines],
+        tagsOf: (id) => tags.oracleTags[id] ?? [],
+        massLandDenialTags: tags.tree.descendants(BRACKET_RULES.tags.massLandDenial),
+        extraTurnTags: tags.tree.descendants(BRACKET_RULES.tags.extraTurn),
+        combos: combos.combos,
+      })
+    : null;
+  const bracketFlags = new Map<string, string[]>();
+  for (const f of estimate ? overTarget(estimate, bracket.target) : [])
+    for (const id of f.cards) bracketFlags.set(id, [...(bracketFlags.get(id) ?? []), cardFlag(f, id, (x) => cards[x]?.name ?? "another card")]);
+
   const warningsFor = (line: DeckLine) => {
     const w: string[] = [];
+    if (line.board !== "maybe")
+      for (const flag of bracketFlags.get(line.card.oracle_id) ?? []) w.push(`Above bracket ${bracket.target}: ${flag}`);
     if (!line.card.commander_legal) w.push("Not legal in Commander");
     if (outsideIdentity(line.card, identity)) w.push("Outside your commander's colors");
     if (line.board === "commander" && !line.card.can_be_commander) w.push("Can't normally be a commander");
@@ -686,6 +714,12 @@ export function DeckEditor({
           <HeaderButton active={panel === "export"} onClick={() => setPanel(panel === "export" ? null : "export")}>
             Export
           </HeaderButton>
+          <BracketBadge
+            target={bracket.target}
+            estimate={estimate}
+            active={panel === "bracket"}
+            onClick={() => setPanel(panel === "bracket" ? null : "bracket")}
+          />
           <HeaderButton active={panel === "stats"} onClick={() => setPanel(panel === "stats" ? null : "stats")}>
             Stats
           </HeaderButton>
@@ -750,6 +784,17 @@ export function DeckEditor({
             onClose={() => setPanel(null)}
           />
         </div>
+      )}
+      {panel === "bracket" && (
+        <BracketPanel
+          target={bracket.target}
+          estimate={estimate}
+          readOnly={readOnly}
+          saveError={bracket.saveError}
+          comboError={combos.error}
+          onTarget={bracket.setTarget}
+          onClose={() => setPanel(null)}
+        />
       )}
       {panel === "stats" && (
         <StatsPanel lines={[...commanders, ...companions, ...mainLines]} identity={identity} onClose={() => setPanel(null)} />
@@ -858,6 +903,9 @@ export function DeckEditor({
             {tags.error && <span className="text-xs text-amber-700 dark:text-amber-400">{tags.error}</span>}
           </div>
 
+          {estimate && panel !== "bracket" && (
+            <BracketBanner target={bracket.target} estimate={estimate} onDetails={() => setPanel("bracket")} />
+          )}
           {highlight && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-amber-400/15 px-3 py-2 text-sm">
               {highlight.startsWith("role:") ? "Highlighting cards that fill" : "Highlighting cards tagged"}{" "}

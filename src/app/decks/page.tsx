@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createDeck } from "./actions";
 import { DeckRow } from "./deck-row";
 import { DropHint } from "./drop-hint";
+import { BRACKETS } from "@/lib/brackets/rules";
 
 export const metadata = { title: "My decks · Commander Tags" };
 
@@ -29,13 +30,29 @@ export default async function DecksPage() {
     <main className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="text-2xl font-semibold">My decks</h1>
 
-      <form action={createDeck} className="mt-6 flex gap-2">
+      <form action={createDeck} className="mt-6 flex flex-wrap gap-2">
         <input
           name="name"
           placeholder="New deck name"
           maxLength={120}
           className="min-w-0 flex-1 rounded-md border border-foreground/20 bg-transparent px-3 py-2"
         />
+        <label className="flex items-center gap-1 text-sm">
+          <span className="sr-only sm:not-sr-only sm:opacity-70">Bracket</span>
+          <select
+            name="bracket"
+            defaultValue="3"
+            aria-label="Target bracket"
+            title="The bracket you're building for. You can change it later."
+            className="min-h-10 rounded-md border border-foreground/20 bg-background px-2"
+          >
+            {BRACKETS.map((b) => (
+              <option key={b.n} value={b.n}>
+                {b.n} {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button className="rounded-md bg-foreground px-4 py-2 font-medium text-background">New deck</button>
       </form>
 
