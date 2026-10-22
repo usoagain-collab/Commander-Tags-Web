@@ -719,6 +719,13 @@ export function DeckEditor({
             active={panel === "bracket"}
             onClick={() => setPanel(panel === "bracket" ? null : "bracket")}
           />
+          <Link
+            href={`/decks/${deck.id}/playtest`}
+            title="Goldfish this deck: shuffle, draw, mulligan and play (needs a tablet or computer)"
+            className="hidden min-h-9 items-center rounded-md border border-foreground/20 px-3 md:inline-flex"
+          >
+            Playtest
+          </Link>
           <HeaderButton active={panel === "stats"} onClick={() => setPanel(panel === "stats" ? null : "stats")}>
             Stats
           </HeaderButton>
