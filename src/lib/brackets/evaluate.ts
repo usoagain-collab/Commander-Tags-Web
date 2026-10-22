@@ -113,3 +113,22 @@ export function estimateLabel(floor: BracketNumber) {
 
 /** Findings that push the deck above the target (what the banner lists and the badges mark). */
 export const overTarget = (e: BracketEstimate, target: BracketNumber) => e.findings.filter((f) => f.minBracket > target);
+
+/**
+ * Phase 5c: what adding one more card would push above the target. Re-runs the estimate with the card added and
+ * keeps only the over-target findings that involve it (a deck already over its Game Changer limit doesn't make
+ * every other card "above bracket"). Empty = the card is fine for this target.
+ */
+export function candidateIssues(
+  deck: EvaluateInput,
+  candidate: { line: DeckLine; tags: string[] },
+  target: BracketNumber,
+): Finding[] {
+  const id = candidate.line.card.oracle_id;
+  const est = estimateBracket({
+    ...deck,
+    lines: [...deck.lines, candidate.line],
+    tagsOf: (x) => (x === id ? candidate.tags : deck.tagsOf(x)),
+  });
+  return overTarget(est, target).filter((f) => f.cards.includes(id));
+}

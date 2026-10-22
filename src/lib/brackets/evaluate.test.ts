@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
-import { estimateBracket, estimateLabel, overTarget, type ComboRow } from "./evaluate";
+import { candidateIssues, estimateBracket, estimateLabel, overTarget, type ComboRow } from "./evaluate";
 
 const line = (name: string, extra: Partial<CardSummary> = {}, quantity = 1): DeckLine => ({
   board: "main",
@@ -95,5 +95,40 @@ describe("estimateBracket", () => {
     expect(overTarget(e, 3).map((f) => f.kind)).toEqual(["mass-land-denial"]);
     expect(overTarget(e, 2).map((f) => f.kind)).toEqual(["mass-land-denial", "game-changers"]);
     expect(estimateLabel(4)).toBe("4+");
+  });
+});
+
+describe("candidateIssues (5c)", () => {
+  const deckInput = (lines: DeckLine[], combos: ComboRow[] = []) => ({
+    lines,
+    tagsOf: (id: string) => tags[id] ?? [],
+    massLandDenialTags: new Set(["mass-land-denial"]),
+    extraTurnTags: new Set(["extra-turn"]),
+    combos,
+  });
+
+  it("flags a fourth Game Changer at target 3, not a third", () => {
+    const two = deckInput([gc("A"), gc("B")]);
+    expect(candidateIssues(two, { line: gc("C"), tags: [] }, 3)).toEqual([]);
+    const three = deckInput([gc("A"), gc("B"), gc("C")]);
+    expect(candidateIssues(three, { line: gc("D"), tags: [] }, 3).map((f) => f.kind)).toEqual(["game-changers"]);
+  });
+
+  it("flags land denial and a third extra turn, using the candidate's own tags", () => {
+    const deck = deckInput([line("Time Warp"), line("Temporal Manipulation")]);
+    expect(candidateIssues(deck, { line: line("Ravages of War"), tags: ["mass-land-denial"] }, 3)[0].kind).toBe("mass-land-denial");
+    expect(candidateIssues(deck, { line: line("Nexus of Fate"), tags: ["extra-turn"] }, 3)[0].kind).toBe("extra-turns");
+    expect(candidateIssues(deck, { line: line("Cultivate"), tags: [] }, 3)).toEqual([]);
+  });
+
+  it("flags a card that completes a combo above the target", () => {
+    const deck = deckInput([line("Thassa's Oracle")], [combo("Thassa's Oracle", "Demonic Consultation", "R")]);
+    expect(candidateIssues(deck, { line: line("Demonic Consultation"), tags: [] }, 3)[0].kind).toBe("combo");
+    expect(candidateIssues(deck, { line: line("Demonic Consultation"), tags: [] }, 4)).toEqual([]);
+  });
+
+  it("doesn't blame a harmless card when the deck is already over", () => {
+    const deck = deckInput([gc("A"), gc("B"), gc("C"), gc("D")]);
+    expect(candidateIssues(deck, { line: line("Cultivate"), tags: [] }, 3)).toEqual([]);
   });
 });

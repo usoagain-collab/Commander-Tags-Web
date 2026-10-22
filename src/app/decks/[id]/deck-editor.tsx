@@ -354,15 +354,14 @@ export function DeckEditor({
   const maybeLines = linesFor(entries, cards, "maybe");
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
-  const estimate = tags.tree
-    ? estimateBracket({
-        lines: [...commanders, ...companions, ...mainLines],
-        tagsOf: (id) => tags.oracleTags[id] ?? [],
-        massLandDenialTags: tags.tree.descendants(BRACKET_RULES.tags.massLandDenial),
-        extraTurnTags: tags.tree.descendants(BRACKET_RULES.tags.extraTurn),
-        combos: combos.combos,
-      })
-    : null;
+  // The deck as the bracket check sees it (also used to screen suggestions, 5c).
+  const bracketDeck = {
+    lines: [...commanders, ...companions, ...mainLines],
+    tagsOf: (id: string) => tags.oracleTags[id] ?? [],
+    massLandDenialTags: tags.tree ? tags.tree.descendants(BRACKET_RULES.tags.massLandDenial) : new Set<string>(),
+    extraTurnTags: tags.tree ? tags.tree.descendants(BRACKET_RULES.tags.extraTurn) : new Set<string>(),
+  };
+  const estimate = tags.tree ? estimateBracket({ ...bracketDeck, combos: combos.combos }) : null;
   const bracketFlags = new Map<string, string[]>();
   for (const f of estimate ? overTarget(estimate, bracket.target) : [])
     for (const id of f.cards) bracketFlags.set(id, [...(bracketFlags.get(id) ?? []), cardFlag(f, id, (x) => cards[x]?.name ?? "another card")]);
@@ -779,6 +778,7 @@ export function DeckEditor({
               say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
             }}
             onRestore={dismissed.restore}
+            bracket={{ target: bracket.target, deck: bracketDeck, deckIds: deckCardIds }}
             onAdd={addWithNotice}
             onPreview={setPreview}
             onClose={() => setPanel(null)}
