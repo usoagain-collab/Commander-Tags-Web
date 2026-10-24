@@ -68,6 +68,7 @@ import { estimateBracket, overTarget } from "@/lib/brackets/evaluate";
 import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
+import { SharePanel } from "./share-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
 import { type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
@@ -148,8 +149,11 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/** Who can open a deck (decks.visibility). */
+export type Visibility = "private" | "unlisted" | "public";
+
 type Props = {
-  deck: { id: string; name: string };
+  deck: { id: string; name: string; visibility: Visibility };
   initialEntries: Entries;
   initialCategories: Categories;
   initialCards: Record<string, CardSummary>;
@@ -245,7 +249,8 @@ export function DeckEditor({
     [save, say, state.categories],
   );
 
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -704,6 +709,18 @@ export function DeckEditor({
             ← My decks
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">{deck.name}</h1>
+          {readOnly && (
+            <p className="mt-1 text-sm opacity-70">
+              Shared deck, read-only.{" "}
+              {userId ? (
+                "You can playtest it or export the list."
+              ) : (
+                <Link href={`/login?next=${encodeURIComponent(`/decks/${deck.id}`)}`} className="underline">
+                  Sign in to build your own decks.
+                </Link>
+              )}
+            </p>
+          )}
           {identity && (
             <p className="mt-1 text-sm opacity-70">Color identity: {identity.size ? [...identity].join("") : "colorless"}</p>
           )}
@@ -746,6 +763,11 @@ export function DeckEditor({
           {!readOnly && (
             <HeaderButton active={panel === "history"} onClick={() => setPanel(panel === "history" ? null : "history")}>
               History
+            </HeaderButton>
+          )}
+          {!readOnly && (
+            <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
+              Share{visibility !== "private" && <span className="ml-1 text-xs opacity-70">({visibility === "public" ? "public" : "link"})</span>}
             </HeaderButton>
           )}
         </div>
@@ -805,6 +827,9 @@ export function DeckEditor({
             onClose={() => setPanel(null)}
           />
         </div>
+      )}
+      {panel === "share" && !readOnly && (
+        <SharePanel deckId={deck.id} visibility={visibility} onChange={setVisibility} onClose={() => setPanel(null)} />
       )}
       {panel === "bracket" && (
         <BracketPanel
