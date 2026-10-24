@@ -18,7 +18,13 @@ export type Instance = {
 };
 
 /** Where a nonland card sits on the battlefield (percent of the play area), and whether it's tapped. */
-export type Placed = { x: number; y: number; tapped: boolean };
+export type Placed = {
+  x: number;
+  y: number;
+  tapped: boolean;
+  /** Counters by kind ("+1/+1", "loyalty", "charge", or any name). Gone when the card leaves the battlefield. */
+  counters?: Record<string, number>;
+};
 
 export type GameState = {
   version: 1;
@@ -36,6 +42,8 @@ export type GameState = {
   /** Cards still to put on the bottom after keeping. */
   toBottom: number;
   freeMulligan: boolean;
+  /** The library's top card is shown face up (Courser of Kruphix, Future Sight…), until turned back down. */
+  topRevealed?: boolean;
   seed: number;
 };
 
@@ -140,6 +148,7 @@ export function draw(state: GameState, count = 1): GameState {
   };
 }
 
+/** A revealed top card stays revealed after a shuffle: the new top card shows, as with Courser of Kruphix. */
 export function shuffleLibrary(state: GameState): GameState {
   const [lib, s] = shuffled(state.zones.library, state.seed);
   return { ...state, zones: { ...state.zones, library: lib }, seed: s };
@@ -235,3 +244,53 @@ export const deckKey = (deck: DeckCard[]) =>
     .map((c) => `${c.commander ? "C" : ""}${c.quantity}x${c.oracleId}`)
     .sort()
     .join(",");
+
+// ---------- counters (6b) ----------
+
+export const COUNTER_KINDS = ["+1/+1", "-1/-1", "loyalty", "charge"] as const;
+
+/** Adds (or with a negative delta removes) counters on a battlefield card. A kind at 0 disappears. */
+export function addCounter(state: GameState, iid: string, kind: string, delta: number): GameState {
+  const p = state.battlefield[iid];
+  const k = kind.trim();
+  if (!p || !k || !delta) return state;
+  const counters = { ...(p.counters ?? {}) };
+  const n = Math.max(0, (counters[k] ?? 0) + delta);
+  if (n) counters[k] = n;
+  else delete counters[k];
+  return { ...state, battlefield: { ...state.battlefield, [iid]: { ...p, counters } } };
+}
+
+// ---------- library tools (6b) ----------
+
+/** Puts the top N cards of the library into the graveyard (top card first). */
+export function mill(state: GameState, count: number): GameState {
+  const n = Math.max(0, Math.min(count, state.zones.library.length));
+  if (!n) return state;
+  const milled = state.zones.library.slice(0, n);
+  return { ...state, zones: { ...state.zones, library: state.zones.library.slice(n), graveyard: [...state.zones.graveyard, ...milled] } };
+}
+
+/** The top N cards (for scry / surveil). */
+export const topCards = (state: GameState, count: number) => state.zones.library.slice(0, Math.max(0, count));
+
+export type ScryChoice = "top" | "bottom" | "graveyard";
+
+/**
+ * Finishes a scry or surveil: `order` is the looked-at cards in the order to put back on top (first = new top
+ * card); each card's choice sends it to the top, the bottom (in the order given), or the graveyard (surveil).
+ * Cards not looked at stay where they were.
+ */
+export function resolveScry(state: GameState, order: string[], choice: Record<string, ScryChoice>): GameState {
+  const looked = new Set(order);
+  const rest = state.zones.library.filter((iid) => !looked.has(iid));
+  const top = order.filter((iid) => (choice[iid] ?? "top") === "top");
+  const bottom = order.filter((iid) => choice[iid] === "bottom");
+  const toGrave = order.filter((iid) => choice[iid] === "graveyard");
+  return {
+    ...state,
+    zones: { ...state.zones, library: [...top, ...rest, ...bottom], graveyard: [...state.zones.graveyard, ...toGrave] },
+  };
+}
+
+export const setTopRevealed = (state: GameState, on: boolean): GameState => ({ ...state, topRevealed: on });

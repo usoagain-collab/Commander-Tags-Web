@@ -6,6 +6,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addCounter,
+  COUNTER_KINDS,
+  mill,
+  resolveScry,
+  setTopRevealed,
+  topCards,
+  zoneOf,
+  type ScryChoice,
   bottomCount,
   commanderTax,
   deckKey,
@@ -37,6 +45,9 @@ export function PlaytestTable({ deck, cards }: Props) {
   const [game, setGame] = useState<GameState | null>(null);
   const [preview, setPreview] = useState<Instance | null>(null);
   const [viewing, setViewing] = useState<Zone | null>(null);
+  // 6b: right-click menu on a battlefield card, and the library tool being used.
+  const [menu, setMenu] = useState<{ iid: string; x: number; y: number } | null>(null);
+  const [tool, setTool] = useState<"search" | "scry" | "mill" | null>(null);
 
   // Restore this tab's game for the same deck list, or deal a new one.
   useEffect(() => {
@@ -69,9 +80,17 @@ export function PlaytestTable({ deck, cards }: Props) {
       const el = e.target as HTMLElement;
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      if (k === "escape") setViewing(null);
-      if (!game || game.stage !== "playing") return;
-      if (k === "n") update(nextTurn);
+      if (k === "escape") {
+        setViewing(null);
+        setMenu(null);
+        setTool(null);
+      }
+      if (!game || game.stage !== "playing" || tool) return;
+      // + / - add or remove a +1/+1 counter on the battlefield card under the mouse.
+      const hovered = preview && game.battlefield[preview.iid] ? preview.iid : null;
+      if ((e.key === "+" || e.key === "=") && hovered) update((g) => addCounter(g, hovered, "+1/+1", 1));
+      else if (e.key === "-" && hovered) update((g) => addCounter(g, hovered, "+1/+1", -1));
+      else if (k === "n") update(nextTurn);
       else if (k === "u") update(untapAll);
       else if (k === "d") update((g) => draw(g));
       else return;
@@ -79,7 +98,7 @@ export function PlaytestTable({ deck, cards }: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [game, update]);
+  }, [game, update, preview, tool]);
 
   if (!game) return <p className="p-6 text-sm opacity-70">Shuffling…</p>;
   const card = (iid: string) => game.cards[iid];
@@ -94,7 +113,7 @@ export function PlaytestTable({ deck, cards }: Props) {
         </Link>
       </p>
       <main className="hidden h-[calc(100vh-7rem)] min-h-[640px] flex-col gap-2 px-3 pb-2 md:flex">
-        <TopBar game={game} deck={deck} update={update} onNewGame={restart} />
+        <TopBar game={game} deck={deck} update={update} onNewGame={restart} onTool={setTool} />
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Side zones: scrolls on short screens rather than spilling into the hand. */}
           <aside className="flex w-[13.5rem] shrink-0 flex-col gap-2 overflow-y-auto">
@@ -106,7 +125,13 @@ export function PlaytestTable({ deck, cards }: Props) {
             </div>
             <CommanderTax game={game} />
           </aside>
-          <Battlefield game={game} onDrop={(iid, at) => drop(iid, "battlefield", { at })} onTap={(iid) => update((g) => toggleTap(g, iid))} onPreview={setPreview} />
+          <Battlefield
+            game={game}
+            onDrop={(iid, at) => drop(iid, "battlefield", { at })}
+            onTap={(iid) => update((g) => toggleTap(g, iid))}
+            onPreview={setPreview}
+            onMenu={(iid, x, y) => setMenu({ iid, x, y })}
+          />
           <PreviewPane card={preview} game={game} />
         </div>
         <Hand game={game} onDrop={(iid) => drop(iid, "hand")} onPreview={setPreview} onBottom={(iid) => update((g) => putOnBottom(g, iid))} onPlay={(iid) => drop(iid, "battlefield")} />
@@ -114,6 +139,12 @@ export function PlaytestTable({ deck, cards }: Props) {
 
       {game.stage === "mulligan" && <MulliganDialog game={game} update={update} card={card} />}
       {viewing && <ZoneViewer zone={viewing} game={game} onClose={() => setViewing(null)} onMove={drop} onPreview={setPreview} />}
+      {menu && zoneOf(game, menu.iid) === "battlefield" && (
+        <CardMenu game={game} at={menu} update={update} onMove={drop} onClose={() => setMenu(null)} />
+      )}
+      {tool === "search" && <LibrarySearch game={game} update={update} onMove={drop} onPreview={setPreview} onClose={() => setTool(null)} />}
+      {tool === "scry" && <ScryDialog game={game} update={update} onClose={() => setTool(null)} />}
+      {tool === "mill" && <MillDialog game={game} update={update} onClose={() => setTool(null)} />}
     </>
   );
 }
@@ -125,11 +156,13 @@ function TopBar({
   deck,
   update,
   onNewGame,
+  onTool,
 }: {
   game: GameState;
   deck: { id: string; name: string };
   update: (fn: (g: GameState) => GameState) => void;
   onNewGame: () => void;
+  onTool: (t: "search" | "scry" | "mill") => void;
 }) {
   const playing = game.stage === "playing";
   return (
@@ -147,7 +180,21 @@ function TopBar({
       <BarButton disabled={!playing} onClick={() => update((g) => draw(g))} hint="D">
         Draw
       </BarButton>
-      <BarButton onClick={() => update(shuffleLibrary)}>Shuffle library</BarButton>
+      <BarButton onClick={() => update(shuffleLibrary)}>Shuffle</BarButton>
+      <span className="mx-1 h-6 border-l border-foreground/15" aria-hidden />
+      <BarButton disabled={!playing} onClick={() => onTool("search")}>
+        Search library
+      </BarButton>
+      <BarButton disabled={!playing} onClick={() => onTool("scry")}>
+        Scry / surveil
+      </BarButton>
+      <BarButton disabled={!playing} onClick={() => onTool("mill")}>
+        Mill
+      </BarButton>
+      <label className="flex min-h-9 items-center gap-1.5 rounded-md border border-foreground/20 px-3" title="Keep the library's top card face up">
+        <input type="checkbox" checked={!!game.topRevealed} onChange={(e) => update((g) => setTopRevealed(g, e.target.checked))} />
+        Top face up
+      </label>
       <span className="ml-auto flex items-center gap-1" aria-label="Life total">
         <BarButton onClick={() => update((g) => setLife(g, g.life - 1))} label="Lose 1 life">
           −
@@ -199,6 +246,7 @@ function CardView({
   tapped,
   onClick,
   onDoubleClick,
+  onContextMenu,
   onPreview,
   title,
 }: {
@@ -207,6 +255,7 @@ function CardView({
   tapped?: boolean;
   onClick?: () => void;
   onDoubleClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   onPreview: (c: Instance | null) => void;
   title?: string;
 }) {
@@ -224,6 +273,14 @@ function CardView({
       }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              onContextMenu(e);
+            }
+          : undefined
+      }
       onMouseEnter={() => onPreview(inst)}
       onMouseLeave={() => onPreview(null)}
       title={title ?? inst.name}
@@ -330,15 +387,19 @@ function LibraryZone({ game, onDraw, onDrop }: { game: GameState; onDraw: () => 
     <div className="rounded-lg border border-foreground/15 p-1.5">
       <ZoneLabel title="Library" count={n} />
       <div className="relative mt-1">
-        <button
-          type="button"
-          onClick={onDraw}
-          disabled={!n || game.stage !== "playing"}
-          title="Click to draw (D)"
-          className="flex aspect-[63/88] w-[88px] items-center justify-center rounded-[4.75%/3.5%] border border-foreground/30 bg-gradient-to-br from-amber-900 to-stone-800 text-sm font-semibold text-amber-100 shadow disabled:opacity-50"
-        >
-          {n ? "Draw" : "Empty"}
-        </button>
+        {game.topRevealed && n > 0 ? (
+          <TopCard inst={game.cards[game.zones.library[0]]} disabled={game.stage !== "playing"} onDraw={onDraw} />
+        ) : (
+          <button
+            type="button"
+            onClick={onDraw}
+            disabled={!n || game.stage !== "playing"}
+            title="Click to draw (D)"
+            className="flex aspect-[63/88] w-[88px] items-center justify-center rounded-[4.75%/3.5%] border border-foreground/30 bg-gradient-to-br from-amber-900 to-stone-800 text-sm font-semibold text-amber-100 shadow disabled:opacity-50"
+          >
+            {n ? "Draw" : "Empty"}
+          </button>
+        )}
         {/* While dragging, the library splits into a top and a bottom drop target. */}
         {dragging && (
           <div className="absolute inset-0 flex w-[88px] flex-col overflow-hidden rounded-[4.75%/3.5%] text-xs font-semibold text-white">
@@ -394,11 +455,13 @@ function Battlefield({
   onDrop,
   onTap,
   onPreview,
+  onMenu,
 }: {
   game: GameState;
   onDrop: (iid: string, at: { x: number; y: number }) => void;
   onTap: (iid: string) => void;
   onPreview: (c: Instance | null) => void;
+  onMenu: (iid: string, x: number, y: number) => void;
 }) {
   const area = useRef<HTMLDivElement>(null);
   const ids = game.zones.battlefield;
@@ -431,7 +494,16 @@ function Battlefield({
           const p = game.battlefield[iid];
           return (
             <div key={iid} className="absolute" style={{ left: `${p.x}%`, top: `${p.y}%` }}>
-              <CardView inst={game.cards[iid]} size={100} tapped={p.tapped} onClick={() => onTap(iid)} onPreview={onPreview} title={`${game.cards[iid].name}: click to tap or untap`} />
+              <CardView
+                inst={game.cards[iid]}
+                size={100}
+                tapped={p.tapped}
+                onClick={() => onTap(iid)}
+                onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
+                onPreview={onPreview}
+                title={`${game.cards[iid].name}: click to tap, right-click for counters and moves`}
+              />
+              <CounterBadges counters={p.counters} />
             </div>
           );
         })}
@@ -442,15 +514,17 @@ function Battlefield({
         {landGroups.map((g) => (
           <div key={g.name} className="relative flex shrink-0" title={`${g.ids.length} × ${g.name}`}>
             {g.ids.map((iid, i) => (
-              <div key={iid} style={{ marginLeft: i === 0 ? 0 : -58 }}>
+              <div key={iid} className="relative" style={{ marginLeft: i === 0 ? 0 : -58 }}>
                 <CardView
                   inst={game.cards[iid]}
                   size={72}
                   tapped={game.battlefield[iid]?.tapped}
                   onClick={() => onTap(iid)}
+                  onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
                   onPreview={onPreview}
-                  title={`${game.cards[iid].name}: click to tap or untap`}
+                  title={`${game.cards[iid].name}: click to tap, right-click for counters and moves`}
                 />
+                <CounterBadges counters={game.battlefield[iid]?.counters} />
               </div>
             ))}
             {g.ids.length > 1 && (
@@ -658,4 +732,351 @@ function useDragging() {
     };
   }, []);
   return dragging;
+}
+
+// ---------- library top card, counters and card menu (6b) ----------
+
+/** The library's top card shown face up ("Top face up"); still click to draw it. */
+function TopCard({ inst, disabled, onDraw }: { inst: Instance; disabled: boolean; onDraw: () => void }) {
+  return (
+    <button type="button" onClick={onDraw} disabled={disabled} title={`Top card: ${inst.name} (click to draw)`} className="block w-[88px]">
+      {inst.image ? (
+        <img src={inst.image} alt={inst.name} draggable={false} className="w-full rounded-[4.75%/3.5%] shadow ring-2 ring-amber-400" />
+      ) : (
+        <span className="flex aspect-[63/88] items-center justify-center rounded-lg border p-1 text-center text-[10px]">{inst.name}</span>
+      )}
+    </button>
+  );
+}
+
+/** Counter pills on a card (labels only; change counters from the right-click menu or the + / - keys). */
+function CounterBadges({ counters }: { counters?: Record<string, number> }) {
+  const list = Object.entries(counters ?? {});
+  if (!list.length) return null;
+  return (
+    <span className="pointer-events-none absolute bottom-1 left-1 flex flex-col items-start gap-0.5">
+      {list.map(([k, n]) => (
+        <span key={k} className="rounded bg-black/85 px-1.5 text-[11px] font-semibold text-white tabular-nums">
+          {k === "+1/+1" ? `+${n}/+${n}` : k === "-1/-1" ? `-${n}/-${n}` : `${n} ${k}`}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Right-click menu on a battlefield card: tap, counters, and moves to other zones. */
+function CardMenu({
+  game,
+  at,
+  update,
+  onMove,
+  onClose,
+}: {
+  game: GameState;
+  at: { iid: string; x: number; y: number };
+  update: (fn: (g: GameState) => GameState) => void;
+  onMove: (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
+  onClose: () => void;
+}) {
+  const { iid } = at;
+  const p = game.battlefield[iid];
+  const inst = game.cards[iid];
+  const [custom, setCustom] = useState("");
+  const kinds = [...new Set([...COUNTER_KINDS, ...Object.keys(p?.counters ?? {})])];
+  const go = (to: Zone, opts?: Parameters<typeof move>[3]) => {
+    onMove(iid, to, opts);
+    onClose();
+  };
+  // Keep the menu on screen.
+  const left = Math.max(8, Math.min(at.x, window.innerWidth - 250));
+  const top = Math.max(8, Math.min(at.y, window.innerHeight - 440));
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+      />
+      <div role="menu" aria-label={`${inst.name} actions`} className="fixed z-50 w-60 rounded-lg border border-foreground/20 bg-background p-2 text-sm shadow-xl" style={{ left, top }}>
+        <p className="truncate px-1 pb-1 font-semibold">{inst.name}</p>
+        <MenuItem
+          onClick={() => {
+            update((g) => toggleTap(g, iid));
+            onClose();
+          }}
+        >
+          {p?.tapped ? "Untap" : "Tap"}
+        </MenuItem>
+        <p className="mt-1 px-1 text-xs font-semibold uppercase tracking-wide opacity-60">Counters</p>
+        {kinds.map((k) => (
+          <div key={k} className="flex items-center gap-1 px-1">
+            <span className="flex-1 truncate">{k}</span>
+            <span className="w-6 text-center tabular-nums">{p?.counters?.[k] ?? 0}</span>
+            <MenuButton label={`Remove a ${k} counter`} onClick={() => update((g) => addCounter(g, iid, k, -1))}>
+              −
+            </MenuButton>
+            <MenuButton label={`Add a ${k} counter`} onClick={() => update((g) => addCounter(g, iid, k, 1))}>
+              +
+            </MenuButton>
+          </div>
+        ))}
+        <form
+          className="mt-1 flex gap-1 px-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const name = custom.trim().toLowerCase();
+            if (name) update((g) => addCounter(g, iid, name, 1));
+            setCustom("");
+          }}
+        >
+          <input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            placeholder="Other counter, e.g. time"
+            maxLength={20}
+            aria-label="Other counter name"
+            className="min-w-0 flex-1 rounded border border-foreground/20 bg-background px-2 py-1 text-xs"
+          />
+          <MenuButton label="Add that counter" submit>
+            +
+          </MenuButton>
+        </form>
+        <p className="mt-2 px-1 text-xs font-semibold uppercase tracking-wide opacity-60">Move to</p>
+        <div className="grid grid-cols-2 gap-1">
+          <MenuItem onClick={() => go("hand")}>Hand</MenuItem>
+          <MenuItem onClick={() => go("graveyard")}>Graveyard</MenuItem>
+          <MenuItem onClick={() => go("exile")}>Exile</MenuItem>
+          <MenuItem onClick={() => go("library", { library: "top" })}>Library top</MenuItem>
+          <MenuItem onClick={() => go("library", { library: "bottom" })}>Library bottom</MenuItem>
+          {inst.commander && <MenuItem onClick={() => go("command")}>Command zone</MenuItem>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MenuItem({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" role="menuitem" onClick={onClick} className="block min-h-8 w-full rounded px-2 text-left hover:bg-foreground/10">
+      {children}
+    </button>
+  );
+}
+
+function MenuButton({ onClick, label, submit, children }: { onClick?: () => void; label: string; submit?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type={submit ? "submit" : "button"}
+      onClick={submit ? undefined : onClick}
+      aria-label={label}
+      title={label}
+      className="h-7 w-7 rounded border border-foreground/20 hover:bg-foreground/10"
+    >
+      {children}
+    </button>
+  );
+}
+
+// ---------- library tools (6b) ----------
+
+/** Search the library (a tutor): every card, alphabetical so the order stays secret, then shuffle. */
+function LibrarySearch({
+  game,
+  update,
+  onMove,
+  onPreview,
+  onClose,
+}: {
+  game: GameState;
+  update: (fn: (g: GameState) => GameState) => void;
+  onMove: (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
+  onPreview: (c: Instance | null) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const ids = game.zones.library
+    .filter((iid) => !needle || game.cards[iid].name.toLowerCase().includes(needle) || game.cards[iid].typeLine.toLowerCase().includes(needle))
+    .sort((a, b) => game.cards[a].name.localeCompare(game.cards[b].name));
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur" role="dialog" aria-label="Search library">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h2 className="font-semibold">Search library ({game.zones.library.length})</h2>
+        <input
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter by name or type, e.g. forest, creature"
+          aria-label="Filter"
+          className="min-h-9 min-w-0 flex-1 rounded-md border border-foreground/20 bg-background px-3 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            update(shuffleLibrary);
+            onClose();
+          }}
+          className="min-h-9 rounded-md bg-foreground px-3 text-sm font-medium text-background"
+        >
+          Shuffle and close
+        </button>
+        <button type="button" onClick={onClose} className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
+          Close without shuffling
+        </button>
+      </div>
+      <ul className="flex flex-wrap gap-3">
+        {ids.map((iid) => (
+          <li key={iid} className="flex w-[110px] flex-col gap-1">
+            <CardView inst={game.cards[iid]} size={110} onPreview={onPreview} />
+            <div className="grid grid-cols-2 gap-1 text-[11px]">
+              <MiniButton onClick={() => onMove(iid, "hand")}>Hand</MiniButton>
+              <MiniButton onClick={() => onMove(iid, "battlefield")}>Play</MiniButton>
+              <MiniButton onClick={() => onMove(iid, "graveyard")}>Graveyard</MiniButton>
+              <MiniButton onClick={() => onMove(iid, "library", { library: "top" })}>Top</MiniButton>
+            </div>
+          </li>
+        ))}
+        {ids.length === 0 && <li className="text-sm opacity-60">No cards match.</li>}
+      </ul>
+    </div>
+  );
+}
+
+/** Scry or surveil N: look at the top N, choose top / bottom / graveyard for each, and order the ones on top. */
+function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+  const [count, setCount] = useState(1);
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [choice, setChoice] = useState<Record<string, ScryChoice>>({});
+  const nudge = (i: number, by: number) =>
+    setOrder((o) => {
+      if (!o) return o;
+      const j = i + by;
+      if (j < 0 || j >= o.length) return o;
+      const next = [...o];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Scry or surveil">
+      <div className="w-full max-w-4xl rounded-2xl bg-background p-5 shadow-xl">
+        {!order ? (
+          <form
+            className="flex flex-wrap items-center gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const top = topCards(game, count);
+              setOrder(top);
+              setChoice(Object.fromEntries(top.map((iid) => [iid, "top" as ScryChoice])));
+            }}
+          >
+            <h2 className="text-lg font-semibold">Scry / surveil</h2>
+            <label className="flex items-center gap-2 text-sm">
+              Look at the top
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                className="w-16 rounded-md border border-foreground/20 bg-background px-2 py-1"
+                autoFocus
+              />
+              cards
+            </label>
+            <button type="submit" className="min-h-10 rounded-lg bg-foreground px-4 font-medium text-background">
+              Look
+            </button>
+            <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <>
+            <h2 className="text-lg font-semibold">Top {order.length}: choose where each goes</h2>
+            <p className="text-sm opacity-70">Cards kept on top go back in this order, leftmost on top. Graveyard = surveil.</p>
+            <ul className="mt-3 flex flex-wrap gap-3">
+              {order.map((iid, i) => (
+                <li key={iid} className="flex w-[130px] flex-col gap-1">
+                  {game.cards[iid].image ? (
+                    <img src={game.cards[iid].image!} alt={game.cards[iid].name} className="w-full rounded-[4.75%/3.5%] shadow" />
+                  ) : (
+                    <span className="flex aspect-[63/88] items-center justify-center rounded-lg border p-2 text-center text-xs">{game.cards[iid].name}</span>
+                  )}
+                  <select
+                    value={choice[iid]}
+                    onChange={(e) => setChoice((c) => ({ ...c, [iid]: e.target.value as ScryChoice }))}
+                    aria-label={`Where ${game.cards[iid].name} goes`}
+                    className="min-h-9 rounded-md border border-foreground/20 bg-background px-1 text-sm"
+                  >
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                    <option value="graveyard">Graveyard</option>
+                  </select>
+                  <div className="flex gap-1 text-xs">
+                    <MiniButton onClick={() => nudge(i, -1)}>← Earlier</MiniButton>
+                    <MiniButton onClick={() => nudge(i, 1)}>Later →</MiniButton>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
+                Cancel (leave as is)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  update((g) => resolveScry(g, order, choice));
+                  onClose();
+                }}
+                className="min-h-10 rounded-lg bg-foreground px-5 font-medium text-background"
+              >
+                Done
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MillDialog({ game, update, onClose }: { game: GameState; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+  const [count, setCount] = useState(1);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Mill">
+      <form
+        className="flex flex-wrap items-center gap-3 rounded-2xl bg-background p-5 shadow-xl"
+        onSubmit={(e) => {
+          e.preventDefault();
+          update((g) => mill(g, count));
+          onClose();
+        }}
+      >
+        <h2 className="text-lg font-semibold">Mill</h2>
+        <label className="flex items-center gap-2 text-sm">
+          Put the top
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, game.zones.library.length)}
+            value={count}
+            onChange={(e) => setCount(Math.max(1, Number(e.target.value) || 1))}
+            className="w-16 rounded-md border border-foreground/20 bg-background px-2 py-1"
+            autoFocus
+          />
+          cards into the graveyard
+        </label>
+        <button type="submit" className="min-h-10 rounded-lg bg-foreground px-4 font-medium text-background">
+          Mill
+        </button>
+        <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
+          Cancel
+        </button>
+      </form>
+    </div>
+  );
 }
