@@ -48,13 +48,14 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
         className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left"
         title={`Open ${card.name}`}
       >
-        <span className="truncate">{card.name}</span>
+        {/* The name keeps at least ~45% of the row; badges shorten instead (full text in their tooltips). */}
+        <span className={warnings.length > 0 ? "min-w-[45%] truncate" : "truncate"}>{card.name}</span>
         {warnings.length > 0 && (
           <span
             title={warnings.join(" · ")}
-            className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+            className="min-w-0 truncate rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
           >
-            ⚠<span className="hidden sm:inline"> {warnings[0]}</span>
+            ⚠<span className="hidden sm:inline"> {shortWarning(warnings[0])}</span>
           </span>
         )}
         {flags > 0 && (
@@ -130,4 +131,10 @@ function QuickButton({
       {children}
     </button>
   );
+}
+
+/** "Above bracket 2: Game Changer" -> "Game Changer" for the row badge; the tooltip keeps the whole text. */
+function shortWarning(w: string) {
+  const i = w.indexOf(": ");
+  return i > 0 ? w.slice(i + 2) : w;
 }
