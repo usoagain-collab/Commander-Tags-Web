@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { FeedbackButton } from "./feedback-button";
 
 export async function SiteHeader() {
   const supabase = await createClient();
@@ -19,6 +20,7 @@ export async function SiteHeader() {
               <Link href="/decks" className="hover:underline">
                 My decks
               </Link>
+              <FeedbackButton />
               <form action="/auth/signout" method="post">
                 <button className="opacity-70 hover:opacity-100">Sign out</button>
               </form>
