@@ -161,6 +161,7 @@ type Props = {
   customRoles: CustomRole[];
   suggestSettings: SuggestSettings;
   dismissedSuggestions: string[];
+  playtestFlags: Record<string, number>;
   targetBracket: BracketNumber;
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
@@ -178,6 +179,7 @@ export function DeckEditor({
   customRoles,
   suggestSettings,
   dismissedSuggestions,
+  playtestFlags,
   targetBracket,
   profileDefaults,
 }: Props) {
@@ -195,6 +197,17 @@ export function DeckEditor({
   const [sheet, setSheet] = useState<{ oracle_id: string; board: Board } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Underperformer flags from the playtester (6d); cleared from the card sheet.
+  const [flags, setFlags] = useState<Record<string, number>>(playtestFlags);
+  const clearFlags = async (oracleId: string) => {
+    setFlags((f) => {
+      const next = { ...f };
+      delete next[oracleId];
+      return next;
+    });
+    const { error } = await createClient().rpc("clear_flag", { p_deck: deck.id, p_oracle: oracleId });
+    if (error) setNotice(`Couldn't clear the flag: ${error.message}`);
+  };
   // Bulk edit (step 3g): select mode, the selected rows (entry keys), and where a Shift-click range starts.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -382,6 +395,7 @@ export function DeckEditor({
       warnings: warningsFor(line),
       // Basic lands and most lands have no function tags; only flag spells.
       untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
+      flags: flags[id] ?? 0,
       highlighted: matchesHighlight(line),
       extraRoles: Math.max(0, lineRoleKeys(line).length - 1),
       myTags: showMyTags ? myTagsOfCard(id) : [],
@@ -804,7 +818,12 @@ export function DeckEditor({
         />
       )}
       {panel === "stats" && (
-        <StatsPanel lines={[...commanders, ...companions, ...mainLines]} identity={identity} onClose={() => setPanel(null)} />
+        <StatsPanel
+          lines={[...commanders, ...companions, ...mainLines]}
+          identity={identity}
+          isRamp={(l) => lineRoleKeys(l).includes("ramp")}
+          onClose={() => setPanel(null)}
+        />
       )}
       {panel === "history" && !readOnly && (
         <HistoryPanel
@@ -1012,6 +1031,8 @@ export function DeckEditor({
           total={order.length}
           warnings={warningsFor(sheetLine)}
           roleKeys={lineRoleKeys(sheetLine)}
+          flags={flags[sheetLine.card.oracle_id] ?? 0}
+          onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (
               <>

@@ -21,6 +21,8 @@ export type DeckItem = {
   manual: boolean;
   /** Bulk edit (step 3g): undefined when not selecting, otherwise whether this card is selected. */
   selected?: boolean;
+  /** Times this card was flagged as an underperformer in the playtester (6d). */
+  flags: number;
 };
 export type ViewSection = {
   key: string;
@@ -361,6 +363,11 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
         </span>
       )}
       {item.untagged && <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">untagged</span>}
+      {item.flags > 0 && (
+        <span title={`Flagged as an underperformer ${item.flags}× in playtests`} className="rounded bg-rose-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+          ⚑{item.flags}
+        </span>
+      )}
     </span>
   );
 }

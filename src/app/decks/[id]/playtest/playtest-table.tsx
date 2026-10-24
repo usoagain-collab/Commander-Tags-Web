@@ -5,6 +5,7 @@
 // kept in session storage, so a refresh doesn't lose it (this tab only; nothing goes to the database).
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { tokenImage, type DeckToken } from "@/lib/deck/tokens";
 import {
   createToken,
@@ -40,9 +41,9 @@ import {
 const DRAG_TYPE = "application/x-ctw-iid";
 const storageKey = (deckId: string) => `playtest:${deckId}`;
 
-type Props = { deck: { id: string; name: string }; cards: DeckCard[]; tokens: DeckToken[] };
+type Props = { deck: { id: string; name: string }; cards: DeckCard[]; tokens: DeckToken[]; canFlag: boolean };
 
-export function PlaytestTable({ deck, cards, tokens }: Props) {
+export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
   const key = deckKey(cards);
   const [game, setGame] = useState<GameState | null>(null);
   const [preview, setPreview] = useState<Instance | null>(null);
@@ -50,6 +51,23 @@ export function PlaytestTable({ deck, cards, tokens }: Props) {
   // 6b: right-click menu on a battlefield card, and the library tool being used.
   const [menu, setMenu] = useState<{ iid: string; x: number; y: number } | null>(null);
   const [tool, setTool] = useState<"search" | "scry" | "mill" | "tokens" | null>(null);
+  const [help, setHelp] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const say = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3000);
+  }, []);
+
+  /** Flags a card as an underperformer for this deck (6d): saved to the deck, shown as a badge in the editor. */
+  const flag = useCallback(
+    async (inst: Instance) => {
+      if (inst.token) return say("Tokens can't be flagged.");
+      if (!canFlag) return say("Only the deck's owner can flag cards.");
+      const { data, error } = await createClient().rpc("flag_card", { p_deck: deck.id, p_oracle: inst.oracleId });
+      say(error ? `Couldn't flag: ${error.message}` : `⚑ Flagged ${inst.name} as an underperformer (${data}×). It shows in the editor.`);
+    },
+    [canFlag, deck.id, say],
+  );
 
   // Restore this tab's game for the same deck list, or deal a new one.
   useEffect(() => {
@@ -86,21 +104,40 @@ export function PlaytestTable({ deck, cards, tokens }: Props) {
         setViewing(null);
         setMenu(null);
         setTool(null);
+        setHelp(false);
+      }
+      if (e.key === "?") {
+        setHelp((h) => !h);
+        e.preventDefault();
+        return;
       }
       if (!game || game.stage !== "playing" || tool) return;
-      // + / - add or remove a +1/+1 counter on the battlefield card under the mouse.
-      const hovered = preview && game.battlefield[preview.iid] ? preview.iid : null;
-      if ((e.key === "+" || e.key === "=") && hovered) update((g) => addCounter(g, hovered, "+1/+1", 1));
-      else if (e.key === "-" && hovered) update((g) => addCounter(g, hovered, "+1/+1", -1));
+      // Keys that act on the card under the mouse (any zone it's visible in).
+      const hovered = preview && game.cards[preview.iid] ? preview : null;
+      const onField = hovered && game.battlefield[hovered.iid] ? hovered.iid : null;
+      if ((e.key === "+" || e.key === "=") && onField) update((g) => addCounter(g, onField, "+1/+1", 1));
+      else if (e.key === "-" && onField) update((g) => addCounter(g, onField, "+1/+1", -1));
+      else if (k === "t" && onField) update((g) => toggleTap(g, onField));
+      else if (k === "f" && hovered) void flag(hovered);
+      else if (k === "g" && hovered) update((g) => move(g, hovered.iid, "graveyard"));
+      else if (k === "e" && hovered) update((g) => move(g, hovered.iid, "exile"));
+      else if (k === "h" && hovered) update((g) => move(g, hovered.iid, "hand"));
+      else if (k === "b" && hovered && !onField) update((g) => move(g, hovered.iid, "battlefield"));
+      // Table actions.
       else if (k === "n") update(nextTurn);
       else if (k === "u") update(untapAll);
       else if (k === "d") update((g) => draw(g));
+      else if (k === "s") update(shuffleLibrary);
+      else if (k === "l") setTool("search");
+      else if (k === "y") setTool("scry");
+      else if (k === "m") setTool("mill");
+      else if (k === "k") setTool("tokens");
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [game, update, preview, tool]);
+  }, [game, update, preview, tool, flag]);
 
   if (!game) return <p className="p-6 text-sm opacity-70">Shuffling…</p>;
   const card = (iid: string) => game.cards[iid];
@@ -115,7 +152,7 @@ export function PlaytestTable({ deck, cards, tokens }: Props) {
         </Link>
       </p>
       <main className="hidden h-[calc(100vh-7rem)] min-h-[640px] flex-col gap-2 px-3 pb-2 md:flex">
-        <TopBar game={game} deck={deck} update={update} onNewGame={restart} onTool={setTool} />
+        <TopBar game={game} deck={deck} update={update} onNewGame={restart} onTool={setTool} onHelp={() => setHelp(true)} />
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Side zones: scrolls on short screens rather than spilling into the hand. */}
           <aside className="flex w-[13.5rem] shrink-0 flex-col gap-2 overflow-y-auto">
@@ -142,12 +179,18 @@ export function PlaytestTable({ deck, cards, tokens }: Props) {
       {game.stage === "mulligan" && <MulliganDialog game={game} update={update} card={card} />}
       {viewing && <ZoneViewer zone={viewing} game={game} onClose={() => setViewing(null)} onMove={drop} onPreview={setPreview} />}
       {menu && zoneOf(game, menu.iid) === "battlefield" && (
-        <CardMenu game={game} at={menu} update={update} onMove={drop} onClose={() => setMenu(null)} />
+        <CardMenu game={game} at={menu} update={update} onMove={drop} onFlag={flag} onClose={() => setMenu(null)} />
       )}
       {tool === "search" && <LibrarySearch game={game} update={update} onMove={drop} onPreview={setPreview} onClose={() => setTool(null)} />}
       {tool === "scry" && <ScryDialog game={game} update={update} onClose={() => setTool(null)} />}
       {tool === "mill" && <MillDialog game={game} update={update} onClose={() => setTool(null)} />}
       {tool === "tokens" && <TokenPicker tokens={tokens} update={update} onClose={() => setTool(null)} />}
+      {help && <ShortcutSheet onClose={() => setHelp(false)} />}
+      {toast && (
+        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-foreground px-4 py-2 text-sm text-background shadow-lg">
+          {toast}
+        </div>
+      )}
     </>
   );
 }
@@ -160,12 +203,14 @@ function TopBar({
   update,
   onNewGame,
   onTool,
+  onHelp,
 }: {
   game: GameState;
   deck: { id: string; name: string };
   update: (fn: (g: GameState) => GameState) => void;
   onNewGame: () => void;
   onTool: (t: "search" | "scry" | "mill" | "tokens") => void;
+  onHelp: () => void;
 }) {
   const playing = game.stage === "playing";
   return (
@@ -183,18 +228,20 @@ function TopBar({
       <BarButton disabled={!playing} onClick={() => update((g) => draw(g))} hint="D">
         Draw
       </BarButton>
-      <BarButton onClick={() => update(shuffleLibrary)}>Shuffle</BarButton>
+      <BarButton onClick={() => update(shuffleLibrary)} hint="S">
+        Shuffle
+      </BarButton>
       <span className="mx-1 h-6 border-l border-foreground/15" aria-hidden />
-      <BarButton disabled={!playing} onClick={() => onTool("search")}>
+      <BarButton disabled={!playing} onClick={() => onTool("search")} hint="L">
         Search library
       </BarButton>
-      <BarButton disabled={!playing} onClick={() => onTool("scry")}>
+      <BarButton disabled={!playing} onClick={() => onTool("scry")} hint="Y">
         Scry / surveil
       </BarButton>
-      <BarButton disabled={!playing} onClick={() => onTool("mill")}>
+      <BarButton disabled={!playing} onClick={() => onTool("mill")} hint="M">
         Mill
       </BarButton>
-      <BarButton disabled={!playing} onClick={() => onTool("tokens")}>
+      <BarButton disabled={!playing} onClick={() => onTool("tokens")} hint="K">
         Tokens
       </BarButton>
       <label className="flex min-h-9 items-center gap-1.5 rounded-md border border-foreground/20 px-3" title="Keep the library's top card face up">
@@ -210,6 +257,9 @@ function TopBar({
           +
         </BarButton>
       </span>
+      <BarButton onClick={onHelp} label="Keyboard shortcuts" hint="?">
+        Keys
+      </BarButton>
       <BarButton onClick={onNewGame}>New game</BarButton>
     </div>
   );
@@ -788,12 +838,14 @@ function CardMenu({
   at,
   update,
   onMove,
+  onFlag,
   onClose,
 }: {
   game: GameState;
   at: { iid: string; x: number; y: number };
   update: (fn: (g: GameState) => GameState) => void;
   onMove: (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
+  onFlag: (inst: Instance) => void;
   onClose: () => void;
 }) {
   const { iid } = at;
@@ -828,6 +880,16 @@ function CardMenu({
         >
           {p?.tapped ? "Untap" : "Tap"}
         </MenuItem>
+        {!inst.token && (
+          <MenuItem
+            onClick={() => {
+              onFlag(inst);
+              onClose();
+            }}
+          >
+            ⚑ Flag as underperformer (F)
+          </MenuItem>
+        )}
         <p className="mt-1 px-1 text-xs font-semibold uppercase tracking-wide opacity-60">Counters</p>
         {kinds.map((k) => (
           <div key={k} className="flex items-center gap-1 px-1">
@@ -1157,6 +1219,54 @@ function TokenPicker({ tokens, update, onClose }: { tokens: DeckToken[]; update:
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ---------- keyboard shortcuts (6d) ----------
+
+const SHORTCUTS: [string, string][] = [
+  ["N", "Next turn (untap all, then draw)"],
+  ["U", "Untap all"],
+  ["D", "Draw a card"],
+  ["S", "Shuffle the library"],
+  ["L", "Search the library"],
+  ["Y", "Scry / surveil"],
+  ["M", "Mill"],
+  ["K", "Create a token"],
+  ["T", "Tap or untap the card under the mouse"],
+  ["+ / −", "Add or remove a +1/+1 counter on the card under the mouse"],
+  ["F", "Flag the card under the mouse as an underperformer"],
+  ["H", "Card under the mouse to hand"],
+  ["B", "Card under the mouse to the battlefield"],
+  ["G", "Card under the mouse to the graveyard"],
+  ["E", "Card under the mouse to exile"],
+  ["Right-click", "Card menu: counters, flag, moves"],
+  ["Esc", "Close any panel"],
+  ["?", "Show or hide this list"],
+];
+
+function ShortcutSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-background p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Keyboard shortcuts</h2>
+          <button type="button" onClick={onClose} className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
+            Close (Esc)
+          </button>
+        </div>
+        <dl className="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-1.5 text-sm">
+          {SHORTCUTS.map(([k, what]) => (
+            <div key={k} className="contents">
+              <dt>
+                <kbd className="rounded border border-foreground/30 px-1.5 py-0.5 text-xs">{k}</kbd>
+              </dt>
+              <dd>{what}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </div>
   );
 }
