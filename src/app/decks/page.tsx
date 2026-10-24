@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/user";
 import { createDeck } from "./actions";
 import { DeckRow } from "./deck-row";
 import { DropHint } from "./drop-hint";
@@ -7,10 +8,7 @@ import { BRACKETS } from "@/lib/brackets/rules";
 export const metadata = { title: "My decks · Commander Tags" };
 
 export default async function DecksPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
 
   // RLS allows public decks plus the user's own; this page shows only their own.
   const { data: decks, error } = await supabase

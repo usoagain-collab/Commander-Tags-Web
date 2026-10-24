@@ -36,7 +36,7 @@ import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
 import { buildRoleDefs, customKey, roleCounts, roleStatus, type CustomRole } from "@/lib/tags/role-settings";
 import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
-import { useTagData } from "@/lib/tags/use-tag-data";
+import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
 import { useArtTree } from "@/lib/tags/use-art-tree";
 import {
   aKey,
@@ -157,6 +157,8 @@ type Props = {
   initialEntries: Entries;
   initialCategories: Categories;
   initialCards: Record<string, CardSummary>;
+  /** The deck's tags, loaded with the page (undefined if that failed: the editor then fetches them). */
+  initialTags?: InitialTags;
   readOnly: boolean;
   savedTagView: Record<string, unknown>;
   hiddenTags: string[];
@@ -175,6 +177,7 @@ export function DeckEditor({
   initialEntries,
   initialCategories,
   initialCards,
+  initialTags,
   readOnly,
   savedTagView,
   hiddenTags,
@@ -326,7 +329,7 @@ export function DeckEditor({
     () => [...new Set([...Object.keys(cards), ...(preview ? [preview.oracle_id] : [])])],
     [cards, preview],
   );
-  const tags = useTagData(tagIds);
+  const tags = useTagData(tagIds, initialTags);
 
   // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
   const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/user";
 import { safeNext } from "@/lib/safe-next";
 import { SignInButtons } from "./sign-in-buttons";
 
@@ -11,10 +11,7 @@ export default async function LoginPage({
   const { next, error } = await searchParams;
   const target = safeNext(next);
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (user) redirect(target);
 
   return (
