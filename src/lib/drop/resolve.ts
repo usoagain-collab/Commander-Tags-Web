@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CardSummary } from "@/lib/deck/model";
 import type { DropRef } from "./scryfall-drop";
+import { importCard } from "@/lib/scryfall/import-card";
 
 type Result = { ok: true; card: CardSummary } | { ok: false; reason: string };
 
@@ -30,6 +31,11 @@ export async function resolveDrop(ref: DropRef, supabase: SupabaseClient): Promi
   if (oracleId) {
     const { data } = await supabase.from("card_summaries").select("*").eq("oracle_id", oracleId).maybeSingle();
     if (data) return { ok: true, card: data as CardSummary };
+    // Not in our nightly data yet (a new spoiler): fetch it live when we know its printing (Phase 7b).
+    if (ref.scryfallId) {
+      const fetched = await importCard(ref.scryfallId);
+      if (fetched.ok) return fetched;
+    }
     if (!ref.name) return { ok: false, reason: "That card isn't in our card data yet (it refreshes daily)." };
   }
   if (ref.name) {
