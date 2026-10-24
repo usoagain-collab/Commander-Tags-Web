@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
 import type { DeckCard } from "@/lib/playtest/game";
+import type { DeckToken } from "@/lib/deck/tokens";
 import { PlaytestTable } from "./playtest-table";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -34,5 +35,8 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
       : [];
   });
 
-  return <PlaytestTable deck={{ id: deck.id as string, name: deck.name as string }} cards={cards} />;
+  // Tokens the deck can make (6c), for the playtester's Tokens button.
+  const { data: tokens } = await supabase.rpc("tokens_for", { p_ids: [...new Set(cards.map((c) => c.oracleId))] });
+
+  return <PlaytestTable deck={{ id: deck.id as string, name: deck.name as string }} cards={cards} tokens={(tokens ?? []) as DeckToken[]} />;
 }

@@ -5,7 +5,9 @@
 // kept in session storage, so a refresh doesn't lose it (this tab only; nothing goes to the database).
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tokenImage, type DeckToken } from "@/lib/deck/tokens";
 import {
+  createToken,
   addCounter,
   COUNTER_KINDS,
   mill,
@@ -38,16 +40,16 @@ import {
 const DRAG_TYPE = "application/x-ctw-iid";
 const storageKey = (deckId: string) => `playtest:${deckId}`;
 
-type Props = { deck: { id: string; name: string }; cards: DeckCard[] };
+type Props = { deck: { id: string; name: string }; cards: DeckCard[]; tokens: DeckToken[] };
 
-export function PlaytestTable({ deck, cards }: Props) {
+export function PlaytestTable({ deck, cards, tokens }: Props) {
   const key = deckKey(cards);
   const [game, setGame] = useState<GameState | null>(null);
   const [preview, setPreview] = useState<Instance | null>(null);
   const [viewing, setViewing] = useState<Zone | null>(null);
   // 6b: right-click menu on a battlefield card, and the library tool being used.
   const [menu, setMenu] = useState<{ iid: string; x: number; y: number } | null>(null);
-  const [tool, setTool] = useState<"search" | "scry" | "mill" | null>(null);
+  const [tool, setTool] = useState<"search" | "scry" | "mill" | "tokens" | null>(null);
 
   // Restore this tab's game for the same deck list, or deal a new one.
   useEffect(() => {
@@ -145,6 +147,7 @@ export function PlaytestTable({ deck, cards }: Props) {
       {tool === "search" && <LibrarySearch game={game} update={update} onMove={drop} onPreview={setPreview} onClose={() => setTool(null)} />}
       {tool === "scry" && <ScryDialog game={game} update={update} onClose={() => setTool(null)} />}
       {tool === "mill" && <MillDialog game={game} update={update} onClose={() => setTool(null)} />}
+      {tool === "tokens" && <TokenPicker tokens={tokens} update={update} onClose={() => setTool(null)} />}
     </>
   );
 }
@@ -162,7 +165,7 @@ function TopBar({
   deck: { id: string; name: string };
   update: (fn: (g: GameState) => GameState) => void;
   onNewGame: () => void;
-  onTool: (t: "search" | "scry" | "mill") => void;
+  onTool: (t: "search" | "scry" | "mill" | "tokens") => void;
 }) {
   const playing = game.stage === "playing";
   return (
@@ -190,6 +193,9 @@ function TopBar({
       </BarButton>
       <BarButton disabled={!playing} onClick={() => onTool("mill")}>
         Mill
+      </BarButton>
+      <BarButton disabled={!playing} onClick={() => onTool("tokens")}>
+        Tokens
       </BarButton>
       <label className="flex min-h-9 items-center gap-1.5 rounded-md border border-foreground/20 px-3" title="Keep the library's top card face up">
         <input type="checkbox" checked={!!game.topRevealed} onChange={(e) => update((g) => setTopRevealed(g, e.target.checked))} />
@@ -466,16 +472,50 @@ function Battlefield({
   const area = useRef<HTMLDivElement>(null);
   const ids = game.zones.battlefield;
   const lands = ids.filter((iid) => game.cards[iid].land);
-  const others = ids.filter((iid) => !game.cards[iid].land);
+  const tokenIds = ids.filter((iid) => game.cards[iid].token);
+  const others = ids.filter((iid) => !game.cards[iid].land && !game.cards[iid].token);
 
-  // Lands group by name in the lands row, so 12 Forests take one stack instead of a whole row.
-  const landGroups: { name: string; ids: string[] }[] = [];
-  for (const iid of lands) {
-    const name = game.cards[iid].name;
-    const g = landGroups.find((x) => x.name === name);
-    if (g) g.ids.push(iid);
-    else landGroups.push({ name, ids: [iid] });
-  }
+  // Lands and tokens group by name in their rows, so 12 Forests or 8 Treasures take one stack each.
+  const groupByName = (list: string[]) => {
+    const groups: { name: string; ids: string[] }[] = [];
+    for (const iid of list) {
+      const name = game.cards[iid].name;
+      const g = groups.find((x) => x.name === name);
+      if (g) g.ids.push(iid);
+      else groups.push({ name, ids: [iid] });
+    }
+    return groups;
+  };
+  const landGroups = groupByName(lands);
+  const tokenGroups = groupByName(tokenIds);
+  const groupRow = (label: string, count: number, groups: { name: string; ids: string[] }[]) => (
+    <div className="flex min-h-[120px] items-end gap-3 overflow-x-auto border-t border-foreground/10 px-2 py-2">
+      <span className="self-center text-xs font-semibold uppercase tracking-wide opacity-50">
+        {label} {count}
+      </span>
+      {groups.map((g) => (
+        <div key={g.name} className="relative flex shrink-0" title={`${g.ids.length} × ${g.name}`}>
+          {g.ids.map((iid, i) => (
+            <div key={iid} className="relative" style={{ marginLeft: i === 0 ? 0 : -58 }}>
+              <CardView
+                inst={game.cards[iid]}
+                size={72}
+                tapped={game.battlefield[iid]?.tapped}
+                onClick={() => onTap(iid)}
+                onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
+                onPreview={onPreview}
+                title={`${game.cards[iid].name}: click to tap, right-click for counters and moves`}
+              />
+              <CounterBadges counters={game.battlefield[iid]?.counters} />
+            </div>
+          ))}
+          {g.ids.length > 1 && (
+            <span className="pointer-events-none absolute -top-2 right-0 rounded bg-black/80 px-1.5 text-xs font-semibold text-white">×{g.ids.length}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <DropTarget
@@ -508,31 +548,9 @@ function Battlefield({
           );
         })}
       </div>
+      {tokenIds.length > 0 && groupRow("Tokens", tokenIds.length, tokenGroups)}
       {/* Lands row, grouped automatically. */}
-      <div className="flex min-h-[120px] items-end gap-3 overflow-x-auto border-t border-foreground/10 px-2 py-2">
-        <span className="self-center text-xs font-semibold uppercase tracking-wide opacity-50">Lands {lands.length}</span>
-        {landGroups.map((g) => (
-          <div key={g.name} className="relative flex shrink-0" title={`${g.ids.length} × ${g.name}`}>
-            {g.ids.map((iid, i) => (
-              <div key={iid} className="relative" style={{ marginLeft: i === 0 ? 0 : -58 }}>
-                <CardView
-                  inst={game.cards[iid]}
-                  size={72}
-                  tapped={game.battlefield[iid]?.tapped}
-                  onClick={() => onTap(iid)}
-                  onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
-                  onPreview={onPreview}
-                  title={`${game.cards[iid].name}: click to tap, right-click for counters and moves`}
-                />
-                <CounterBadges counters={game.battlefield[iid]?.counters} />
-              </div>
-            ))}
-            {g.ids.length > 1 && (
-              <span className="pointer-events-none absolute -top-2 right-0 rounded bg-black/80 px-1.5 text-xs font-semibold text-white">×{g.ids.length}</span>
-            )}
-          </div>
-        ))}
-      </div>
+      {groupRow("Lands", lands.length, landGroups)}
     </DropTarget>
   );
 }
@@ -1077,6 +1095,68 @@ function MillDialog({ game, update, onClose }: { game: GameState; update: (fn: (
           Cancel
         </button>
       </form>
+    </div>
+  );
+}
+
+// ---------- tokens (6c) ----------
+
+/** The deck's tokens (from its cards) to put onto the battlefield, plus any other token by name. */
+function TokenPicker({ tokens, update, onClose }: { tokens: DeckToken[]; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [made, setMade] = useState<string | null>(null);
+  const make = (spec: { name: string; image: string | null; typeLine: string }) => {
+    update((g) => createToken(g, spec));
+    setMade(spec.name);
+  };
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur" role="dialog" aria-label="Tokens">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h2 className="font-semibold">Create a token</h2>
+        {made && <span className="text-sm opacity-70">Made a {made}. Click again for another.</span>}
+        <form
+          className="ml-auto flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) make({ name: name.trim(), image: null, typeLine: "Token" });
+            setName("");
+          }}
+        >
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Other token, e.g. 1/1 Soldier"
+            maxLength={40}
+            aria-label="Other token name"
+            className="min-h-9 rounded-md border border-foreground/20 bg-background px-3 text-sm"
+          />
+          <button type="submit" className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
+            Create
+          </button>
+        </form>
+        <button type="button" onClick={onClose} className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
+          Close (Esc)
+        </button>
+      </div>
+      {tokens.length === 0 ? (
+        <p className="text-sm opacity-60">No cards in this deck make tokens. Use “Other token” for anything else.</p>
+      ) : (
+        <ul className="flex flex-wrap gap-3">
+          {tokens.map((t) => (
+            <li key={t.token_id}>
+              <button
+                type="button"
+                onClick={() => make({ name: t.name, image: tokenImage(t.token_id), typeLine: t.type_line })}
+                title={`Create a ${t.name}`}
+                className="block w-[110px] text-left text-xs"
+              >
+                <img src={tokenImage(t.token_id)} alt={t.name} loading="lazy" draggable={false} className="w-full rounded-[4.75%/3.5%] shadow hover:ring-2 hover:ring-amber-400" />
+                <span className="mt-1 block font-medium">{t.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
