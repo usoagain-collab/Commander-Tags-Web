@@ -26,7 +26,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 4. Suggestions | Done (merged Oct 19, 2026): 4a engine + panel, 4b ranking styles, 4c dismiss + EDHREC check |
 | 5. Bracket targeting | Done (merged Oct 22, 2026): 5a data + rules (nightly Spellbook combo import), 5b editor (target, estimate, alerts, badges), 5c suggestion filter |
 | 6. Playtester | Done (merged Oct 24, 2026): 6a table, 6b library tools + counters, 6c tokens, 6d flags + shortcuts + hand stats |
-| 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026). Left: Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` on Vercel (both need David), then the friend test |
+| 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026); Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` set up and checked live. Left: the friend test itself |
 | v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down, playtester on phones) |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
@@ -103,6 +103,9 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Vercel needs the env vars too**: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Production and Preview). Without them every page fails, because the middleware creates a Supabase client on each request.
 - `NEXT_PUBLIC_SUPABASE_URL` is the bare project address (`https://<ref>.supabase.co`), **not** the `/rest/v1/` API URL. With the suffix, database calls still work but sign-in breaks.
 - `vercel.json` sets `framework: nextjs`, because the Vercel project was created as "Other".
+- **One Vercel project: `commandertagsweb`** (live at https://commandertagsweb.vercel.app). The older duplicate `commander-tags-web` was deleted Oct 24, 2026.
+- **Supabase Auth URL Configuration:** Site URL = `https://commandertagsweb.vercel.app`; Redirect URLs include `https://commandertagsweb.vercel.app/**`, `http://localhost:3000/**` and the preview pattern. If a sign-in lands on another address with `?code=` and the user is signed out, the redirect isn't on that list (Supabase falls back to the Site URL).
+- **Google OAuth** client (Google Cloud project "Commander Tags", published) with redirect URI `https://edsjqsnsobmryltrwsca.supabase.co/auth/v1/callback`. Google and Discord make separate accounts unless their emails match (linking is on the v2 backlog).
 
 ## Stack (decided)
 

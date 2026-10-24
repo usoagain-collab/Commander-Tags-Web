@@ -174,6 +174,7 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Multiplayer playtesting | Playtest against other players (v1's playtester is solo goldfish, phase 6) | Oct 18, 2026 |
 | Stats drill-down | Click a bar in the Stats panel (a mana value on the curve, a color, a card type) to see the cards that make it up, like Moxfield's clickable mana curve. Likely reuses the editor's highlight (as clicking a role or tag does) | Oct 19, 2026 |
 | Playtester on phones | Playtesting on phone screens (tap a card, pick an action). v1's playtester is desktop/tablet only | Oct 22, 2026 |
+| Link sign-in methods | A "Link Google / Discord to this account" button, so one account works with both. Supabase merges sign-ins automatically only when both report the same verified email; otherwise each method makes its own account. Needs manual identity linking turned on in Supabase | Oct 24, 2026 |
 
 ## Not intended
 
