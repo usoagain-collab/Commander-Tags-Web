@@ -107,7 +107,11 @@ function Colors({ lines, identity }: { lines: DeckLine[]; identity: Set<string> 
         Each color&apos;s share of the colored symbols in your spells&apos; costs, next to its share of what your lands can make.
       </p>
       {rows.length === 0 ? (
-        <p className="opacity-60">No colored costs or lands yet.</p>
+        <p className="opacity-60">
+          {identity && identity.size === 0
+            ? "Your commander is colorless, so there are no colors to balance."
+            : "No colored costs or lands yet."}
+        </p>
       ) : (
         <ul className="space-y-3">
           {rows.map((r) => {

@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import type { CardSummary } from "@/lib/deck/model";
 import type { DeckToken } from "@/lib/deck/token-merge";
 import type { InitialTags } from "@/lib/tags/use-tag-data";
+import type { ComboRow } from "@/lib/brackets/evaluate";
 import type { Visibility } from "./deck-editor";
 
 export type DeckRow = {
@@ -34,6 +35,7 @@ type Bundle = {
   rows: CardRow[];
   cards: CardSummary[];
   tags: Omit<InitialTags, "ids"> | null;
+  combos: ComboRow[] | null;
   tokens: DeckToken[] | null;
   profile: Profile | null;
 };
@@ -50,5 +52,5 @@ export const loadDeck = cache(async (id: string, kind: "editor" | "playtest") =>
   const b = res.data as Bundle | null;
   if (!b) return { user, deck: null } as const;
   const tags: InitialTags | undefined = b.tags ? { ...b.tags, ids: b.cards.map((c) => c.oracle_id) } : undefined;
-  return { user, deck: b.deck, rows: b.rows, cards: b.cards, tags, tokens: b.tokens ?? [], profile: b.profile } as const;
+  return { user, deck: b.deck, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile } as const;
 });

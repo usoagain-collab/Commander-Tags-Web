@@ -139,6 +139,15 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [game, update, preview, tool, flag]);
 
+  if (cards.length === 0)
+    return (
+      <p className="p-6 text-sm">
+        This deck has no cards to play yet.{" "}
+        <Link href={`/decks/${deck.id}`} className="underline">
+          Back to the deck
+        </Link>
+      </p>
+    );
   if (!game) return <p className="p-6 text-sm opacity-70">Shuffling…</p>;
   const card = (iid: string) => game.cards[iid];
   const drop = (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => update((g) => move(g, iid, to, opts));

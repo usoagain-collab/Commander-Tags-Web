@@ -64,7 +64,7 @@ import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
 import { BracketBadge, BracketBanner, BracketPanel, cardFlag } from "./bracket-panel";
-import { estimateBracket, overTarget } from "@/lib/brackets/evaluate";
+import { estimateBracket, overTarget, type ComboRow } from "@/lib/brackets/evaluate";
 import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
@@ -159,6 +159,8 @@ type Props = {
   initialCards: Record<string, CardSummary>;
   /** The deck's tags, loaded with the page (undefined if that failed: the editor then fetches them). */
   initialTags?: InitialTags;
+  /** Two-card combos in the deck, loaded with the page. */
+  initialCombos?: ComboRow[];
   readOnly: boolean;
   savedTagView: Record<string, unknown>;
   hiddenTags: string[];
@@ -178,6 +180,7 @@ export function DeckEditor({
   initialCategories,
   initialCards,
   initialTags,
+  initialCombos,
   readOnly,
   savedTagView,
   hiddenTags,
@@ -315,7 +318,7 @@ export function DeckEditor({
   const bracket = useBracketTarget(deck.id, targetBracket, readOnly);
   // Combos are checked on the 100-card deck (commander, companion, mainboard), not the maybeboard.
   const deckCardIds = Object.keys(entries).filter((k) => !k.startsWith("maybe|")).map((k) => k.split("|")[1]);
-  const combos = useCombosWithin(deckCardIds);
+  const combos = useCombosWithin(deckCardIds, initialCombos);
 
   // ---------- My tags (step 3f) ----------
   const myTags = useMyTags(deck.id, !readOnly && !!userId, (loaded) => dispatch({ type: "loadTagCards", tagCards: loaded }));

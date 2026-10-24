@@ -7,11 +7,11 @@ export async function SiteHeader() {
 
   return (
     <header className="border-b border-foreground/10">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 whitespace-nowrap px-4 py-3 sm:px-6">
         <Link href="/" className="font-semibold">
           Commander Tags
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex items-center gap-3 text-sm sm:gap-4">
           {user ? (
             <>
               <Link href="/decks" className="hover:underline">
