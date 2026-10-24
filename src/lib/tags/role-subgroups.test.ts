@@ -32,9 +32,9 @@ describe("subgroupCandidates", () => {
     expect(subgroupCandidates(["land-ramp"], ramp, tree)).toEqual(["land-ramp"]);
   });
 
-  it("otherwise uses the first branch under the main tag, or the main tag itself", () => {
+  it("otherwise uses the first branch under the main tag; the main tag itself gives none", () => {
     expect(subgroupCandidates(["cost-reduction"], ramp, tree)).toEqual(["cost-reduction"]);
-    expect(subgroupCandidates(["ramp"], ramp, tree)).toEqual(["ramp"]);
+    expect(subgroupCandidates(["ramp"], ramp, tree)).toEqual([]);
     expect(subgroupCandidates(["impulse"], draw, tree)).toEqual(["impulse"]);
     expect(subgroupCandidates(["pure-draw"], draw, tree)).toEqual(["draw"]);
   });

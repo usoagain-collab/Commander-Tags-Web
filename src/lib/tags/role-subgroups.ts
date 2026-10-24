@@ -7,7 +7,8 @@ import type { TagTree } from "./tree";
  * Which subgroups a card could go in for a role, from each of its tags in that role:
  * - if the tag sits under one of the role's own named tags beyond the first (Ramp's mana-rock, mana-dork,
  *   land-ramp; Card advantage's draw), that named tag;
- * - otherwise the first branch below the role's main tag (or the main tag itself if the card is tagged there).
+ * - otherwise the first branch below the role's main tag. A card tagged with the main tag itself has no
+ *   candidate from that tag, so it lands in "Other <role>" rather than a subgroup named like the role.
  */
 export function subgroupCandidates(tags: string[], role: ResolvedRole, tree: TagTree): string[] {
   if (!role.tagSet || !role.slugs?.length) return [];
@@ -18,7 +19,7 @@ export function subgroupCandidates(tags: string[], role: ResolvedRole, tree: Tag
     const chain = tree.chain(t).filter((s) => role.tagSet!.has(s));
     const namedInChain = chain.filter((s) => named.has(s));
     if (namedInChain.length) out.add(namedInChain.at(-1)!);
-    else out.add(chain[1] ?? chain[0] ?? t);
+    else if (chain[1]) out.add(chain[1]);
   }
   return [...out];
 }

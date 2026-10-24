@@ -71,4 +71,12 @@ describe("tag autocomplete", () => {
     ];
     expect(rankTags(tags, "ramp").map((t) => t.slug)).toEqual(["ramp", "ramp-matters", "land-ramp", "cramped"]);
   });
+
+  it("puts an exact match first even when it is small", () => {
+    const tags = [
+      { slug: "sacrifice-outlet-creature", size: 898 },
+      { slug: "sacrifice-outlet", size: 12 },
+    ];
+    expect(rankTags(tags, "sacrifice-outlet")[0].slug).toBe("sacrifice-outlet");
+  });
 });
