@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  addCounter,
+  mill,
+  resolveScry,
+  topCards,
   bottomCount,
   commanderTax,
   deckKey,
@@ -125,5 +129,44 @@ describe("saving", () => {
     expect(readSaved(raw, deckKey(deck))).toEqual(g);
     expect(readSaved(raw, deckKey(deck.slice(1)))).toBeNull();
     expect(readSaved("not json", deckKey(deck))).toBeNull();
+  });
+});
+
+describe("counters and library tools (6b)", () => {
+  const started = () => keep(newGame(deck, 11));
+
+  it("adds and removes counters; a kind at 0 disappears; they go when the card leaves", () => {
+    let g = started();
+    const card = g.zones.hand[0];
+    g = move(g, card, "battlefield");
+    g = addCounter(addCounter(g, card, "+1/+1", 2), card, "charge", 1);
+    expect(g.battlefield[card].counters).toEqual({ "+1/+1": 2, charge: 1 });
+    g = addCounter(g, card, "charge", -1);
+    expect(g.battlefield[card].counters).toEqual({ "+1/+1": 2 });
+    expect(addCounter(g, card, "+1/+1", -5).battlefield[card].counters).toEqual({});
+    g = move(move(g, card, "hand"), card, "battlefield");
+    expect(g.battlefield[card].counters).toBeUndefined();
+    expect(addCounter(g, g.zones.hand[0], "+1/+1", 1)).toBe(g); // not on the battlefield
+  });
+
+  it("mills the top N into the graveyard", () => {
+    const g = started();
+    const top3 = g.zones.library.slice(0, 3);
+    const m = mill(g, 3);
+    expect(m.zones.graveyard).toEqual(top3);
+    expect(m.zones.library).toHaveLength(g.zones.library.length - 3);
+    expect(mill(g, 0)).toBe(g);
+  });
+
+  it("scry: chosen order on top, bottoms at the bottom; surveil sends to the graveyard", () => {
+    const g = started();
+    const [a, b, c] = topCards(g, 3);
+    const s = resolveScry(g, [c, a, b], { a: "top", [a]: "top", [b]: "bottom", [c]: "top" });
+    expect(s.zones.library.slice(0, 2)).toEqual([c, a]);
+    expect(s.zones.library.at(-1)).toBe(b);
+    expect(s.zones.library).toHaveLength(g.zones.library.length);
+    const v = resolveScry(g, [a, b], { [a]: "graveyard", [b]: "top" });
+    expect(v.zones.graveyard).toEqual([a]);
+    expect(v.zones.library[0]).toBe(b);
   });
 });
