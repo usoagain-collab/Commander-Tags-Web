@@ -90,6 +90,6 @@ export function insertTag(text: string, token: TagToken, slug: string): { text: 
 /** Orders tag matches: slug starts with the text, then a word in it does, then anywhere; bigger tags first. */
 export function rankTags<T extends { slug: string; size: number }>(tags: T[], partial: string): T[] {
   const score = (slug: string) =>
-    slug.startsWith(partial) ? 0 : slug.split("-").some((w) => w.startsWith(partial)) ? 1 : 2;
+    slug === partial ? -1 : slug.startsWith(partial) ? 0 : slug.split("-").some((w) => w.startsWith(partial)) ? 1 : 2;
   return [...tags].sort((a, b) => score(a.slug) - score(b.slug) || b.size - a.size || a.slug.localeCompare(b.slug));
 }

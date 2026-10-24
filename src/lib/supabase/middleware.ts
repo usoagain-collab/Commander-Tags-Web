@@ -22,10 +22,10 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Don't put code between createServerClient and getUser: getUser is what refreshes an expired session.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Don't put code between createServerClient and getClaims: it refreshes an expired session (writing the new
+  // cookies), then checks the token's signature locally instead of asking the Auth server on every request.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ?? null;
 
   // Signed-out visitors to My decks go to the login page, then come back. A single deck page (and its
   // playtest) may be a shared link, so those pages decide for themselves (Phase 7a).

@@ -4,8 +4,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mergeTokens, type DeckToken } from "./token-merge";
 
-export type DeckToken = { token_id: string; name: string; type_line: string; made_by: string[] };
+export type { DeckToken };
 
 /** Scryfall CDN image for a printing id: /normal/front/<1st char>/<2nd char>/<id>.jpg */
 export const tokenImage = (printingId: string) =>
@@ -24,7 +25,7 @@ export function useDeckTokens(ids: string[]) {
     let live = true;
     const timer = setTimeout(async () => {
       const { data, error } = await supabase.rpc("tokens_for", { p_ids: key.split(",") });
-      if (live) setTokens(error ? [] : ((data ?? []) as DeckToken[]));
+      if (live) setTokens(error ? [] : mergeTokens((data ?? []) as DeckToken[]));
     }, 300);
     return () => {
       live = false;

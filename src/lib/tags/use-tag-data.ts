@@ -1,12 +1,15 @@
 "use client";
 
 // Loads what the tag layer needs for a deck: the shared oracle tag tree (once per page, cached daily)
-// and each card's tags. Cards added later get their tags fetched as soon as they appear.
+// and each card's tags. The page sends the deck's tags with its first load (initial); cards added later get
+// their tags fetched as soon as they appear.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { TagTree, type TagTreePayload } from "./tree";
 
 export type ArtTag = [slug: string, label: string, size: number];
+/** What card_tags_for returns, plus the ids it was asked about. */
+export type InitialTags = { o: Record<string, string[]>; a: Record<string, ArtTag[]>; ids: string[] };
 export type TagData = {
   tree: TagTree | null;
   oracleTags: Record<string, string[]>;
@@ -28,14 +31,14 @@ function loadTree(): Promise<TagTree> {
   return treePromise;
 }
 
-export function useTagData(oracleIds: string[]): TagData {
+export function useTagData(oracleIds: string[], initial?: InitialTags): TagData {
   const supabase = useMemo(() => createClient(), []);
   const [tree, setTree] = useState<TagTree | null>(null);
-  const [oracleTags, setOracleTags] = useState<Record<string, string[]>>({});
-  const [artTags, setArtTags] = useState<Record<string, ArtTag[]>>({});
-  const [loaded, setLoaded] = useState<Set<string>>(new Set());
+  const [oracleTags, setOracleTags] = useState<Record<string, string[]>>(() => initial?.o ?? {});
+  const [artTags, setArtTags] = useState<Record<string, ArtTag[]>>(() => initial?.a ?? {});
+  const [loaded, setLoaded] = useState<Set<string>>(() => new Set(initial?.ids ?? []));
   const [error, setError] = useState<string | null>(null);
-  const requested = useRef(new Set<string>());
+  const requested = useRef(new Set<string>(initial?.ids ?? []));
 
   useEffect(() => {
     loadTree()

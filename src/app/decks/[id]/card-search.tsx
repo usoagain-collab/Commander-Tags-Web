@@ -57,6 +57,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [sentQuery, setSentQuery] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [matching, setMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
@@ -93,14 +94,18 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       }
       const list = body as ScryfallList;
       if (!append) setWarnings(list.warnings ?? []);
-      await loadSummaries(list.data);
+      // Show Scryfall's results right away; the add buttons appear as each card is matched to our data.
       setResults((prev) => (append ? [...prev, ...list.data] : list.data));
       setTotal(list.total_cards);
       setNextPage(list.has_more ? (list.next_page ?? null) : null);
+      setLoading(false);
+      setMatching(true);
+      await loadSummaries(list.data);
     } catch {
       setError("Couldn't reach Scryfall. Check your connection and try again.");
     } finally {
       setLoading(false);
+      setMatching(false);
     }
   }
 
@@ -108,10 +113,11 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   async function loadSummaries(cards: ScryfallCard[]) {
     const ids = [...new Set(cards.map(oracleIdOf).filter((id): id is string => !!id))].filter((id) => !summaries[id]);
     const found: Record<string, CardSummary> = {};
-    for (let i = 0; i < ids.length; i += 60) {
-      const { data } = await supabase.from("card_summaries").select("*").in("oracle_id", ids.slice(i, i + 60));
-      for (const c of (data ?? []) as CardSummary[]) found[c.oracle_id] = c;
-    }
+    const batches: string[][] = [];
+    for (let i = 0; i < ids.length; i += 60) batches.push(ids.slice(i, i + 60));
+    // A page has up to 175 cards: the batches go out together rather than one after another.
+    const results = await Promise.all(batches.map((b) => supabase.from("card_summaries").select("*").in("oracle_id", b)));
+    for (const { data } of results) for (const c of (data ?? []) as CardSummary[]) found[c.oracle_id] = c;
     setSummaries((prev) => ({ ...prev, ...found }));
   }
 
@@ -359,6 +365,8 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                       {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}
                     </span>
                   </div>
+                ) : matching ? (
+                  <p className="min-h-6 text-xs opacity-50">Matching…</p>
                 ) : (
                   <FetchNewCard
                     scryfallId={sf.id}
