@@ -88,7 +88,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         aria-controls="quick-add-results"
         className="w-full rounded-md border border-foreground/20 bg-transparent px-3 py-2"
       />
-      <p className="mt-1 text-xs opacity-60">
+      <p className="mt-1 hidden text-xs opacity-60 sm:block">
         Enter adds to the mainboard · Shift+Enter to the maybeboard · Ctrl+Enter makes it your commander · press / to
         come back here
       </p>

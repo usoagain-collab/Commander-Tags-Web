@@ -29,14 +29,22 @@ export function useBracketTarget(deckId: string, initial: BracketNumber, readOnl
   return { target, setTarget, saveError };
 }
 
-/** Combos whose two cards are both in `ids`. Waits a moment after changes so a burst of edits asks once. */
-export function useCombosWithin(ids: string[]) {
+/**
+ * Combos whose two cards are both in `ids`. Waits a moment after changes so a burst of edits asks once.
+ * `initial` is what the page loaded with the deck (deck_bundle), so the first ask is skipped.
+ */
+export function useCombosWithin(ids: string[], initial?: ComboRow[]) {
   const supabase = useMemo(() => createClient(), []);
   const key = useMemo(() => [...new Set(ids)].sort().join(","), [ids]);
-  const [combos, setCombos] = useState<ComboRow[]>([]);
+  const [combos, setCombos] = useState<ComboRow[]>(() => initial ?? []);
   const [error, setError] = useState<string | null>(null);
+  const skipFirst = useRef(!!initial);
 
   useEffect(() => {
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
     if (!key) {
       setCombos([]);
       return;

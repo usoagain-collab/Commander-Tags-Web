@@ -25,7 +25,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
     if (!user) redirect(`/login?next=${encodeURIComponent(`/decks/${id}`)}`);
     notFound();
   }
-  const { rows, cards: summaries, tags: initialTags, profile } = loaded;
+  const { rows, cards: summaries, tags: initialTags, combos: initialCombos, profile } = loaded;
 
   const entries: Entries = {};
   const categories: Categories = {};
@@ -43,6 +43,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       initialCategories={categories}
       initialCards={cards}
       initialTags={initialTags}
+      initialCombos={initialCombos}
       readOnly={!owner}
       savedTagView={profile?.tag_view ?? {}}
       hiddenTags={profile?.hidden_tags ?? []}

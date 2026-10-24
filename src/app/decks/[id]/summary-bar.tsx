@@ -6,7 +6,8 @@ import { isLand } from "@/lib/tags/roles";
 /**
  * Sticky bar at the bottom: deck size, counts by card type, and today's total price.
  * The land count includes modal double-faced cards with a land face (they can be played as lands),
- * even though they're listed under their front face's type.
+ * even though they're listed under their front face's type. Phones show size, lands and price only (one line);
+ * the type counts are also in Stats.
  */
 export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; size: number; price: number }) {
   const types = groupByType(deckLines).filter((g) => g.section !== "Land");
@@ -20,7 +21,7 @@ export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className={size === 100 ? "font-semibold text-green-700 dark:text-green-400" : "font-semibold"}>{size} / 100</span>
         {types.map((g) => (
-          <span key={g.section} className="opacity-70">
+          <span key={g.section} className="hidden opacity-70 sm:inline">
             {g.section} {g.count}
           </span>
         ))}
