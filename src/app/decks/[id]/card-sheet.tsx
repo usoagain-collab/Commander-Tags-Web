@@ -27,6 +27,9 @@ type Props = {
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
+  /** Playtest flags (6d): how often it was flagged, and a way to clear them. */
+  flags?: number;
+  onClearFlags?: () => void;
   /** Category picker and My tags (step 3f), shown above the card's roles and tags. */
   extra?: React.ReactNode;
 };
@@ -148,6 +151,16 @@ export function CardSheet(props: Props) {
                 {card.price_usd != null && <> · ${Number(card.price_usd).toFixed(2)} each</>}
               </p>
               <CommanderLegality details={details} />
+              {!!props.flags && (
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
+                  ⚑ Flagged as an underperformer {props.flags}× in playtests
+                  {!readOnly && props.onClearFlags && (
+                    <button type="button" onClick={props.onClearFlags} className="min-h-9 rounded-md border border-foreground/20 px-2 text-xs text-foreground">
+                      Clear
+                    </button>
+                  )}
+                </p>
+              )}
               {warnings.map((w) => (
                 <p key={w} className="mt-1 text-sm text-amber-700 dark:text-amber-400">
                   ⚠ {w}

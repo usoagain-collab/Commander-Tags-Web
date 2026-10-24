@@ -16,7 +16,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function PlaytestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: deck } = await supabase.from("decks").select("id, name").eq("id", id).maybeSingle();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: deck } = await supabase.from("decks").select("id, name, owner_id").eq("id", id).maybeSingle();
   if (!deck) notFound();
 
   const { data: rows, error } = await supabase
@@ -38,5 +41,5 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
   // Tokens the deck can make (6c), for the playtester's Tokens button.
   const { data: tokens } = await supabase.rpc("tokens_for", { p_ids: [...new Set(cards.map((c) => c.oracleId))] });
 
-  return <PlaytestTable deck={{ id: deck.id as string, name: deck.name as string }} cards={cards} tokens={(tokens ?? []) as DeckToken[]} />;
+  return <PlaytestTable deck={{ id: deck.id as string, name: deck.name as string }} cards={cards} tokens={(tokens ?? []) as DeckToken[]} canFlag={deck.owner_id === user?.id} />;
 }

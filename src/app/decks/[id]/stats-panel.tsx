@@ -1,10 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 // Deck stats (step 3i): mana curve, color pips against land sources, and card types, for the 100-card deck.
 // Plain CSS bars (no chart library); everything is readable at phone width.
 import type { DeckLine } from "@/lib/deck/model";
 import { COLOR_NAMES, colorBalance, manaCurve, typeCounts, type Color } from "@/lib/deck/stats";
 import { tokenImage, useDeckTokens, type DeckToken } from "@/lib/deck/tokens";
+import { handStats } from "@/lib/deck/hand-stats";
 import { Panel } from "./deck-text-panel";
 
 const COLOR_BAR: Record<Color, string> = {
@@ -22,7 +24,17 @@ const COLOR_BAR_LIGHT: Record<Color, string> = {
   G: "bg-green-600/40",
 };
 
-export function StatsPanel({ lines, identity, onClose }: { lines: DeckLine[]; identity: Set<string> | null; onClose: () => void }) {
+export function StatsPanel({
+  lines,
+  identity,
+  isRamp,
+  onClose,
+}: {
+  lines: DeckLine[];
+  identity: Set<string> | null;
+  isRamp: (l: DeckLine) => boolean;
+  onClose: () => void;
+}) {
   const tokens = useDeckTokens(lines.map((l) => l.card.oracle_id));
   const nameOf = (id: string) => lines.find((l) => l.card.oracle_id === id)?.card.name ?? "a card";
   return (
@@ -34,6 +46,7 @@ export function StatsPanel({ lines, identity, onClose }: { lines: DeckLine[]; id
           <Curve lines={lines} />
           <Colors lines={lines} identity={identity} />
           <Types lines={lines} />
+          <OpeningHands lines={lines} isRamp={isRamp} />
           <Tokens tokens={tokens} nameOf={nameOf} />
         </div>
       )}
@@ -180,6 +193,52 @@ function Tokens({ tokens, nameOf }: { tokens: DeckToken[] | null; nameOf: (id: s
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  );
+}
+
+/** Opening-hand stats (6d): 1,000 shuffles of the library (the commander starts in the command zone). */
+function OpeningHands({ lines, isRamp }: { lines: DeckLine[]; isRamp: (l: DeckLine) => boolean }) {
+  const library = lines
+    .filter((l) => l.board === "main")
+    .map((l) => ({ land: l.card.counts_as_land, ramp: isRamp(l), quantity: l.quantity }));
+  const key = library.map((c) => `${c.land ? 1 : 0}${c.ramp ? 1 : 0}x${c.quantity}`).join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const s = useMemo(() => handStats(library), [key]);
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const max = Math.max(0.01, ...s.landSpread);
+  return (
+    <section>
+      <h3 className="mb-1 font-semibold">Opening hands</h3>
+      {s.hands === 0 ? (
+        <p className="opacity-60">Add more cards to simulate hands.</p>
+      ) : (
+        <>
+          <p className="mb-3 text-xs opacity-70">
+            {s.hands.toLocaleString()} shuffled 7-card hands · average {s.averageLands.toFixed(1)} lands · {pct(s.keepable)} have 2–4 lands
+          </p>
+          <div className="flex h-24 items-end gap-1.5" role="img" aria-label={s.landSpread.map((x, i) => `${i} lands: ${pct(x)}`).join(", ")}>
+            {s.landSpread.map((x, i) => (
+              <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                <span className="text-[10px] tabular-nums opacity-70">{x >= 0.005 ? pct(x) : ""}</span>
+                <div className={`w-full rounded-t ${i >= 2 && i <= 4 ? "bg-green-600/70" : "bg-foreground/35"}`} style={{ height: `${(x / max) * 100}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex gap-1.5 border-t border-foreground/15 pt-1">
+            {s.landSpread.map((_, i) => (
+              <span key={i} className="flex-1 text-center text-xs opacity-70">
+                {i}
+              </span>
+            ))}
+          </div>
+          <p className="mt-1 text-center text-xs opacity-60">lands in the opening 7</p>
+          <p className="mt-3">
+            Ramp by turn 2: <strong>{pct(s.rampByTurn2.play)}</strong> on the play, <strong>{pct(s.rampByTurn2.draw)}</strong> on the draw
+            <span className="opacity-60"> ({s.rampCards} Ramp cards)</span>
+          </p>
+        </>
       )}
     </section>
   );

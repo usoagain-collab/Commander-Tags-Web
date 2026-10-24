@@ -16,7 +16,7 @@ type Props = {
 
 /** One card in Text view. The name opens the card sheet; quick −/+/✕ sit at the end on wider screens. */
 export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: Props) {
-  const { line, warnings, untagged, highlighted, extraRoles, myTags, manual, selected } = item;
+  const { line, warnings, untagged, highlighted, extraRoles, myTags, manual, selected, flags } = item;
   const selecting = selected !== undefined;
   const { card, board, quantity } = line;
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
@@ -55,6 +55,11 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
             className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
           >
             ⚠<span className="hidden sm:inline"> {warnings[0]}</span>
+          </span>
+        )}
+        {flags > 0 && (
+          <span title={`Flagged as an underperformer ${flags}× in playtests`} className="shrink-0 rounded bg-rose-600/15 px-1.5 py-0.5 text-xs text-rose-700 dark:text-rose-300">
+            ⚑{flags}
           </span>
         )}
         {untagged && (

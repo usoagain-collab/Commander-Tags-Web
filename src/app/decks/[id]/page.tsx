@@ -24,7 +24,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   const { data: deck } = await supabase
     .from("decks")
-    .select("id, name, owner_id, role_targets, custom_roles, suggest_settings, dismissed_suggestions, target_bracket")
+    .select("id, name, owner_id, role_targets, custom_roles, suggest_settings, dismissed_suggestions, target_bracket, playtest_flags")
     .eq("id", id)
     .maybeSingle();
   if (!deck) notFound();
@@ -63,6 +63,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       customRoles={readCustomRoles(deck.custom_roles)}
       suggestSettings={readSuggestSettings(deck.suggest_settings)}
       dismissedSuggestions={(deck.dismissed_suggestions as string[] | null) ?? []}
+      playtestFlags={(deck.playtest_flags as Record<string, number> | null) ?? {}}
       targetBracket={((deck.target_bracket as number | null) ?? 3) as BracketNumber}
       profileDefaults={{
         targets: { ...DEFAULT_ROLE_TARGETS, ...readTargets(profile?.default_role_targets) },
