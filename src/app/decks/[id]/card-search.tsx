@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { entryKey, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
+import { importCard } from "@/lib/scryfall/import-card";
 import {
   buildQuery,
   insertTag,
@@ -359,9 +360,13 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                     </span>
                   </div>
                 ) : (
-                  <p className="text-xs opacity-60" title="Our card data refreshes daily; new cards appear the next day.">
-                    Not in our card data yet
-                  </p>
+                  <FetchNewCard
+                    scryfallId={sf.id}
+                    onFetched={(fetched) => {
+                      setSummaries((s) => ({ ...s, [fetched.oracle_id]: fetched }));
+                      onAdd(fetched, "main");
+                    }}
+                  />
                 )}
               </li>
             );
@@ -380,5 +385,34 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       )}
       {loading && !nextPage && <p className="mt-3 text-sm opacity-60">Searching Scryfall…</p>}
     </section>
+  );
+}
+
+/**
+ * A card that's on Scryfall but not in our nightly data yet (new spoilers): fetch it now and add it (Phase 7b).
+ * Its tags come with the next nightly import.
+ */
+function FetchNewCard({ scryfallId, onFetched }: { scryfallId: string; onFetched: (card: CardSummary) => void }) {
+  const [state, setState] = useState<"idle" | "busy" | string>("idle");
+  return (
+    <div className="text-xs">
+      <button
+        type="button"
+        disabled={state === "busy"}
+        onClick={async () => {
+          setState("busy");
+          const r = await importCard(scryfallId);
+          if (r.ok) {
+            setState("idle");
+            onFetched(r.card);
+          } else setState(r.reason);
+        }}
+        title="This card is newer than our nightly card data. Fetch it from Scryfall and add it to the mainboard."
+        className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10 disabled:opacity-50"
+      >
+        {state === "busy" ? "Fetching…" : "New card: fetch + add"}
+      </button>
+      {state !== "idle" && state !== "busy" && <p className="mt-1 text-red-600">{state}</p>}
+    </div>
   );
 }
