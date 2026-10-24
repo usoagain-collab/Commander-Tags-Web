@@ -22,6 +22,7 @@ type ScryfallCard = {
   oracle_text?: string; color_identity?: string[]; legalities?: Record<string, string>; games?: string[];
   edhrec_rank?: number; prices?: { usd?: string | null }; image_uris?: Record<string, string>;
   illustration_id?: string; card_faces?: Face[]; game_changer?: boolean; produced_mana?: string[];
+  id?: string; all_parts?: { id: string; component: string; name: string; type_line?: string }[];
 };
 type Tagging = { oracle_id?: string; illustration_id?: string; weight?: string; annotation?: string | null };
 type ScryfallTag = {
@@ -189,6 +190,19 @@ async function main() {
     }
     const linkRows = [...links].map((l) => l.split("|"));
 
+    // Tokens each card makes (Phase 6c), from all_parts. Token cards list themselves too; skip that.
+    const tokenRows: Cell[][] = [];
+    const tokenSeen = new Set<string>();
+    for (const c of cards) {
+      for (const part of c.all_parts ?? []) {
+        if (part.component !== "token" || part.id === c.id) continue;
+        const key = `${c.oracle_id}|${part.id}`;
+        if (tokenSeen.has(key)) continue;
+        tokenSeen.add(key);
+        tokenRows.push([c.oracle_id, part.id, part.name, part.type_line ?? ""]);
+      }
+    }
+
     // 4. Load everything in one transaction.
     log("Loading into Postgres ...");
     await client.query("begin");
@@ -209,6 +223,7 @@ async function main() {
     log(`  cards upserted`);
 
     // DELETE (not TRUNCATE) so readers aren't locked out while the new data loads.
+    await client.query("delete from public.card_tokens");
     await client.query("delete from public.card_tags");
     await client.query("delete from public.illustration_tags");
     await client.query("delete from public.tag_links");
@@ -220,6 +235,8 @@ async function main() {
     log(`  card_tags loaded`);
     await copyRows(client, "public.illustration_tags", ["illustration_id", "tag_id", "weight", "annotation"], illusTagRows);
     log(`  illustration_tags loaded`);
+    await copyRows(client, "public.card_tokens", ["oracle_id", "token_id", "name", "type_line"], tokenRows);
+    log(`  card_tokens loaded`);
 
     await client.query("commit");
 
@@ -233,6 +250,7 @@ async function main() {
       tagged_cards: new Set(cardTagRows.map((r) => r[0])).size,
       tagged_illustrations: new Set(illusTagRows.map((r) => r[0])).size,
       illustration_tags: illusTagRows.length,
+      card_tokens: tokenRows.length,
       skipped,
       source_updated_at: { oracle_cards: entry("oracle_cards").updated_at, oracle_tags: entry("oracle_tags").updated_at, art_tags: entry("art_tags").updated_at },
       seconds: Math.round((Date.now() - t0) / 1000),

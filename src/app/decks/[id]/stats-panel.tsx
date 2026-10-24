@@ -4,6 +4,7 @@
 // Plain CSS bars (no chart library); everything is readable at phone width.
 import type { DeckLine } from "@/lib/deck/model";
 import { COLOR_NAMES, colorBalance, manaCurve, typeCounts, type Color } from "@/lib/deck/stats";
+import { tokenImage, useDeckTokens, type DeckToken } from "@/lib/deck/tokens";
 import { Panel } from "./deck-text-panel";
 
 const COLOR_BAR: Record<Color, string> = {
@@ -22,6 +23,8 @@ const COLOR_BAR_LIGHT: Record<Color, string> = {
 };
 
 export function StatsPanel({ lines, identity, onClose }: { lines: DeckLine[]; identity: Set<string> | null; onClose: () => void }) {
+  const tokens = useDeckTokens(lines.map((l) => l.card.oracle_id));
+  const nameOf = (id: string) => lines.find((l) => l.card.oracle_id === id)?.card.name ?? "a card";
   return (
     <Panel title="Stats" onClose={onClose}>
       {lines.length === 0 ? (
@@ -31,6 +34,7 @@ export function StatsPanel({ lines, identity, onClose }: { lines: DeckLine[]; id
           <Curve lines={lines} />
           <Colors lines={lines} identity={identity} />
           <Types lines={lines} />
+          <Tokens tokens={tokens} nameOf={nameOf} />
         </div>
       )}
     </Panel>
@@ -150,6 +154,33 @@ function Types({ lines }: { lines: DeckLine[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/** Tokens list (Phase 6c): every token the deck's cards can make, and which cards make it. */
+function Tokens({ tokens, nameOf }: { tokens: DeckToken[] | null; nameOf: (id: string) => string }) {
+  return (
+    <section className="md:col-span-2 xl:col-span-3">
+      <h3 className="mb-1 font-semibold">Tokens{tokens ? ` (${tokens.length})` : ""}</h3>
+      {tokens === null ? (
+        <p className="opacity-60">Checking…</p>
+      ) : tokens.length === 0 ? (
+        <p className="opacity-60">No cards in this deck make tokens.</p>
+      ) : (
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
+          {tokens.map((t) => (
+            <li key={t.token_id} className="text-xs">
+              <img src={tokenImage(t.token_id)} alt={t.name} loading="lazy" width={146} height={204} className="w-full rounded-[4.75%/3.5%] shadow" />
+              <p className="mt-1 font-medium">{t.name}</p>
+              <p className="opacity-60" title={t.made_by.map(nameOf).join(", ")}>
+                from {t.made_by.slice(0, 2).map(nameOf).join(", ")}
+                {t.made_by.length > 2 ? ` +${t.made_by.length - 2}` : ""}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

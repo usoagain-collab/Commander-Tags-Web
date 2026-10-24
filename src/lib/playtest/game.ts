@@ -15,6 +15,8 @@ export type Instance = {
   /** Front face is a land: it sits in the lands row on the battlefield. */
   land: boolean;
   commander: boolean;
+  /** A token (6c): it sits in the tokens row and stops existing when it leaves the battlefield. */
+  token?: boolean;
 };
 
 /** Where a nonland card sits on the battlefield (percent of the play area), and whether it's tapped. */
@@ -42,6 +44,8 @@ export type GameState = {
   /** Cards still to put on the bottom after keeping. */
   toBottom: number;
   freeMulligan: boolean;
+  /** Counter for token ids (t1, t2, …). */
+  tokensMade?: number;
   /** The library's top card is shown face up (Courser of Kruphix, Future Sight…), until turned back down. */
   topRevealed?: boolean;
   seed: number;
@@ -194,6 +198,8 @@ export type MoveOptions = {
 export function move(state: GameState, iid: string, to: Zone, opts: MoveOptions = {}): GameState {
   const from = zoneOf(state, iid);
   if (!from) return state;
+  // A token that leaves the battlefield ceases to exist (rule 111.7).
+  if (state.cards[iid].token && from === "battlefield" && to !== "battlefield") return removeCard(state, iid);
   if (from === to) {
     // Within the library: move to the top or bottom (scry, "put on top"). Within the battlefield: reposition.
     if (to === "library") {
@@ -294,3 +300,31 @@ export function resolveScry(state: GameState, order: string[], choice: Record<st
 }
 
 export const setTopRevealed = (state: GameState, on: boolean): GameState => ({ ...state, topRevealed: on });
+
+// ---------- tokens (6c) ----------
+
+export type TokenSpec = { name: string; image: string | null; typeLine: string };
+
+/** Puts a new token onto the battlefield (in the tokens row). */
+export function createToken(state: GameState, spec: TokenSpec): GameState {
+  const n = (state.tokensMade ?? 0) + 1;
+  const iid = `t${n}`;
+  const inst: Instance = { iid, oracleId: "", name: spec.name, image: spec.image, typeLine: spec.typeLine, land: false, commander: false, token: true };
+  return {
+    ...state,
+    tokensMade: n,
+    cards: { ...state.cards, [iid]: inst },
+    zones: { ...state.zones, battlefield: [...state.zones.battlefield, iid] },
+    battlefield: { ...state.battlefield, [iid]: { x: 0, y: 0, tapped: false } },
+  };
+}
+
+function removeCard(state: GameState, iid: string): GameState {
+  const zones = { ...state.zones };
+  for (const z of ZONES) zones[z] = zones[z].filter((x) => x !== iid);
+  const cards = { ...state.cards };
+  delete cards[iid];
+  const battlefield = { ...state.battlefield };
+  delete battlefield[iid];
+  return { ...state, zones, cards, battlefield };
+}

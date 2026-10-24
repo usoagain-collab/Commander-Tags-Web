@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createToken,
   addCounter,
   mill,
   resolveScry,
@@ -168,5 +169,22 @@ describe("counters and library tools (6b)", () => {
     const v = resolveScry(g, [a, b], { [a]: "graveyard", [b]: "top" });
     expect(v.zones.graveyard).toEqual([a]);
     expect(v.zones.library[0]).toBe(b);
+  });
+});
+
+describe("tokens (6c)", () => {
+  it("creates tokens on the battlefield; a token leaving the battlefield stops existing", () => {
+    let g = keep(newGame(deck, 21));
+    g = createToken(createToken(g, { name: "Treasure", image: null, typeLine: "Token Artifact — Treasure" }), { name: "Treasure", image: null, typeLine: "Token Artifact — Treasure" });
+    const [t1, t2] = g.zones.battlefield;
+    expect([t1, t2]).toEqual(["t1", "t2"]);
+    expect(g.cards[t1].token).toBe(true);
+    g = toggleTap(g, t1);
+    expect(g.battlefield[t1].tapped).toBe(true);
+    g = move(g, t1, "graveyard");
+    expect(g.cards[t1]).toBeUndefined();
+    expect(g.zones.graveyard).not.toContain(t1);
+    expect(g.zones.battlefield).toEqual([t2]);
+    expect(Object.values(g.zones).reduce((n, z) => n + z.length, 0)).toBe(101); // 100 cards + 1 token
   });
 });
