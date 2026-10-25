@@ -164,16 +164,20 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 
 | Feature | What it means | Added |
 | --- | --- | --- |
-| Card printings | Printing picker and switching printings in a deck (stored in `deck_cards.printing_id`); art tags follow the chosen printing | Oct 18, 2026 |
+| Card printings | Printing picker and switching printings in a deck (stored in `deck_cards.printing_id`); art tags follow the chosen printing. **Friend test: important** | Oct 18, 2026 |
 | Preferred printing | Remember a favourite printing per card across all your decks (needs printings) | Oct 18, 2026 |
 | Pricing details | Foil vs. normal price, prices per store, price settings, price per printing (v1 keeps today's single price per card and the deck total) | Oct 18, 2026 |
-| Foil version | Mark a card in a deck as foil | Oct 18, 2026 |
+| Foil version | Mark a card in a deck as foil. **Friend test: important** | Oct 18, 2026 |
 | Collection tracking | Ownership checkmarks, "add to collection", the "unowned" price total (also listed under Out of scope for v1) | Oct 18, 2026 |
 | Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |
 | Change mana cost | Override a card's displayed mana cost for stats (e.g. X spells) | Oct 18, 2026 |
 | Multiplayer playtesting | Playtest against other players (v1's playtester is solo goldfish, phase 6) | Oct 18, 2026 |
 | Stats drill-down | Click a bar in the Stats panel (a mana value on the curve, a color, a card type) to see the cards that make it up, like Moxfield's clickable mana curve. Likely reuses the editor's highlight (as clicking a role or tag does) | Oct 19, 2026 |
 | Playtester on phones | Playtesting on phone screens (tap a card, pick an action). v1's playtester is desktop/tablet only | Oct 22, 2026 |
+| Touch-friendly playtester | Friend test: on touch screens a card only becomes draggable after a long press, and the long press also opens the browser's menu. Needs touch handling of its own (tap to pick up or tap for actions, no long-press conflict); goes with Playtester on phones | Oct 24, 2026 |
+| Close the mulligan dialog | Friend test: the opening-hand dialog can't be dismissed by clicking outside it. Add a close / cancel button (and click outside or Esc) | Oct 24, 2026 |
+| Gamer look and feel | Friend test: the site feels too professional. Give it an aesthetic for Magic players (theme, colors, card-game feel); exact direction decided in v2 | Oct 24, 2026 |
+| Light / dark mode switch | Friend test: a visible light/dark toggle (v1 only follows the device setting) | Oct 24, 2026 |
 | Link sign-in methods | A "Link Google / Discord to this account" button, so one account works with both. Supabase merges sign-ins automatically only when both report the same verified email; otherwise each method makes its own account. Needs manual identity linking turned on in Supabase | Oct 24, 2026 |
 | Refined bracket estimate | A smarter bracket estimator that weighs combos, Game Changers and, most importantly, theme cohesiveness (how tightly the deck's cards share themes), instead of v1's floor from rule-breaking cards alone. Exact specs to be decided in the v2 build | Oct 24, 2026 |
 
