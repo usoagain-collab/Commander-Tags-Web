@@ -688,10 +688,31 @@ function MulliganDialog({
 }) {
   const cost = bottomCount(game.mulligans + 1, game.freeMulligan);
   const lands = game.zones.hand.filter((iid) => card(iid).land).length;
+  // Closing (the ✕, a click outside, or Esc) keeps this hand, like Keep (friend test: there was no way out).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && update(keep);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [update]);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Opening hand">
-      <div className="w-full max-w-5xl rounded-2xl bg-background p-5 shadow-xl">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Opening hand"
+      onClick={() => update(keep)}
+    >
+      <div className="relative w-full max-w-5xl rounded-2xl bg-background p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => update(keep)}
+          title="Close and keep this hand"
+          aria-label="Close and keep this hand"
+          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-md opacity-70 hover:bg-foreground/10 hover:opacity-100"
+        >
+          ✕
+        </button>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 pr-10">
           <h2 className="text-lg font-semibold">
             Opening hand{game.mulligans > 0 && ` (mulligan ${game.mulligans})`}: {lands} {lands === 1 ? "land" : "lands"}
           </h2>
@@ -720,7 +741,8 @@ function MulliganDialog({
           <p className="mr-auto text-sm opacity-70">
             {bottomCount(game.mulligans, game.freeMulligan) > 0
               ? `Keeping puts ${bottomCount(game.mulligans, game.freeMulligan)} on the bottom.`
-              : "Keeping this hand costs nothing."}
+              : "Keeping this hand costs nothing."}{" "}
+            Closing this keeps the hand.
           </p>
           <button
             type="button"
