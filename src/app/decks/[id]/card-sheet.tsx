@@ -306,7 +306,7 @@ function ActionButton({
       onClick={onClick}
       aria-label={label}
       className={`min-h-11 rounded-lg border px-3 text-sm font-medium ${
-        danger ? "border-red-600/40 text-red-600 hover:bg-red-600/10" : "border-foreground/20 hover:bg-foreground/10"
+        danger ? "border-red-400/50 text-red-400 hover:bg-red-600/10" : "border-foreground/20 hover:bg-foreground/10"
       }`}
     >
       {children}

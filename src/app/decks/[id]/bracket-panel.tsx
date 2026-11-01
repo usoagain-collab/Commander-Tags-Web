@@ -105,7 +105,7 @@ export function BracketPanel({
             ))}
           </div>
           <p className="mt-1 opacity-70">{BRACKETS[target - 1].blurb}</p>
-          {saveError && <p className="mt-1 text-red-600">{saveError}</p>}
+          {saveError && <p className="mt-1 text-red-400">{saveError}</p>}
         </div>
 
         <div>

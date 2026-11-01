@@ -79,6 +79,7 @@ import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
 import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
+import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 
 type State = {
   entries: Entries;
@@ -235,10 +236,15 @@ export function DeckEditor({
   const [hidden, toggleHidden] = useHiddenTags(hiddenTags, userId);
   const quickAdd = useRef<QuickAddHandle>(null);
 
-  const say = useCallback((msg: string) => {
+  // The toast offers Undo only for messages that confirm the edit just made.
+  const [noticeUndo, setNoticeUndo] = useState(false);
+  const say = useCallback((msg: string, canUndo = false) => {
     setNotice(msg);
-    window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 4000);
+    setNoticeUndo(canUndo);
+    window.setTimeout(() => setNotice((m) => (m === msg ? null : m)), 5000);
   }, []);
+  // Narrow screens: the role profile, top tags and My tags fold behind one row of tabs, so the deck comes first.
+  const [fold, setFold] = useState<"roles" | "tags" | "mine" | null>(null);
 
   /** Run a planned edit: update the screen, remember it for undo, queue it for saving. */
   const run = useCallback(
@@ -606,7 +612,9 @@ export function DeckEditor({
   useEffect(() => {
     if (sheet && sheetIndex < 0) setSheet(null); // the card was removed
   }, [sheet, sheetIndex]);
-  const previewLine = preview ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === preview.oracle_id) : undefined;
+  // The card panel rests on the commander until a card is hovered.
+  const shown = preview ?? commanders[0]?.card ?? null;
+  const shownLine = shown ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === shown.oracle_id) : undefined;
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
   /**
    * A click on a card. While selecting (or with Ctrl/Cmd) it toggles the card; Shift selects everything between
@@ -703,92 +711,83 @@ export function DeckEditor({
 
   /** Adds a card found outside the deck list (search results, drag from Scryfall) and confirms it. */
   const addWithNotice = (card: CardSummary, board: Board) => {
-    if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`);
+    if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-6 pt-6">
+    <main>
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Link href="/decks" className="text-sm opacity-70 hover:underline">
-            ← My decks
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold">{deck.name}</h1>
-          {readOnly && (
-            <p className="mt-1 text-sm opacity-70">
-              Shared deck, read-only.{" "}
-              {userId ? (
-                "You can playtest it or export the list."
-              ) : (
-                <Link href={`/login?next=${encodeURIComponent(`/decks/${deck.id}`)}`} className="underline">
-                  Sign in to build your own decks.
+      <DeckHero
+        name={deck.name}
+        commanders={commanders.map((l) => l.card)}
+        identity={identity}
+        size={size}
+        price={totalPrice(entries, cards)}
+        backLink={!readOnly}
+        onOpenCommander={(i) => openLine(commanders[i])}
+        note={
+          readOnly && (
+            <p className="mt-2 text-sm opacity-90">
+              A shared deck.{" "}
+              {!userId && (
+                <Link href={`/login?next=${encodeURIComponent(`/decks/${deck.id}`)}`} className="font-semibold text-gold underline">
+                  Sign in to build your own.
                 </Link>
               )}
             </p>
-          )}
-          {identity && (
-            <p className="mt-1 text-sm opacity-70">Color identity: {identity.size ? [...identity].join("") : "colorless"}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          {!readOnly && (
-            <HeaderButton active={panel === "suggest"} onClick={() => (panel === "suggest" ? setPanel(null) : suggestOverall())}>
-              Suggest
-            </HeaderButton>
-          )}
-          {!readOnly && (
-            <HeaderButton active={panel === "search"} onClick={() => setPanel(panel === "search" ? null : "search")}>
-              Search
-            </HeaderButton>
-          )}
-          {!readOnly && (
-            <HeaderButton active={panel === "import"} onClick={() => setPanel(panel === "import" ? null : "import")}>
-              Import
-            </HeaderButton>
-          )}
-          <HeaderButton active={panel === "export"} onClick={() => setPanel(panel === "export" ? null : "export")}>
-            Export
-          </HeaderButton>
-          <BracketBadge
-            target={bracket.target}
-            estimate={estimate}
-            active={panel === "bracket"}
-            onClick={() => setPanel(panel === "bracket" ? null : "bracket")}
-          />
-          <Link
-            href={`/decks/${deck.id}/playtest`}
-            title="Goldfish this deck: shuffle, draw, mulligan and play (needs a tablet or computer)"
-            className="hidden min-h-9 items-center rounded-md border border-foreground/20 px-3 md:inline-flex"
-          >
-            Playtest
-          </Link>
-          <HeaderButton active={panel === "stats"} onClick={() => setPanel(panel === "stats" ? null : "stats")}>
-            Stats
-          </HeaderButton>
-          {!readOnly && (
-            <HeaderButton active={panel === "history"} onClick={() => setPanel(panel === "history" ? null : "history")}>
-              History
-            </HeaderButton>
-          )}
-          {!readOnly && (
-            <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
-              Share{visibility !== "private" && <span className="ml-1 text-xs opacity-70">({visibility === "public" ? "public" : "link"})</span>}
-            </HeaderButton>
-          )}
-        </div>
-        {!readOnly && (
-          <div className="flex items-center gap-3 text-sm">
-            <SaveIndicator status={status} onRetry={retry} />
-            <HeaderButton onClick={undo} disabled={state.past.length === 0} title="Undo (Ctrl+Z)">
-              Undo
-            </HeaderButton>
-            <HeaderButton onClick={redo} disabled={state.future.length === 0} title="Redo (Ctrl+Shift+Z)">
-              Redo
-            </HeaderButton>
-          </div>
-        )}
-      </div>
+          )
+        }
+        status={
+          <>
+            <BracketBadge
+              target={bracket.target}
+              estimate={estimate}
+              active={panel === "bracket"}
+              onClick={() => setPanel(panel === "bracket" ? null : "bracket")}
+            />
+          </>
+        }
+        actions={
+          <>
+            {!readOnly && (
+              <button
+                type="button"
+                className="btn btn-gold"
+                aria-pressed={panel === "suggest"}
+                onClick={() => (panel === "suggest" ? setPanel(null) : suggestOverall())}
+              >
+                ✦ Suggest cards
+              </button>
+            )}
+            {!readOnly && (
+              <HeaderButton active={panel === "search"} onClick={() => setPanel(panel === "search" ? null : "search")}>
+                Search
+              </HeaderButton>
+            )}
+            <Link
+              href={`/decks/${deck.id}/playtest`}
+              title="Goldfish this deck: shuffle, draw, mulligan and play (needs a tablet or computer)"
+              className="btn hidden md:inline-flex"
+            >
+              Playtest
+            </Link>
+            {!readOnly && (
+              <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
+                Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
+              </HeaderButton>
+            )}
+            <MoreMenu
+              items={[
+                ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
+                { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
+                { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
+                ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
+              ]}
+            />
+          </>
+        }
+      />
+      <div className="mx-auto max-w-[1500px] px-4 sm:px-6">
 
       {panel === "search" && !readOnly && (
         <CardSearch
@@ -885,79 +884,87 @@ export function DeckEditor({
         </aside>
 
         <div className="min-w-0">
-          {/* Narrower screens: the same profile, folded above the deck. */}
-          <details className="group mb-4 rounded-lg border border-foreground/15 xl:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-sm font-medium">
-              <span>
-                Role profile
-                {roles.length > 0 && (
-                  <span className={`ml-2 text-xs font-normal ${underTarget ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
-                    {underTarget ? `${underTarget} under target` : "all targets met"}
-                  </span>
-                )}
-              </span>
-              <span aria-hidden className="transition-transform group-open:rotate-90">
-                ›
-              </span>
-            </summary>
-            <div className="px-3 pb-3">{renderProfile(true)}</div>
-          </details>
-          <details className="group mb-4 rounded-lg border border-foreground/15 xl:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-sm font-medium">
-              <span>
-                Top tags
-                {themes.length > 0 && (
-                  <span className="ml-2 text-xs font-normal opacity-60">
-                    {themes
-                      .slice(0, 3)
-                      .map((t) => t.label)
-                      .join(", ")}
-                  </span>
-                )}
-              </span>
-              <span aria-hidden className="transition-transform group-open:rotate-90">
-                ›
-              </span>
-            </summary>
-            <div className="px-3 pb-3">{renderTopTags(true)}</div>
-          </details>
-          {!readOnly && (
-            <details className="group mb-4 rounded-lg border border-foreground/15 xl:hidden">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-sm font-medium">
-                <span>
-                  My tags
-                  {myTags.tags.length > 0 && <span className="ml-2 text-xs font-normal opacity-60">{myTags.tags.length}</span>}
-                </span>
-                <span aria-hidden className="transition-transform group-open:rotate-90">
-                  ›
-                </span>
-              </summary>
-              <div className="px-3 pb-3">{renderMyTags(true)}</div>
-            </details>
+          {commanders.length === 0 && !readOnly && (
+            <div className="panel mb-5 border-gold/40 p-5 text-center sm:p-8">
+              <h2 className="display text-2xl sm:text-3xl">Who leads this deck?</h2>
+              <p className="mx-auto mt-2 max-w-md opacity-85">Pick a commander. Everything else, colors, suggestions and tags, follows from it.</p>
+              <div className="mx-auto mt-4 max-w-md">
+                <QuickAdd
+                  commanderOnly
+                  onAdd={(card) => {
+                    if (run(planAdd(entries, card, "commander"), card)) say(`${card.name} leads this deck.`, true);
+                  }}
+                  onPreview={setPreview}
+                />
+              </div>
+              <button type="button" onClick={() => setPanel("import")} className="mt-3 min-h-10 px-2 text-sm underline opacity-85 hover:opacity-100">
+                Or import a list you already have
+              </button>
+            </div>
           )}
-          {!readOnly && (
-            <QuickAdd ref={quickAdd} onAdd={(card, board) => run(planAdd(entries, card, board), card)} onPreview={setPreview} />
+          {/* Narrower screens: the same profile and tags behind one row of tabs, so the deck comes first. */}
+          <div className="mb-3 flex gap-2 xl:hidden">
+            <FoldTab active={fold === "roles"} onClick={() => setFold(fold === "roles" ? null : "roles")}>
+              Roles
+              {roles.length > 0 && (
+                <span className={`text-[13px] font-normal ${underTarget ? "text-amber-400" : "text-green-400"}`}>
+                  {underTarget ? `${underTarget} low` : "✓"}
+                </span>
+              )}
+            </FoldTab>
+            <FoldTab active={fold === "tags"} onClick={() => setFold(fold === "tags" ? null : "tags")}>
+              Top tags
+            </FoldTab>
+            {!readOnly && (
+              <FoldTab active={fold === "mine"} onClick={() => setFold(fold === "mine" ? null : "mine")}>
+                My tags
+              </FoldTab>
+            )}
+          </div>
+          {fold && (
+            <div className="panel mb-4 p-3 xl:hidden">
+              {fold === "roles" && renderProfile(true)}
+              {fold === "tags" && renderTopTags(true)}
+              {fold === "mine" && !readOnly && renderMyTags(true)}
+            </div>
           )}
-          <p aria-live="polite" className="mt-2 min-h-5 text-sm text-amber-700 dark:text-amber-400">
-            {notice}
-          </p>
+          {!readOnly && commanders.length > 0 && (
+            <QuickAdd
+              ref={quickAdd}
+              onAdd={(card, board) => {
+                if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
+              }}
+              onPreview={setPreview}
+            />
+          )}
+          <Toast message={notice} onUndo={noticeUndo && state.past.length > 0 ? undo : undefined} />
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-b border-foreground/10 pb-3">
-            <div className="flex flex-wrap items-center gap-3">
+          {/* Stays in reach while scrolling a long deck. */}
+          <div className="sticky top-0 z-20 -mx-4 mt-2 flex flex-wrap items-center gap-2 border-b border-foreground/10 bg-background/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0">
+            <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
               <DeckToolbar settings={view} onChange={setView} />
-              {!readOnly && (
+            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
                   aria-pressed={selecting}
                   title="Select several cards to move, tag or remove them at once (or Ctrl/Shift-click cards)"
-                  className={`min-h-9 rounded-md border px-3 text-sm ${selecting ? "border-blue-500 bg-blue-500 text-white" : "border-foreground/20"}`}
+                  className="btn"
                 >
-                  {selecting ? "Done selecting" : "Select"}
+                  {selecting ? "Done" : "Select"}
                 </button>
-              )}
-            </div>
-            {tags.error && <span className="text-xs text-amber-700 dark:text-amber-400">{tags.error}</span>}
+                <HeaderButton onClick={undo} disabled={state.past.length === 0} title="Undo (Ctrl+Z)">
+                  Undo
+                </HeaderButton>
+                <HeaderButton onClick={redo} disabled={state.future.length === 0} title="Redo (Ctrl+Shift+Z)">
+                  Redo
+                </HeaderButton>
+                <SaveIndicator status={status} onRetry={retry} />
+              </div>
+            )}
+            {tags.error && <span className="w-full text-sm text-amber-400">{tags.error}</span>}
           </div>
 
           {estimate && panel !== "bracket" && (
@@ -974,14 +981,9 @@ export function DeckEditor({
             </div>
           )}
 
-          {commanders.length === 0 && (
-            <p className="mt-4 px-1.5 text-sm opacity-60">
-              No commander yet. Add a legendary creature with Ctrl+Enter, or open a card and choose “Make commander”.
-            </p>
-          )}
           <div className={`mt-4 ${selecting ? "select-none" : ""}`}>
             {sections.length === 0 ? (
-              <p className="px-1.5 text-sm opacity-60">Empty. Add cards above, import a list, or drag cards in from Scryfall.</p>
+              commanders.length > 0 ? null : <p className="px-1.5 text-center text-sm opacity-75">You can also drag cards in from Scryfall.</p>
             ) : (
               <DeckView
                 sections={sections}
@@ -1008,12 +1010,12 @@ export function DeckEditor({
         <aside className="hidden lg:block">
           <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6">
             <CardPanel
-              card={preview}
-              roleKeys={previewLine ? lineRoleKeys(previewLine) : preview ? roleKeysOf(preview) : []}
+              card={shown}
+              roleKeys={shownLine ? lineRoleKeys(shownLine) : shown ? roleKeysOf(shown) : []}
               extra={
-                preview && (
+                shown && (
                   <PanelMyTags
-                    tags={myTagsOfCard(preview.oracle_id)}
+                    tags={myTagsOfCard(shown.oracle_id)}
                     highlight={highlight}
                     onHighlight={(t) => toggleHighlight(myTagHighlight(t.id))}
                   />
@@ -1024,7 +1026,7 @@ export function DeckEditor({
               highlight={highlight}
               onTag={toggleHighlight}
               onOpen={() => {
-                const line = preview && order.find((l) => l.card.oracle_id === preview.oracle_id);
+                const line = shown && order.find((l) => l.card.oracle_id === shown.oracle_id);
                 if (line) openLine(line);
               }}
             />
@@ -1053,6 +1055,7 @@ export function DeckEditor({
           />
         </>
       )}
+      </div>
 
       {sheetLine && (
         <CardSheet
@@ -1126,15 +1129,15 @@ function HeaderButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-pressed={active}
-      className={`min-h-9 rounded-md border px-3 disabled:opacity-40 ${
-        active ? "border-foreground bg-foreground text-background" : "border-foreground/20"
-      }`}
-    >
+    <button onClick={onClick} disabled={disabled} title={title} aria-pressed={active} className="btn">
+      {children}
+    </button>
+  );
+}
+
+function FoldTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} aria-expanded={active} className={`btn min-w-0 flex-1 ${active ? "border-gold text-gold" : ""}`}>
       {children}
     </button>
   );
@@ -1143,17 +1146,17 @@ function HeaderButton({
 function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
   if (status.state === "error") {
     return (
-      <span className="flex items-center gap-2 text-red-600" title={status.error}>
+      <span className="flex items-center gap-2 text-red-400" title={status.error}>
         Not saved ({status.pending} {status.pending === 1 ? "change" : "changes"})
-        <button onClick={onRetry} className="rounded border border-red-600/40 px-2 py-0.5">
+        <button onClick={onRetry} className="rounded border border-red-400/50 px-2 py-0.5">
           Retry
         </button>
       </span>
     );
   }
   return (
-    <span className="opacity-60" aria-live="polite">
-      {status.state === "saving" ? "Saving…" : "All changes saved"}
+    <span className="hidden text-[13px] opacity-75 sm:inline" aria-live="polite">
+      {status.state === "saving" ? "Saving…" : "Saved"}
     </span>
   );
 }

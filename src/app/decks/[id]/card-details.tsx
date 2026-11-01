@@ -61,7 +61,7 @@ export function RulesText({ details, error, onRetry }: { details?: CardDetails; 
 const STATUS: Record<Legality, { mark: string; label: string; className: string }> = {
   legal: { mark: "✓", label: "Legal", className: "text-green-700 dark:text-green-400" },
   restricted: { mark: "R", label: "Restricted", className: "text-amber-700 dark:text-amber-400" },
-  banned: { mark: "✕", label: "Banned", className: "text-red-600" },
+  banned: { mark: "✕", label: "Banned", className: "text-red-400" },
   not_legal: { mark: "–", label: "Not legal", className: "opacity-40" },
 };
 

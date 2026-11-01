@@ -114,9 +114,9 @@ export function SuggestPanel(props: Props) {
   return (
     <Panel title={`Suggestions: ${source.label}`} onClose={onClose}>
       <StyleControls settings={score.settings} onChange={props.onSettings} />
-      {props.saveError && <p className="mt-1 text-sm text-red-600">{props.saveError}</p>}
+      {props.saveError && <p className="mt-1 text-sm text-red-400">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
       {!error && (pool === null || combos === null) && <p className="mt-3 text-sm opacity-60">Finding cards…</p>}
       {(hiddenAbove > 0 || showAbove) && (
         <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">

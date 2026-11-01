@@ -15,7 +15,7 @@ export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; 
   const mdfc = deckLines.filter((l) => l.card.counts_as_land && !isLand(l.card.type_line)).reduce((n, l) => n + l.quantity, 0);
   return (
     <div
-      className="sticky bottom-0 z-30 -mx-6 mt-8 border-t border-foreground/10 bg-background/95 px-6 py-2 text-sm backdrop-blur"
+      className="sticky bottom-0 z-30 -mx-4 mt-8 border-t border-foreground/10 bg-background/95 px-4 py-2 text-sm backdrop-blur sm:-mx-6 sm:px-6"
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

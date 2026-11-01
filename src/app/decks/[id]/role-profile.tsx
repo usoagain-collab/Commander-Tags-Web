@@ -107,7 +107,7 @@ export function RoleProfile(props: Props) {
                       onClick={() => props.onRemoveCustom(r.key)}
                       aria-label={`Remove the ${r.name} role`}
                       title="Remove this role"
-                      className="min-h-8 min-w-8 rounded border border-foreground/15 text-xs text-red-600"
+                      className="min-h-8 min-w-8 rounded border border-foreground/15 text-xs text-red-400"
                     >
                       ✕
                     </button>
@@ -122,7 +122,7 @@ export function RoleProfile(props: Props) {
         })}
       </ul>
 
-      {props.saveError && <p className="text-xs text-red-600">{props.saveError}</p>}
+      {props.saveError && <p className="text-xs text-red-400">{props.saveError}</p>}
 
       {!readOnly && (
         <div className="space-y-2 border-t border-foreground/10 pt-3">

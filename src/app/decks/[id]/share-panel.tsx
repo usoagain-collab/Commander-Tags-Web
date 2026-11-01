@@ -59,7 +59,7 @@ export function SharePanel({
             </button>
           ))}
         </div>
-        {error && <p className="text-red-600">{error}</p>}
+        {error && <p className="text-red-400">{error}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <input readOnly value={link} aria-label="Deck link" className="min-h-11 min-w-0 flex-1 rounded-md border border-foreground/20 bg-background px-3" onFocus={(e) => e.target.select()} />
           <button

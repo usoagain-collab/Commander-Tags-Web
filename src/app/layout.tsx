@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
+
 export const metadata: Metadata = {
   title: "Commander Tags",
-  description: "A Commander deck builder driven by Scryfall Tagger tags.",
+  description: "Build Commander decks by what cards do. Role targets, tag-driven suggestions and a goldfish table.",
 };
 
 export default function RootLayout({
@@ -13,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
       <body className="antialiased min-h-screen flex flex-col">
         <SiteHeader />
         <div className="flex-1">{children}</div>
