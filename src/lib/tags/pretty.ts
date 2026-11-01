@@ -12,7 +12,7 @@ const ROLE_COLORS: Record<string, string> = {
   "Card advantage": "#5aa9e6",
   "Targeted removal": "#ef6a4f",
   "Board wipes": "#f0964a",
-  Protection: "#e9e4d4",
+  Protection: "var(--role-protection)",
   Recursion: "#b08be0",
 };
 

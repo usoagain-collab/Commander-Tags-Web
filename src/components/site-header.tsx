@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { getProfileLook } from "@/lib/supabase/profile";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { Avatar } from "./avatar";
 import { FeedbackButton } from "./feedback-button";
 
 export async function SiteHeader() {
-  const user = await getCurrentUser();
+  const [user, look] = await Promise.all([getCurrentUser(), getProfileLook()]);
 
   return (
     <header className="relative z-40 border-b border-foreground/10 bg-background/70 backdrop-blur">
@@ -20,8 +22,9 @@ export async function SiteHeader() {
               <Link href="/decks" className="flex min-h-11 items-center px-2 font-medium hover:text-gold">
                 My decks
               </Link>
-              <Link href="/settings" className="flex min-h-11 items-center px-2 hover:text-gold">
-                Settings
+              <Link href="/settings" aria-label="Settings" className="flex min-h-11 items-center gap-2 px-2 hover:text-gold">
+                <Avatar url={look.avatarUrl} name={look.name} size={28} />
+                <span className="hidden sm:inline">Settings</span>
               </Link>
               <FeedbackButton />
               <form action="/auth/signout" method="post" className="ml-2 border-l border-foreground/15 pl-2 sm:ml-4 sm:pl-4">
