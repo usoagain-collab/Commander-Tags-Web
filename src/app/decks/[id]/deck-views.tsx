@@ -19,6 +19,8 @@ export type DeckItem = {
   myTags: MyTag[];
   /** The category was set by hand (step 3f). */
   manual: boolean;
+  /** Just added: flashes once so you can see where it landed. */
+  fresh: boolean;
   /** Bulk edit (step 3g): undefined when not selecting, otherwise whether this card is selected. */
   selected?: boolean;
   /** Times this card was flagged as an underperformer in the playtester (6d). */
@@ -173,7 +175,7 @@ export function DeckView(props: Props) {
     );
   }
   return (
-    <div className="columns-1 gap-8 xl:columns-2">
+    <div>
       {blocks.map((b) =>
         b.type === "parent" ? (
           <DropZone key={`p:${b.parent.key}`} sectionKey={b.parent.key} onCardDrop={props.onCardDrop} className="break-inside-avoid">
@@ -290,7 +292,7 @@ function Tile({
       onFocus={onHover}
       title={`Open ${card.name}`}
       aria-pressed={item.selected}
-      className={`card-lift relative block w-full rounded-[5%/3.6%] text-left ${
+      className={`card-lift relative block w-full rounded-[5%/3.6%] text-left ${item.fresh ? "fresh" : ""} ${
         item.selected ? "ring-4 ring-blue-500" : item.highlighted ? "ring-4 ring-gold" : ""
       }`}
     >

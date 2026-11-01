@@ -247,6 +247,12 @@ export function DeckEditor({
   }, []);
   // Narrow screens: the role profile, top tags and My tags fold behind one row of tabs, so the deck comes first.
   const [fold, setFold] = useState<"roles" | "tags" | "mine" | null>(null);
+  // The card just added flashes once.
+  const [fresh, setFresh] = useState<string | null>(null);
+  const flash = useCallback((id: string) => {
+    setFresh(id);
+    window.setTimeout(() => setFresh((f) => (f === id ? null : f)), 1600);
+  }, []);
 
   /** Run a planned edit: update the screen, remember it for undo, queue it for saving. */
   const run = useCallback(
@@ -304,7 +310,9 @@ export function DeckEditor({
       const mod = e.ctrlKey || e.metaKey;
       // An empty box has no typing to undo (quick add keeps focus after adding), so the shortcut means the deck.
       const blank = el instanceof HTMLInputElement && el.value === "";
-      if (e.key === "Escape" && selecting && !typing) {
+      if (e.key === "Escape" && (panel === "search" || panel === "suggest") && !sheet) {
+        setPanel(null);
+      } else if (e.key === "Escape" && selecting && !typing) {
         stopSelecting();
       } else if (e.key === "/" && !typing) {
         e.preventDefault();
@@ -320,7 +328,7 @@ export function DeckEditor({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [readOnly, undo, redo, selecting, stopSelecting]);
+  }, [readOnly, undo, redo, selecting, stopSelecting, panel, sheet]);
 
   const { entries, cards, categories, tagCards } = state;
 
@@ -418,6 +426,7 @@ export function DeckEditor({
       untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
       flags: flags[id] ?? 0,
       highlighted: matchesHighlight(line),
+      fresh: fresh === id,
       // In Group by Role the heading already names the first role.
       roleNames: lineRoleKeys(line)
         .slice(view.group === "role" ? 1 : 0)
@@ -479,6 +488,19 @@ export function DeckEditor({
     />
   );
   const underTarget = roles.filter((r) => roleStatus(counts[r.key] ?? 0, r.target) === "under").length;
+  const complete = size === 100 && roles.length > 0 && underTarget === 0;
+  // Finishing the deck is the big moment. Only an edit in this visit counts, not opening a finished deck.
+  const [celebrate, setCelebrate] = useState(false);
+  const wasComplete = useRef(complete);
+  const editCount = state.past.length;
+  useEffect(() => {
+    if (complete && !wasComplete.current && editCount > 0) {
+      setCelebrate(true);
+      say("100 cards, every role covered. Deck complete!");
+      window.setTimeout(() => setCelebrate(false), 1600);
+    }
+    wasComplete.current = complete;
+  }, [complete, editCount, say]);
 
   // ---------- top tags (Phase 3d) ----------
   const themeCards: ThemeCard[] = [...commanders, ...mainLines].map((l) => ({
@@ -720,7 +742,10 @@ export function DeckEditor({
 
   /** Adds a card found outside the deck list (search results, drag from Scryfall) and confirms it. */
   const addWithNotice = (card: CardSummary, board: Board) => {
-    if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
+    if (run(planAdd(entries, card, board), card)) {
+      flash(card.oracle_id);
+      say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
+    }
   };
 
   return (
@@ -733,19 +758,13 @@ export function DeckEditor({
         size={size}
         price={totalPrice(entries, cards)}
         backLink={!readOnly}
-        complete={size === 100 && roles.length > 0 && underTarget === 0}
+        complete={complete}
+        celebrate={celebrate}
         themes={themes.slice(0, 3).map((t) => prettyTag(t.label))}
         onOpenCommander={(i) => openLine(commanders[i])}
         note={
           readOnly && (
-            <p className="mt-2 text-sm opacity-90">
-              A shared deck.{" "}
-              {!userId && (
-                <Link href={`/login?next=${encodeURIComponent(`/decks/${deck.id}`)}`} className="font-semibold text-gold underline">
-                  Sign in to build your own.
-                </Link>
-              )}
-            </p>
+            <p className="mt-1 text-sm opacity-90">A deck shared with you.</p>
           )
         }
         status={
@@ -760,7 +779,12 @@ export function DeckEditor({
         }
         actions={
           <>
-            {!readOnly && (
+            {readOnly && (
+              <Link href={userId ? "/decks" : `/login?next=${encodeURIComponent("/decks")}`} className="btn btn-gold">
+                ✦ Build your own
+              </Link>
+            )}
+            {!readOnly && (commanders.length > 0 || size > 0) && (
               <button
                 type="button"
                 className="btn btn-gold"
@@ -801,7 +825,7 @@ export function DeckEditor({
       <div className="mx-auto max-w-[1500px] px-4 sm:px-6">
 
       {panel === "search" && !readOnly && (
-        <div className="lg:max-h-[78vh] lg:overflow-y-auto">
+        <div className="drawer">
         <CardSearch
           entries={entries}
           identity={identity}
@@ -816,7 +840,7 @@ export function DeckEditor({
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
       {panel === "suggest" && suggestFor && !readOnly && (
-        <div id="suggest-panel" className="scroll-mt-4 lg:max-h-[78vh] lg:overflow-y-auto">
+        <div id="suggest-panel" className="drawer scroll-mt-4">
           <SuggestPanel
             source={suggestFor}
             identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
@@ -927,7 +951,7 @@ export function DeckEditor({
           )}
           {/* Narrower screens: roles stay in view as a strip; targets and tags sit behind one row of tabs. */}
           {roles.length > 0 && (
-            <ul className="-mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
+            <ul className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
               {roles.map((r) => {
                 const n = counts[r.key] ?? 0;
                 return (
@@ -978,7 +1002,10 @@ export function DeckEditor({
             <QuickAdd
               ref={quickAdd}
               onAdd={(card, board) => {
-                if (run(planAdd(entries, card, board), card)) say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
+                if (run(planAdd(entries, card, board), card)) {
+                  flash(card.oracle_id);
+                  say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
+                }
               }}
               onPreview={setPreview}
             />
@@ -1205,8 +1232,8 @@ function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () =>
     );
   }
   return (
-    <span className="hidden text-[13px] opacity-75 sm:inline" aria-live="polite">
-      {status.state === "saving" ? "Saving…" : "Saved"}
+    <span className={`hidden text-[13px] sm:inline ${status.state === "saving" ? "text-amber-400" : "text-green-400"}`} aria-live="polite">
+      {status.state === "saving" ? "Saving…" : "✓ Saved"}
     </span>
   );
 }

@@ -16,6 +16,7 @@ export function DeckHero({
   price,
   backLink,
   complete,
+  celebrate,
   themes,
   note,
   status,
@@ -30,6 +31,8 @@ export function DeckHero({
   backLink: boolean;
   /** 100 cards and every role target met. */
   complete: boolean;
+  /** Just became complete: one shimmer across the banner. */
+  celebrate: boolean;
   /** The deck's top themes, in words. */
   themes: string[];
   note?: React.ReactNode;
@@ -46,17 +49,18 @@ export function DeckHero({
         {art && <img src={art} alt="" className="h-full w-full scale-105 object-cover object-[center_25%] opacity-75" />}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/65 to-background/10" />
         <div className="absolute inset-0 bg-gradient-to-r from-background/85 via-background/30 to-transparent" />
+        {celebrate && <div className="shimmer absolute inset-0" />}
       </div>
-      <div className={`mx-auto flex max-w-[1500px] items-end gap-5 px-4 pb-5 sm:px-6 ${art ? "pt-3 sm:pt-12" : "pt-3 sm:pt-6"}`}>
+      <div className={`mx-auto flex max-w-[1500px] items-end gap-5 px-4 pb-4 sm:px-6 ${art ? "pt-2 lg:pt-8" : "pt-2 sm:pt-4"}`}>
         {commanders.length > 0 && (
-          <div className="hidden shrink-0 sm:flex lg:hidden">
+          <div className="hidden shrink-0 md:flex lg:hidden">
             {commanders.map((c, i) => (
               <button
                 key={c.oracle_id}
                 type="button"
                 onClick={() => onOpenCommander(i)}
                 title={`Open ${c.name}`}
-                className={`card-lift w-36 rounded-[4.75%/3.5%] shadow-2xl ${i > 0 ? "-ml-24" : ""}`}
+                className={`card-lift w-32 rounded-[4.75%/3.5%] shadow-2xl ${i > 0 ? "-ml-24" : ""}`}
               >
                 {c.image_normal && <img src={c.image_normal} alt={c.name} className="w-full rounded-[4.75%/3.5%]" />}
               </button>
@@ -69,8 +73,8 @@ export function DeckHero({
               ← My decks
             </Link>
           )}
-          <h1 className="display text-3xl leading-tight [text-shadow:0_2px_16px_#000] sm:text-5xl">{name}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 [text-shadow:0_1px_8px_#000]">
+          <h1 className="display text-3xl leading-tight [text-shadow:0_2px_16px_#000] lg:text-5xl">{name}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 [text-shadow:0_1px_8px_#000]">
             {pips.length > 0 && (
               <span className="inline-flex gap-1">
                 {pips.map((c) => (
@@ -81,23 +85,23 @@ export function DeckHero({
             {commanders.length > 0 && <span className="min-w-0 opacity-90">{commanders.map((c) => c.name).join(" & ")}</span>}
           </div>
           {note}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            {complete && <span className="complete inline-flex min-h-9 items-center rounded-lg bg-gold px-3 font-semibold text-gold-ink">✦ Deck complete</span>}
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            {complete && <span className={`${celebrate ? "complete " : ""}inline-flex min-h-9 items-center rounded-lg bg-gold px-3 font-semibold text-gold-ink`}>✦ Complete</span>}
             <Stat good={size === 100}>
               <span key={size} className="pop inline-block">
-                {size} / 100 cards
+                {size} / 100
               </span>
             </Stat>
             <Stat>${price.toFixed(0)}</Stat>
             {status}
           </div>
           {themes.length > 0 && (
-            <p className="mt-2 text-sm [text-shadow:0_1px_8px_#000]">
+            <p className="mt-2 hidden text-sm [text-shadow:0_1px_8px_#000] sm:block">
               <span className="opacity-75">Plays: </span>
               {themes.join(" · ")}
             </p>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">{actions}</div>
         </div>
       </div>
     </header>

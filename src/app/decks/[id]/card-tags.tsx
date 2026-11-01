@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
+import { MECHANIC_NOISE } from "@/lib/tags/themes";
 import type { CardSummary } from "@/lib/deck/model";
 import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagData } from "@/lib/tags/use-tag-data";
@@ -24,8 +25,9 @@ export function CardTags({ card, roleKeys, roles, tags, highlight, onTag }: Prop
   const oracle = tags.oracleTags[card.oracle_id] ?? [];
   const art = tags.artTags[card.oracle_id] ?? [];
   const deepest = tags.tree ? tags.tree.sortDeepestFirst(oracle) : oracle;
-  // Print-run bookkeeping (cycles) says least about what a card does, so it goes last.
-  const sorted = [...deepest.filter((s) => !s.startsWith("cycle-")), ...deepest.filter((s) => s.startsWith("cycle-"))];
+  // Print-run bookkeeping (cycles) and rules plumbing say least about what a card does, so they go last.
+  const quiet = (s: string) => s.startsWith("cycle-") || MECHANIC_NOISE.has(tags.tree?.label(s) ?? s);
+  const sorted = [...deepest.filter((s) => !quiet(s)), ...deepest.filter(quiet)];
   const [showAll, setShowAll] = useState(false);
   const shownTags = showAll ? sorted : sorted.slice(0, 8);
 
@@ -73,8 +75,8 @@ export function CardTags({ card, roleKeys, roles, tags, highlight, onTag }: Prop
       </div>
 
       {art.length > 0 && (
-        <div>
-          <h4 className="eyebrow mb-1.5">In the art</h4>
+        <details>
+          <summary className="eyebrow mb-1.5 flex min-h-8 items-center">In the art ({art.length})</summary>
           <div className="flex flex-wrap gap-1.5">
             {art.map(([slug, label, size]) => (
               <TagChip
@@ -87,7 +89,7 @@ export function CardTags({ card, roleKeys, roles, tags, highlight, onTag }: Prop
               />
             ))}
           </div>
-        </div>
+        </details>
       )}
     </div>
   );

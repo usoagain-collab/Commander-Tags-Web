@@ -107,7 +107,7 @@ export function TopTags(props: Props) {
               {props.hidden.map((h) => (
                 <li key={h.key} className="flex items-center justify-between gap-2">
                   <span className="truncate">
-                    {h.label}
+                    {prettyTag(h.label)}
                     {h.key.startsWith("a:") && <span className="ml-1 opacity-60">(art)</span>}
                   </span>
                   {!readOnly && (
@@ -125,6 +125,10 @@ export function TopTags(props: Props) {
   );
 }
 
+/** A row's tools appear on hover where there's a mouse, so tag names get the room; touch screens always show them. */
+const ROW_ICON =
+  "flex h-8 w-8 shrink-0 items-center justify-center opacity-75 hover:opacity-100 [@media(hover:hover)]:hidden [@media(hover:hover)]:group-hover:flex [@media(hover:hover)]:group-focus-within:flex";
+
 function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
   const row = useRef<HTMLLIElement>(null);
   const { pos, open, show, hide } = useAnchoredPopover(260, 260);
@@ -137,7 +141,7 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
       ref={row}
       onPointerEnter={(e) => e.pointerType === "mouse" && show(row.current)}
       onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
-      className={`flex items-center gap-1 rounded text-sm ${active ? "bg-amber-400/20" : "hover:bg-foreground/5"}`}
+      className={`group flex items-center gap-1 rounded text-sm ${active ? "bg-amber-400/20" : "hover:bg-foreground/5"}`}
     >
       <button
         type="button"
@@ -162,7 +166,7 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
         aria-expanded={open}
         onClick={() => (open ? hide() : show(row.current))}
         onBlur={hide}
-        className="flex h-8 w-8 shrink-0 items-center justify-center text-xs opacity-50 hover:opacity-100"
+        className={`${ROW_ICON} text-xs`}
       >
         ⑂
       </button>
@@ -172,9 +176,9 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
           onClick={() => props.onSuggest!(tag)}
           aria-label={`Suggest cards with ${tag.label}`}
           title="Suggest cards with this tag"
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-sm opacity-50 hover:opacity-100"
+          className={`${ROW_ICON} text-sm text-gold`}
         >
-          💡
+          ✦
         </button>
       )}
       {!props.readOnly && tag.kind === "o" && !isRole && (
@@ -183,7 +187,7 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
           onClick={() => props.onMakeRole(tag)}
           aria-label={`Make ${tag.label} a role`}
           title="Make this a role with its own target"
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-sm opacity-50 hover:opacity-100"
+          className={`${ROW_ICON} text-sm`}
         >
           +
         </button>
@@ -194,7 +198,7 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
           onClick={() => props.onToggleHidden(tag.key)}
           aria-label={`Hide ${tag.label}`}
           title="Hide this tag (saved to your profile)"
-          className="flex h-8 w-8 shrink-0 items-center justify-center text-sm opacity-50 hover:opacity-100"
+          className={`${ROW_ICON} text-sm`}
         >
           ×
         </button>
@@ -212,7 +216,7 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
               >
                 <span className="truncate">
                   {r.depth > 0 ? "› " : ""}
-                  {r.label}
+                  {prettyTag(r.label)}
                 </span>
                 {r.count > 0 && <span className="shrink-0 rounded bg-foreground/10 px-1 tabular-nums">{r.count}</span>}
               </span>

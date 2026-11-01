@@ -7,9 +7,9 @@
 //   - cards are upserted (decks reference oracle_id, so cards are never deleted);
 //   - tags, tag_links, card_tags and illustration_tags are deleted and reloaded inside ONE transaction.
 //     Until it commits, every reader keeps seeing the previous data; if anything fails, it rolls back.
-import { gunzipSync } from "node:zlib";
+import { createGunzip, gunzipSync } from "node:zlib";
 import { pipeline } from "node:stream/promises";
-import { createRequire } from "node:module";
+import { createInterface } from "node:readline";
 import { Readable } from "node:stream";
 import pg from "pg";
 import { from as copyFrom } from "pg-copy-streams";
@@ -54,28 +54,31 @@ async function downloadRecords<T>(entry: BulkEntry): Promise<T[]> {
 
 /**
  * The cheapest USD price per card across every printing. oracle_cards carries one printing, which is often a promo
- * with no regular price (Sol Ring, Command Tower). Streamed, because default_cards is about 500 MB. Foil prices count
- * only when a card has no regular price at all. If this fails, the import still runs on oracle_cards prices.
+ * with no regular price (Sol Ring, Command Tower). Read line by line, because default_cards is several hundred MB
+ * (JSONL, usually gzipped). Foil prices count only when a card has no regular price at all. If this fails, the
+ * import still runs on oracle_cards prices, and says so in its log.
  */
 async function cheapestPrices(entry: BulkEntry) {
-  const require = createRequire(import.meta.url);
-  const { parser } = require("stream-json") as typeof import("stream-json");
-  const { streamArray } = require("stream-json/streamers/StreamArray") as typeof import("stream-json/streamers/StreamArray");
-  if (!entry.download_uri) throw new Error("default_cards has no JSON download link");
-  const res = await fetch(entry.download_uri, { headers: { "User-Agent": USER_AGENT } });
-  if (!res.ok || !res.body) throw new Error(`GET ${entry.download_uri} -> HTTP ${res.status}`);
+  const url = entry.jsonl_download_uri ?? entry.download_uri;
+  if (!url?.includes(".jsonl")) throw new Error("default_cards has no JSONL download link");
+  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok || !res.body) throw new Error(`GET ${url} -> HTTP ${res.status}`);
   const regular = new Map<string, number>();
   const foil = new Map<string, number>();
   const keepLowest = (map: Map<string, number>, id: string, price: string | null | undefined) => {
     const n = Number(price);
     if (price && n > 0 && !(map.get(id)! <= n)) map.set(id, n);
   };
-  const stream = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream).pipe(parser()).pipe(streamArray());
-  for await (const { value } of stream as AsyncIterable<{ value: ScryfallCard }>) {
-    if (!value.oracle_id) continue;
-    keepLowest(regular, value.oracle_id, value.prices?.usd);
-    keepLowest(foil, value.oracle_id, value.prices?.usd_foil);
-    keepLowest(foil, value.oracle_id, value.prices?.usd_etched);
+  const raw = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
+  // fetch undoes Content-Encoding gzip by itself; only a file that is itself .gz still needs unpacking.
+  const zipped = url.endsWith(".gz") && !res.headers.get("content-encoding");
+  for await (const line of createInterface({ input: zipped ? raw.pipe(createGunzip()) : raw })) {
+    if (!line.trim()) continue;
+    const card = JSON.parse(line) as ScryfallCard;
+    if (!card.oracle_id) continue;
+    keepLowest(regular, card.oracle_id, card.prices?.usd);
+    keepLowest(foil, card.oracle_id, card.prices?.usd_foil);
+    keepLowest(foil, card.oracle_id, card.prices?.usd_etched);
   }
   return new Map([...foil, ...regular]);
 }

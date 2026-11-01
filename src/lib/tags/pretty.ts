@@ -1,6 +1,8 @@
 /** "tutor-land-any" -> "Tutor land any": Scryfall's labels read like database names, so tags are shown this way. */
 export function prettyTag(label: string) {
   const text = label.replace(/-/g, " ").trim();
+  const family = text.match(/^(typal|tutor)\s+(.+)$/i);
+  if (family) return `${family[1].charAt(0).toUpperCase()}${family[1].slice(1)}: ${family[2]}`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 

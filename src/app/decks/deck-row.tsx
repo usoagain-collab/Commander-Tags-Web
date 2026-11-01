@@ -79,6 +79,10 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
         )}
       </div>
 
+      <span aria-hidden className="mx-4 mb-3 block h-1 overflow-hidden rounded-full bg-foreground/10">
+        <span className={`block h-full ${deck.card_count === 100 ? "bg-green-400" : "bg-gold"}`} style={{ width: `${Math.min(100, deck.card_count)}%` }} />
+      </span>
+
       {drop.status && (
         <p
           aria-live="polite"
