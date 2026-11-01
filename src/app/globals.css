@@ -1,16 +1,47 @@
 @import "tailwindcss";
 
-/* The site has one look, dark, so card art stands out. Every dark: style always applies. */
-@custom-variant dark (&:where(html, html *));
+/* Two looks, chosen in Settings and set on <html> by the root layout. A section can force one with its own data-theme. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-:root {
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
   --background: #0c0d12;
   --foreground: #f3efe6;
   --panel: #161821;
   --panel-raised: #20232f;
   --gold: #e8b54d;
+  --gold-hover: #f4cb74;
   --gold-ink: #1d1505;
+  --glow: #1c2030;
+  --art-shadow: #000;
+  --role-protection: #e9e4d4;
+  /* The playtest table stays dark on a light page: put the bright shades back (see the light block). */
+  --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-green-300: oklch(87.1% 0.15 154.449);
+  --color-green-400: oklch(79.2% 0.209 151.711);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --background: #f6f3ec;
+  --foreground: #1e1c18;
+  --panel: #fffdf8;
+  --panel-raised: #ece7dc;
+  --gold: #8a5d00;
+  --gold-hover: #734d00;
+  --gold-ink: #fffaf0;
+  --glow: #fffdf8;
+  --art-shadow: #fff;
+  --role-protection: #6f6a5c;
+  /* Much of the site writes status text in these bright shades, which fade out on a pale page. Same names, deeper ink. */
+  --color-red-400: #b91c1c;
+  --color-amber-300: #a16207;
+  --color-amber-400: #a16207;
+  --color-green-300: #15803d;
+  --color-green-400: #15803d;
 }
 
 @theme inline {
@@ -25,7 +56,7 @@
 }
 
 body {
-  background: radial-gradient(1100px 520px at 50% -160px, #1c2030, transparent), var(--background);
+  background: radial-gradient(1100px 520px at 50% -160px, var(--glow), transparent), var(--background);
   background-repeat: no-repeat;
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -109,8 +140,8 @@ input[type="radio"] {
     box-shadow: 0 6px 22px -10px var(--gold);
   }
   .btn-gold:hover:not(:disabled) {
-    border-color: #f4cb74;
-    background: #f4cb74;
+    border-color: var(--gold-hover);
+    background: var(--gold-hover);
   }
   .btn-gold[aria-pressed="true"] {
     color: var(--gold-ink);

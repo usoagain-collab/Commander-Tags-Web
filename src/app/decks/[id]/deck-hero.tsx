@@ -79,8 +79,8 @@ export function DeckHero({
               ← My decks
             </Link>
           )}
-          <h1 className="display text-3xl leading-tight [text-shadow:0_2px_16px_#000] lg:text-5xl">{name}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 [text-shadow:0_1px_8px_#000]">
+          <h1 className="display text-3xl leading-tight [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-5xl">{name}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 [text-shadow:0_1px_8px_var(--art-shadow)]">
             {pips.length > 0 && (
               <span className="inline-flex gap-1">
                 {pips.map((c) => (
@@ -102,7 +102,7 @@ export function DeckHero({
             {status}
           </div>
           {themes.length > 0 && (
-            <p className="mt-2 hidden text-sm [text-shadow:0_1px_8px_#000] sm:block">
+            <p className="mt-2 hidden text-sm [text-shadow:0_1px_8px_var(--art-shadow)] sm:block">
               <span className="opacity-75">Plays: </span>
               {themes.join(" · ")}
             </p>

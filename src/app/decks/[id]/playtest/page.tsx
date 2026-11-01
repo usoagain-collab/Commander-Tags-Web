@@ -31,5 +31,10 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
       return c ? [{ oracleId: c.oracle_id, name: c.name, image: r.printing ? printingImage(r.printing.id) : c.image_normal, typeLine: c.type_line, quantity: r.quantity, commander: r.board === "commander" }] : [];
     });
 
-  return <PlaytestTable deck={{ id: deck.id, name: deck.name }} cards={cards} tokens={mergeTokens(loaded.tokens)} canFlag={deck.owner_id === user?.id} />;
+  // A game table: dark in both looks, so the felt and the cards keep their contrast.
+  return (
+    <div data-theme="dark" className="h-full bg-background text-foreground">
+      <PlaytestTable deck={{ id: deck.id, name: deck.name }} cards={cards} tokens={mergeTokens(loaded.tokens)} canFlag={deck.owner_id === user?.id} />
+    </div>
+  );
 }
