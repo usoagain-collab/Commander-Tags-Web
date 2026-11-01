@@ -1006,7 +1006,7 @@ function CardMenu({
   return (
     <>
       <div
-        className="fixed inset-0 z-40"
+        className="fixed inset-0 z-[46]"
         onClick={onClose}
         onContextMenu={(e) => {
           e.preventDefault();
