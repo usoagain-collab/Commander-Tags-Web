@@ -244,10 +244,10 @@ export function readSaved(raw: string | null, deckKey: string): GameState | null
   }
 }
 
-/** Identifies a deck list (which cards, how many), so a saved game is only reused for the same list. */
+/** Identifies a deck list (which cards, how many, which art), so a saved game is only reused for the same list. */
 export const deckKey = (deck: DeckCard[]) =>
   deck
-    .map((c) => `${c.commander ? "C" : ""}${c.quantity}x${c.oracleId}`)
+    .map((c) => `${c.commander ? "C" : ""}${c.quantity}x${c.oracleId}@${c.image ?? ""}`)
     .sort()
     .join(",");
 

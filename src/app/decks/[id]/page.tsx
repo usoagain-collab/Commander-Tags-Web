@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { entryKey, type Board, type Categories, type Entries } from "@/lib/deck/model";
+import { entryKey, type Board, type Categories, type Entries, type Printings } from "@/lib/deck/model";
+import { printingImage } from "@/lib/deck/printing";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets } from "@/lib/tags/role-settings";
 import { readSuggestSettings } from "@/lib/suggest/score";
@@ -15,10 +16,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   // What a pasted link shows in Discord and elsewhere. Only someone allowed to open the deck gets this far.
   const commanderIds = new Set(rows.filter((r) => r.board === "commander").map((r) => r.oracle_id));
   const commanders = cards.filter((c) => commanderIds.has(c.oracle_id));
+  const commanderRow = rows.find((r) => r.board === "commander" && r.printing);
   const size = rows.filter((r) => r.board === "commander" || r.board === "main").reduce((n, r) => n + r.quantity, 0);
   const title = `${deck.name} · Commander Tags`;
   const description = [commanders.map((c) => c.name).join(" & ") || "Commander deck", `${size} cards`, `Bracket ${deck.target_bracket ?? 3}`].join(" · ");
-  const art = commanders.find((c) => c.image_art_crop)?.image_art_crop;
+  const art = commanderRow?.printing ? printingImage(commanderRow.printing.id, "art_crop") : commanders.find((c) => c.image_art_crop)?.image_art_crop;
   return {
     title,
     description,
@@ -42,9 +44,11 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   const entries: Entries = {};
   const categories: Categories = {};
+  const printings: Printings = {};
   for (const r of rows) {
     entries[entryKey(r.board as Board, r.oracle_id)] = r.quantity;
     if (r.category) categories[entryKey(r.board as Board, r.oracle_id)] = r.category;
+    if (r.printing) printings[entryKey(r.board as Board, r.oracle_id)] = r.printing;
   }
   const cards = Object.fromEntries(summaries.map((c) => [c.oracle_id, c]));
   const owner = deck.owner_id === user?.id;
@@ -54,6 +58,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       deck={{ id: deck.id, name: deck.name, visibility: deck.visibility }}
       initialEntries={entries}
       initialCategories={categories}
+      initialPrintings={printings}
       initialCards={cards}
       initialTags={initialTags}
       initialCombos={initialCombos}

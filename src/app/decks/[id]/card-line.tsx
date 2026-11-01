@@ -51,6 +51,11 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
       >
         {/* The name keeps at least ~45% of the row; badges shorten instead (full text in their tooltips). */}
         <span className="min-w-[45%] truncate">{card.name}</span>
+        {line.printing?.foil && (
+          <span title="Foil" className="shrink-0 rounded bg-gold/15 px-1.5 py-0.5 text-xs text-gold">
+            ✦<span className="hidden sm:inline"> Foil</span>
+          </span>
+        )}
         {warnings.length > 0 && (
           <span
             title={warnings.join(" · ")}

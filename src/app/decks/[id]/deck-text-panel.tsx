@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { BOARD_LABELS, BOARDS, type CardSummary, type Change, type Entries } from "@/lib/deck/model";
+import { BOARD_LABELS, BOARDS, type CardSummary, type Change, type Entries, type Printings } from "@/lib/deck/model";
+import { foilFor } from "@/lib/deck/printing";
+import { fetchPrintingsByRef, printingRef } from "@/lib/scryfall/printings";
 import {
   EXPORT_FORMATS,
   EXPORT_NOTES,
@@ -16,6 +18,7 @@ import {
 
 type ImportProps = {
   entries: Entries;
+  printings: Printings;
   onApply: (change: Change, cards: CardSummary[]) => void;
   onClose: () => void;
 };
@@ -25,9 +28,10 @@ type Preview = {
   report: ImportReport;
   ignored: IgnoredLine[];
   cards: CardSummary[];
+  printingsFailed: boolean;
 };
 
-export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
+export function ImportPanel({ entries, printings, onApply, onClose }: ImportProps) {
   const supabase = useMemo(() => createClient(), []);
   const deckHasCards = Object.keys(entries).length > 0;
   const [text, setText] = useState("");
@@ -42,15 +46,26 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
     const { lines, ignored } = parseDeckText(text);
     const names = [...new Set(lines.map((l) => l.name))];
     const { data, error } = await supabase.rpc("resolve_card_names", { names });
-    setBusy(false);
     if (error) {
+      setBusy(false);
       setError(`Couldn't look up the cards: ${error.message}`);
       return;
     }
+    // Printings named in the list. If Scryfall can't answer, the cards still import with their default printing.
+    const named = lines.flatMap((l) => (l.set && l.number ? [{ set: l.set, number: l.number }] : []));
+    const prints = named.length ? await fetchPrintingsByRef(named).catch(() => null) : new Map();
+    setBusy(false);
     const found: Record<string, CardSummary> = {};
     for (const { input, card } of (data ?? []) as { input: string; card: CardSummary }[]) found[input.toLowerCase()] = card;
-    const { change, report } = planImport(entries, lines, found, mode);
-    setPreview({ change, report, ignored, cards: Object.values(found) });
+    const { change, report } = planImport(entries, lines, found, mode, {
+      current: printings,
+      printingOf: (l, card) => {
+        const hit = l.set && l.number ? prints?.get(printingRef(l.set, l.number)) : undefined;
+        if (!hit || hit.oracleId !== card.oracle_id) return null;
+        return { ...hit.printing, foil: foilFor(hit.printing.finishes, !!l.foil) };
+      },
+    });
+    setPreview({ change, report, ignored, cards: Object.values(found), printingsFailed: named.length > 0 && !prints });
   }
 
   const total = preview ? Object.values(preview.report.counts).reduce((a, b) => a + b, 0) : 0;
@@ -95,6 +110,7 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
               .map((b) => `${BOARD_LABELS[b]} ${preview.report.counts[b]}`)
               .join(" · ") || "nothing"}
           </p>
+          {preview.printingsFailed && <p className="mt-1 opacity-70">Scryfall didn&apos;t answer, so set codes are ignored: cards use their default printing.</p>}
           {preview.report.commanderFromLayout && (
             <p className="mt-1 opacity-70">The card(s) after the last blank line were read as your commander.</p>
           )}
@@ -143,10 +159,10 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
         ) : (
           <button
             onClick={() => onApply(preview.change, preview.cards)}
-            disabled={preview.change.rows.length === 0}
+            disabled={preview.change.rows.length === 0 && !preview.change.printings?.length}
             className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink disabled:opacity-50"
           >
-            {preview.change.rows.length === 0 ? "Nothing to change" : mode === "replace" ? "Replace deck" : "Add cards"}
+            {preview.change.rows.length === 0 && !preview.change.printings?.length ? "Nothing to change" : mode === "replace" ? "Replace deck" : "Add cards"}
           </button>
         )}
         <button onClick={onClose} className="text-sm opacity-70">
@@ -160,14 +176,15 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
 type ExportProps = {
   deckName: string;
   entries: Entries;
+  printings: Printings;
   cards: Record<string, CardSummary>;
   onClose: () => void;
 };
 
-export function ExportPanel({ deckName, entries, cards, onClose }: ExportProps) {
+export function ExportPanel({ deckName, entries, printings, cards, onClose }: ExportProps) {
   const [format, setFormat] = useState<ExportFormat>("moxfield");
   const [copied, setCopied] = useState(false);
-  const text = useMemo(() => exportDeck(entries, cards, format), [entries, cards, format]);
+  const text = useMemo(() => exportDeck(entries, cards, format, printings), [entries, cards, format, printings]);
 
   async function copy() {
     await navigator.clipboard.writeText(text);

@@ -28,7 +28,8 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 6. Playtester | Done (merged Oct 24, 2026): 6a table, 6b library tools + counters, 6c tokens, 6d flags + shortcuts + hand stats |
 | 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026); Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` set up and checked live. Left: the friend test itself |
 | Design pass | Done (merged Oct 31, 2026): three judge-panel rounds. Final scores UI 14, UX 15, Visual 15, Readability 14, Fun 15, Bugs 17 (baseline 13, 12, 8, 13, 9, 15) |
-| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down, playtester on phones) |
+| Printings + foil | Built Oct 31, 2026 (from the v2 backlog, at David's request). See "Printings and foil" below |
+| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (pricing details, mixed copies of one card, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down, playtester on phones) |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
 
@@ -116,6 +117,18 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Rules changed for the bugs score:** a card that can't be a commander is refused, and so is a third commander. The nightly import stores each card's cheapest USD printing, read from `default_cards`, which Scryfall lists only as gzipped JSONL. If that read fails, the import logs it and keeps oracle_cards prices, so check `cards priced` in the log.
 - **Judge panel tips:** run judges one at a time (they share one browser pane), and give each a scratch deck in the test account.
 
+## Printings and foil (built Oct 31, 2026)
+
+- **David's choices:** option A, stored on the row: `deck_cards.printing_id`, `foil` (needs a printing), `printing_info` jsonb (set, set_name, number, illustration_id, finishes, usd, usd_foil, usd_etched; migration 0025). **Price = the real price of the choice**, foil price when foil, etched counts as foil. Cards with no choice stay at their cheapest printing. A printing with no price falls back to the cheapest, marked "(est.)" in the card sheet.
+- **One value everywhere:** SQL rows, snapshots and saves all carry `printing` = printing_info + id + foil, or null. `deck_bundle` and `shared_deck` return it; `deck_versions.cards` has it as a fifth array item (older versions have four, meaning default).
+- **Logic:** `src/lib/deck/printing.ts` (images from the printing id on the CDN, `foilFor`, `printingPrice`). In `model.ts`: `Change.printings`, `planPrinting`, `applyPrintings`, `keepPrintings` (like `keepCategories`: moves and undo keep the choice). `linesFor(..., printings)` returns `card` already showing the chosen image, art and price, so views, hero, sort and stats need no changes of their own; pass printings to `totalPrice` and `exportDeck` too.
+- **Fetching:** `src/lib/scryfall/printings.ts`, live from the browser (`unique=prints`, paper only, newest first, 175 a page). All printings are not stored: about 110k rows wouldn't fit the free database.
+- **UI:** "Printing & foil…" in the card sheet opens `printing-picker.tsx`. Turning foil on with no choice pins the printing the card is showing. A foil-only printing forces foil on; one with no foil forces it off. Foil shows as `.foil-sheen` on images (no pointer events) and a label on text rows.
+- **Art tags** follow the chosen illustration through `useChosenArtTags` and SQL `art_tags_for_illustrations`; a card on two boards uses its deck printing over its maybeboard one.
+- **Import/export:** Moxfield, Archidekt and plain lists write `(SET) number *F*` (or `*E*`), and import reads them through Scryfall's `/cards/collection`, ignoring a code that names a different card. Arena and MTGO stay names only. Dragging a printing from Scryfall stores it when that adds the row.
+- **Nightly:** the import reprices chosen printings while it reads `default_cards`, in its own short transaction with `deck_cards_touch` disabled, so decks don't all look edited. Disabling the trigger locks `deck_cards` until commit, so keep it out of the long tag transaction.
+- **Known limit:** one printing per card per board, so 10 Forests share one art and foil state (v2 backlog: mixed copies). Add to another deck doesn't carry the printing.
+
 ## Stack (decided)
 
 - **Next.js + TypeScript**, hosted on **Vercel** (free tier).
@@ -133,7 +146,7 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **RLS**: owners have full access to their own profile, decks and deck cards; anyone can read `public` decks. **Unlisted decks have no open read policy** (it would let anyone list them all); share links (Phase 7) go through a server route that fetches one deck by id.
 - **Card search**: the browser calls Scryfall's search API directly (full syntax), then joins results to our DB by `oracle_id` for tags. Quick add and `otag:` autocomplete use our own DB.
 - **Sign-in**: Discord first (working locally), Google next. A profile row is created automatically on first sign-in.
-- **Printing picker deferred**: `deck_cards.printing_id` exists (null = default). Slim the `cards` rows before loading all printings.
+- **Printing picker deferred** (built Oct 31, 2026; see "Printings and foil").
 - **Editor (2b)**: pure deck logic in `src/lib/deck/model.ts` (tested in `model.test.ts`, run `npm test`). Every edit is a `Change` of row counts (from → to), so undo/redo is exact and autosave sends the same rows. Autosave (`use-autosave.ts`) queues edits in order through the `apply_deck_changes` SQL function (one transaction per edit, RLS applies); a failed save stops the queue and shows Retry.
 - **Copy limits** come from the `card_summaries` view (`max_copies`: basics and "any number" 99, Seven Dwarves 7, Nazgûl 9, else 1). Commander/companion boards hold 1. Quick add uses `search_cards()` (trigram index, Commander-legal only).
 - Card images and mana symbols load from Scryfall's CDN with plain `<img>` (ESLint's no-img-element is off on purpose).

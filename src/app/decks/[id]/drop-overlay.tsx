@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BOARD_LABELS, type Board, type CardSummary } from "@/lib/deck/model";
+import type { ChosenPrinting } from "@/lib/deck/printing";
 import { looksDroppable, readDrop } from "@/lib/drop/scryfall-drop";
 import { resolveDrop } from "@/lib/drop/resolve";
 
 type Props = {
-  onCard: (card: CardSummary, board: Board) => void;
+  onCard: (card: CardSummary, board: Board, printing?: ChosenPrinting) => void;
   onMessage: (msg: string) => void;
 };
 
@@ -37,7 +38,7 @@ export function DropOverlay({ onCard, onMessage }: Props) {
     setBusy(true);
     const result = await resolveDrop(ref, supabase);
     setBusy(false);
-    if (result.ok) onCard(result.card, board);
+    if (result.ok) onCard(result.card, board, result.printing);
     else onMessage(result.reason);
   }
   // The window listeners below are added once; this ref lets them call the latest handle(), which sees

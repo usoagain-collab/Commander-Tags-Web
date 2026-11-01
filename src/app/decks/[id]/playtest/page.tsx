@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import type { DeckCard } from "@/lib/playtest/game";
+import { printingImage } from "@/lib/deck/printing";
 import { mergeTokens } from "@/lib/deck/token-merge";
 import { loadDeck, UUID } from "../load-deck";
 import { PlaytestTable } from "./playtest-table";
@@ -27,7 +28,7 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
     .filter((r) => r.board === "commander" || r.board === "main")
     .flatMap((r) => {
       const c = byId.get(r.oracle_id);
-      return c ? [{ oracleId: c.oracle_id, name: c.name, image: c.image_normal, typeLine: c.type_line, quantity: r.quantity, commander: r.board === "commander" }] : [];
+      return c ? [{ oracleId: c.oracle_id, name: c.name, image: r.printing ? printingImage(r.printing.id) : c.image_normal, typeLine: c.type_line, quantity: r.quantity, commander: r.board === "commander" }] : [];
     });
 
   return <PlaytestTable deck={{ id: deck.id, name: deck.name }} cards={cards} tokens={mergeTokens(loaded.tokens)} canFlag={deck.owner_id === user?.id} />;

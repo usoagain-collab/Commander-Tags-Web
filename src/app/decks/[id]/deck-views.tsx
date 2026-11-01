@@ -296,7 +296,7 @@ function Tile({
         item.selected ? "ring-4 ring-blue-500" : item.highlighted ? "ring-4 ring-gold" : ""
       }`}
     >
-      <CardImage name={card.name} src={card.image_normal} />
+      <CardImage name={card.name} src={card.image_normal} foil={item.line.printing?.foil} />
       <TileBadges item={item} quantity={quantity} />
       <SelectedMark selected={item.selected} />
       {/* Under the image, not on it: the whole tile stays the one tap target. */}
@@ -321,7 +321,7 @@ function Stack({ section, onOpen, onHover, onCardDrop }: { section: ViewSection 
             aria-pressed={it.selected}
             className={`relative block w-full rounded-[5%/3.6%] ${it.selected ? "ring-4 ring-blue-500" : it.highlighted ? "ring-4 ring-amber-400" : ""}`}
           >
-            <CardImage name={it.line.card.name} src={it.line.card.image_normal} />
+            <CardImage name={it.line.card.name} src={it.line.card.image_normal} foil={it.line.printing?.foil} />
             <TileBadges item={it} quantity={it.line.quantity} />
             <SelectedMark selected={it.selected} />
           </button>
@@ -346,9 +346,11 @@ function SelectedMark({ selected }: { selected?: boolean }) {
   );
 }
 
-function CardImage({ name, src }: { name: string; src: string | null }) {
+function CardImage({ name, src, foil }: { name: string; src: string | null; foil?: boolean }) {
   return src ? (
-    <img src={src} alt={name} loading="lazy" draggable={false} width={244} height={340} className="block w-full rounded-[4.75%/3.5%] shadow" />
+    <span className={`relative block ${foil ? "foil-sheen" : ""}`}>
+      <img src={src} alt={foil ? `${name} (foil)` : name} loading="lazy" draggable={false} width={244} height={340} className="block w-full rounded-[4.75%/3.5%] shadow" />
+    </span>
   ) : (
     <span className="flex aspect-[63/88] items-center justify-center rounded-lg border border-foreground/20 bg-foreground/5 p-2 text-center text-xs">
       {name}

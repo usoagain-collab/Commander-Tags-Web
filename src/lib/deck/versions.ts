@@ -1,32 +1,37 @@
 // Version history (step 3h): reading saved versions, comparing two deck states, and restoring one.
 // Versions are full snapshots (deck_versions.cards, migration 0010), so any two compare directly.
-import { BOARDS, entryKey, parseKey, type Board, type Categories, type Change, type Entries, type Plan } from "./model";
+import { BOARDS, entryKey, parseKey, type Board, type Categories, type Change, type Entries, type Plan, type Printings } from "./model";
+import type { ChosenPrinting } from "./printing";
 
 export type VersionMeta = { id: string; created_at: string; kind: "auto" | "manual"; name: string | null; card_count: number };
-export type DeckState = { entries: Entries; categories: Categories };
+export type DeckState = { entries: Entries; categories: Categories; printings?: Printings };
 
-/** deck_versions.cards ([[oracle_id, board, quantity, category], ...]) as entries and categories. */
+/** deck_versions.cards ([[oracle_id, board, quantity, category, printing], ...]). Older versions have no printing item. */
 export function readSnapshot(raw: unknown): DeckState {
   const entries: Entries = {};
   const categories: Categories = {};
+  const printings: Printings = {};
   for (const r of Array.isArray(raw) ? raw : []) {
     if (!Array.isArray(r)) continue;
-    const [id, board, quantity, category] = r as [unknown, unknown, unknown, unknown];
+    const [id, board, quantity, category, printing] = r as [unknown, unknown, unknown, unknown, unknown];
     if (typeof id !== "string" || !BOARDS.includes(board as Board) || typeof quantity !== "number" || quantity <= 0) continue;
     const k = entryKey(board as Board, id);
     entries[k] = quantity;
     if (typeof category === "string" && category) categories[k] = category;
+    if (printing && typeof (printing as ChosenPrinting).id === "string") printings[k] = printing as ChosenPrinting;
   }
-  return { entries, categories };
+  return { entries, categories, printings };
 }
 
 export type DiffLine = { oracle_id: string; board: Board; from: number; to: number };
-export type DeckDiff = { added: DiffLine[]; removed: DiffLine[]; changed: DiffLine[]; categorized: number };
+export type DeckDiff = { added: DiffLine[]; removed: DiffLine[]; changed: DiffLine[]; categorized: number; reprinted: number };
+
+const printingKey = (p: ChosenPrinting | null | undefined) => (p ? `${p.id}${p.foil ? "*" : ""}` : "");
 
 /** What changed going from `before` to `after`, per board. Copies added or removed count as "changed". */
 export function diffDecks(before: DeckState, after: DeckState): DeckDiff {
   const keys = new Set([...Object.keys(before.entries), ...Object.keys(after.entries)]);
-  const diff: DeckDiff = { added: [], removed: [], changed: [], categorized: 0 };
+  const diff: DeckDiff = { added: [], removed: [], changed: [], categorized: 0, reprinted: 0 };
   for (const k of keys) {
     const from = before.entries[k] ?? 0;
     const to = after.entries[k] ?? 0;
@@ -36,6 +41,7 @@ export function diffDecks(before: DeckState, after: DeckState): DeckDiff {
     else if (from > 0 && to === 0) diff.removed.push(line);
     else if (from !== to) diff.changed.push(line);
     else if ((before.categories[k] ?? null) !== (after.categories[k] ?? null)) diff.categorized++;
+    if (from > 0 && to > 0 && printingKey(before.printings?.[k]) !== printingKey(after.printings?.[k])) diff.reprinted++;
   }
   return diff;
 }
@@ -66,8 +72,15 @@ export function planRestore(current: DeckState, target: DeckState, label: string
     const to = target.entries[k] ? (target.categories[k] ?? null) : null;
     if (from !== to) categories.push({ ...parseKey(k), from, to });
   }
-  if (!rows.length && !categories.length) return { ok: false, reason: "The deck already matches that version." };
-  return { ok: true, change: { label, rows, categories, snapshot } };
+  const printKeys = new Set([...Object.keys(current.printings ?? {}), ...Object.keys(target.printings ?? {})]);
+  const printings: NonNullable<Change["printings"]> = [];
+  for (const k of printKeys) {
+    const from = current.printings?.[k] ?? null;
+    const to = target.entries[k] ? (target.printings?.[k] ?? null) : null;
+    if (printingKey(from) !== printingKey(to)) printings.push({ ...parseKey(k), from, to });
+  }
+  if (!rows.length && !categories.length && !printings.length) return { ok: false, reason: "The deck already matches that version." };
+  return { ok: true, change: { label, rows, categories, printings, snapshot } };
 }
 
 /** "Oct 19, 2026, 8:15 PM" in the viewer's own time zone. */

@@ -6,6 +6,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import type { CardSummary } from "@/lib/deck/model";
+import type { ChosenPrinting } from "@/lib/deck/printing";
 import type { DeckToken } from "@/lib/deck/token-merge";
 import type { InitialTags } from "@/lib/tags/use-tag-data";
 import type { ComboRow } from "@/lib/brackets/evaluate";
@@ -23,7 +24,7 @@ export type DeckRow = {
   target_bracket: number | null;
   playtest_flags?: Record<string, number> | null;
 };
-export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null };
+export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null };
 export type Profile = {
   tag_view?: Record<string, unknown> | null;
   default_role_targets?: unknown;

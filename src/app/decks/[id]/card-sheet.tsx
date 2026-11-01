@@ -9,6 +9,8 @@ import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagData } from "@/lib/tags/use-tag-data";
 import { CommanderLegality, LegalityAndRulings, RulesText, useCardDetails } from "./card-details";
 import { CardTags } from "./card-tags";
+import { printingImage, printingPrice, type ChosenPrinting } from "@/lib/deck/printing";
+import { PrintingPicker } from "./printing-picker";
 
 type Props = {
   deckId: string;
@@ -24,6 +26,7 @@ type Props = {
   onTag: (slug: string) => void;
   onMove: (to: Board) => void;
   onQuantity: (n: number) => void;
+  onPrinting: (to: ChosenPrinting | null) => void;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -41,14 +44,19 @@ type Props = {
  */
 export function CardSheet(props: Props) {
   const { line, index, total, warnings, readOnly, onClose, onPrev, onNext } = props;
-  const { card, board, quantity } = line;
+  const { card, board, quantity, printing } = line;
   const closeRef = useRef<HTMLButtonElement>(null);
-  const [panel, setPanel] = useState<"main" | "decks">("main");
+  const [panel, setPanel] = useState<"main" | "decks" | "printing">("main");
   const [copied, setCopied] = useState(false);
   const [face, setFace] = useState(0);
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
   const { details, error, retry } = useCardDetails(card.oracle_id);
-  const image = details?.flippable ? details.faces[face]?.image : card.image_normal;
+  // The faces in details are the default printing's; a chosen printing has its own back image on the CDN.
+  const image = !details?.flippable
+    ? card.image_normal
+    : printing
+      ? printingImage(printing.id, "normal", face ? "back" : "front")
+      : details.faces[face]?.image;
 
   // Keyboard: Esc closes, arrow keys step through the deck. Lock page scroll while open.
   useEffect(() => {
@@ -118,6 +126,7 @@ export function CardSheet(props: Props) {
           <div className="mx-auto w-full max-w-[300px] space-y-2">
             {image ? (
               <img
+                key={image /* a new element, so the old art doesn't linger while the new image loads */}
                 src={image}
                 alt={details?.flippable ? details.faces[face].name : card.name}
                 width={300}
@@ -149,7 +158,16 @@ export function CardSheet(props: Props) {
                 {quantity > 1 ? `${quantity} copies · ` : ""}
                 {BOARD_LABELS[board]}
                 {card.price_usd != null && <> · ${Number(card.price_usd).toFixed(2)} each</>}
+                {printing && printingPrice(printing) == null && card.price_usd != null && (
+                  <span title="Scryfall has no price for this printing, so this is the card's cheapest price"> (est.)</span>
+                )}
               </p>
+              {printing && (
+                <p className="mt-1 text-sm opacity-85">
+                  {printing.set_name} ({printing.set.toUpperCase()}) #{printing.number}
+                  {printing.foil && <span className="text-gold"> · ✦ Foil</span>}
+                </p>
+              )}
               <CommanderLegality details={details} />
               {!!props.flags && (
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
@@ -186,6 +204,7 @@ export function CardSheet(props: Props) {
                     </ActionButton>
                   </div>
                 )}
+                <ActionButton onClick={() => setPanel("printing")}>Printing &amp; foil…</ActionButton>
                 <ActionButton onClick={() => setPanel("decks")}>Add to another deck…</ActionButton>
                 <ActionButton onClick={copyName}>{copied ? "Copied" : "Copy card name"}</ActionButton>
                 <ActionButton onClick={() => props.onQuantity(0)} danger>
@@ -195,6 +214,10 @@ export function CardSheet(props: Props) {
             )}
             {!readOnly && panel === "decks" && (
               <OtherDecks deckId={props.deckId} line={line} onDone={() => setPanel("main")} />
+            )}
+
+            {!readOnly && panel === "printing" && (
+              <PrintingPicker card={card} printing={printing ?? null} onPick={props.onPrinting} onDone={() => setPanel("main")} />
             )}
 
             <RulesText details={details} error={error} onRetry={retry} />
