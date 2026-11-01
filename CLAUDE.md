@@ -27,6 +27,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 5. Bracket targeting | Done (merged Oct 22, 2026): 5a data + rules (nightly Spellbook combo import), 5b editor (target, estimate, alerts, badges), 5c suggestion filter |
 | 6. Playtester | Done (merged Oct 24, 2026): 6a table, 6b library tools + counters, 6c tokens, 6d flags + shortcuts + hand stats |
 | 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026); Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` set up and checked live. Left: the friend test itself |
+| Design pass | Done (merged Oct 31, 2026): three judge-panel rounds. Final scores UI 14, UX 15, Visual 15, Readability 14, Fun 15, Bugs 17 (baseline 13, 12, 8, 13, 9, 15) |
 | v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (printings, pricing details, foil, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down, playtester on phones) |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
@@ -106,6 +107,14 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **One Vercel project: `commandertagsweb`** (live at https://commandertagsweb.vercel.app). The older duplicate `commander-tags-web` was deleted Oct 24, 2026.
 - **Supabase Auth URL Configuration:** Site URL = `https://commandertagsweb.vercel.app`; Redirect URLs include `https://commandertagsweb.vercel.app/**`, `http://localhost:3000/**` and the preview pattern. If a sign-in lands on another address with `?code=` and the user is signed out, the redirect isn't on that list (Supabase falls back to the Site URL).
 - **Google OAuth** client (Google Cloud project "Commander Tags", published) with redirect URI `https://edsjqsnsobmryltrwsca.supabase.co/auth/v1/callback`. Google and Discord make separate accounts unless their emails match (linking is on the v2 backlog).
+
+## Visual design (judge-panel rounds, Oct 31, 2026)
+
+- **Look:** dark only (light mode removed; `dark:` styles always apply), near-black with one gold accent, Fraunces for titles, Inter for text. Tokens and the `.btn`, `.btn-gold`, `.panel`, `.eyebrow`, `.display` classes live in `globals.css`. Gold marks the one main action and selected states.
+- **Deck page:** `deck-hero.tsx` (commander art banner, pips, numbers, Suggest / Search / Playtest / Share / More; Import, Export, Stats, History sit under More). Roles have one color each (`roleColor` in `src/lib/tags/pretty.ts`), and every tag shown goes through `prettyTag`. Text view is one column so names are never cut. Search and Suggest are a left drawer from 1024 px up (`.drawer`; Esc closes). New users start in Visual grid; shared decks always open in it.
+- **Rewards:** added cards flash (`.fresh`), and reaching 100 cards with every role met through an edit in this visit runs a shimmer and message (never on page load).
+- **Rules changed for the bugs score:** a card that can't be a commander is refused, and so is a third commander. The nightly import stores each card's cheapest USD printing, read from `default_cards`, which Scryfall lists only as gzipped JSONL. If that read fails, the import logs it and keeps oracle_cards prices, so check `cards priced` in the log.
+- **Judge panel tips:** run judges one at a time (they share one browser pane), and give each a scratch deck in the test account.
 
 ## Stack (decided)
 
