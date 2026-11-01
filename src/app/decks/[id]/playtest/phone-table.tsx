@@ -23,6 +23,7 @@ import {
   type GameState,
   type Instance,
   type Zone,
+  pilesOf,
 } from "@/lib/playtest/game";
 
 type Update = (fn: (g: GameState) => GameState) => void;
@@ -255,22 +256,6 @@ function freeSpot(game: GameState, box: Box, width: number) {
     if (!taken) return spot;
   }
   return cellPosition(placed.length, box, width);
-}
-
-type Pile = { key: string; ids: string[]; tapped: boolean };
-
-/** Lands and tokens stack by name. Tapped ones form their own pile, so you can read your mana at a glance. */
-function pilesOf(game: GameState, ids: string[]): Pile[] {
-  const piles = new Map<string, Pile>();
-  for (const iid of ids) {
-    const p = game.battlefield[iid];
-    const key = `${game.cards[iid].name}|${p.tapped}|${JSON.stringify(p.counters ?? {})}`;
-    const pile = piles.get(key);
-    if (pile) pile.ids.push(iid);
-    else piles.set(key, { key, ids: [iid], tapped: p.tapped });
-  }
-  // Same-named piles stay together however the tapping went.
-  return [...piles.values()].sort((a, b) => game.cards[a.ids[0]].name.localeCompare(game.cards[b.ids[0]].name) || Number(a.tapped) - Number(b.tapped));
 }
 
 // ---------- the table ----------

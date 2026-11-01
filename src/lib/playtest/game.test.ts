@@ -7,6 +7,7 @@ import {
   topCards,
   bottomCount,
   commanderTax,
+  pilesOf,
   deckKey,
   draw,
   keep,
@@ -186,5 +187,29 @@ describe("tokens (6c)", () => {
     expect(g.zones.graveyard).not.toContain(t1);
     expect(g.zones.battlefield).toEqual([t2]);
     expect(Object.values(g.zones).reduce((n, z) => n + z.length, 0)).toBe(101); // 100 cards + 1 token
+  });
+});
+
+describe("pilesOf", () => {
+  const withForests = () => {
+    let g = keep(newGame(deck, 1));
+    const forests = [...g.zones.library, ...g.zones.hand].filter((iid) => g.cards[iid].name === "Forest").slice(0, 3);
+    for (const iid of forests) g = move(g, iid, "battlefield");
+    return { g, forests };
+  };
+
+  it("stacks untapped cards by name and splits off tapped ones, untapped first", () => {
+    const { g, forests } = withForests();
+    expect(pilesOf(g, forests).map((p) => [p.tapped, p.ids.length])).toEqual([[false, 3]]);
+    const tapped = toggleTap(g, forests[0]);
+    expect(pilesOf(tapped, forests).map((p) => [p.tapped, p.ids.length])).toEqual([
+      [false, 2],
+      [true, 1],
+    ]);
+  });
+
+  it("keeps a card with counters apart", () => {
+    const { g, forests } = withForests();
+    expect(pilesOf(addCounter(g, forests[0], "charge", 1), forests).map((p) => p.ids.length).sort()).toEqual([1, 2]);
   });
 });

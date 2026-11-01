@@ -21,6 +21,8 @@ import {
   type ScryChoice,
   bottomCount,
   commanderTax,
+  pilesOf,
+  type Pile,
   deckKey,
   draw,
   keep,
@@ -606,45 +608,38 @@ function Battlefield({
   const tokenIds = ids.filter((iid) => game.cards[iid].token);
   const others = ids.filter((iid) => !game.cards[iid].land && !game.cards[iid].token);
 
-  // Lands and tokens group by name in their rows, so 12 Forests or 8 Treasures take one stack each.
-  const groupByName = (list: string[]) => {
-    const groups: { name: string; ids: string[] }[] = [];
-    for (const iid of list) {
-      const name = game.cards[iid].name;
-      const g = groups.find((x) => x.name === name);
-      if (g) g.ids.push(iid);
-      else groups.push({ name, ids: [iid] });
-    }
-    return groups;
-  };
-  const landGroups = groupByName(lands);
-  const tokenGroups = groupByName(tokenIds);
-  const groupRow = (label: string, count: number, groups: { name: string; ids: string[] }[]) => (
-    <div className="flex min-h-[120px] items-end gap-3 overflow-x-auto border-t border-foreground/10 px-2 py-2">
+  // A click taps or untaps the next card in the pile, so there's nothing to aim at. The top card stays put as a pile
+  // shrinks (the depth behind it never changes the width), so repeated clicks keep landing on the same pile.
+  const pileRow = (label: string, count: number, piles: Pile[]) => (
+    <div className="flex min-h-[120px] items-end gap-2 overflow-x-auto border-t border-foreground/10 px-2 py-2">
       <span className="self-center text-xs font-semibold uppercase tracking-wide opacity-50">
         {label} {count}
       </span>
-      {groups.map((g) => (
-        <div key={g.name} className="relative flex shrink-0" title={`${g.ids.length} × ${g.name}`}>
-          {g.ids.map((iid, i) => (
-            <div key={iid} className="enter relative" style={{ marginLeft: i === 0 ? 0 : -58 }}>
+      {piles.map((pile) => {
+        const iid = pile.ids[0];
+        const inst = game.cards[iid];
+        return (
+          <div key={pile.key} className={`enter relative shrink-0 cursor-pointer pl-2 ${pile.tapped ? "mx-3" : ""}`} onClick={() => onTap(iid)}>
+            {pile.ids.slice(1, 3).map((behind, i) => (
+              <div key={behind} aria-hidden className={`pointer-events-none absolute top-0 w-[72px] ${pile.tapped ? "rotate-90" : ""}`} style={{ left: 4 - i * 4 }}>
+                {inst.image ? <img src={inst.image} alt="" className="w-full rounded-[4.75%/3.5%] shadow" /> : <div className="aspect-[63/88] rounded-lg border bg-foreground/5" />}
+              </div>
+            ))}
+            <div className="relative">
               <CardView
-                inst={game.cards[iid]}
+                inst={inst}
                 size={72}
-                tapped={game.battlefield[iid]?.tapped}
-                onClick={() => onTap(iid)}
+                tapped={pile.tapped}
                 onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
                 onPreview={onPreview}
-                title={`${game.cards[iid].name}: click to tap, right-click for counters and moves`}
+                title={`${pile.ids.length} × ${inst.name}: click to ${pile.tapped ? "untap" : "tap"} one, right-click for counters and moves`}
               />
               <CounterBadges counters={game.battlefield[iid]?.counters} />
             </div>
-          ))}
-          {g.ids.length > 1 && (
-            <span className="pointer-events-none absolute -top-2 right-0 rounded bg-black/80 px-1.5 text-xs font-semibold text-white">×{g.ids.length}</span>
-          )}
-        </div>
-      ))}
+            {pile.ids.length > 1 && <span className="pointer-events-none absolute -top-2 right-0 z-10 rounded bg-black/80 px-1.5 text-xs font-semibold text-white">×{pile.ids.length}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -680,9 +675,9 @@ function Battlefield({
           );
         })}
       </div>
-      {tokenIds.length > 0 && groupRow("Tokens", tokenIds.length, tokenGroups)}
+      {tokenIds.length > 0 && pileRow("Tokens", tokenIds.length, pilesOf(game, tokenIds))}
       {/* Lands row, grouped automatically. */}
-      {groupRow("Lands", lands.length, landGroups)}
+      {pileRow("Lands", lands.length, pilesOf(game, lands))}
     </DropTarget>
   );
 }
