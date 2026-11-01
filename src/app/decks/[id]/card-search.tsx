@@ -316,7 +316,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
             const card = id ? summaries[id] : undefined;
             const have = id ? inDeck(id) : 0;
             return (
-              <li key={sf.id} className="flex flex-col gap-1.5" onMouseEnter={() => card && onPreview(card)}>
+              <li key={sf.id} data-preview-card className="flex flex-col gap-1.5" onMouseEnter={() => card && onPreview(card)}>
                 <div className="relative">
                   {imageOf(sf) ? (
                     <img

@@ -228,7 +228,7 @@ function SuggestionCard({
 }) {
   const { card } = row;
   return (
-    <li className="relative flex flex-col gap-2" onMouseEnter={() => onPreview(card)}>
+    <li data-preview-card className="relative flex flex-col gap-2" onMouseEnter={() => onPreview(card)}>
       {best && <span className="absolute -left-1 top-3 z-10 rounded-r-md bg-gold px-2 py-0.5 text-xs font-bold text-gold-ink shadow-lg">Best match</span>}
       <button type="button" onClick={() => onPreview(card)} onFocus={() => onPreview(card)} title={`Show ${card.name} in the card panel`} className="card-lift block rounded-[4.75%/3.5%]">
         {card.image_normal ? (

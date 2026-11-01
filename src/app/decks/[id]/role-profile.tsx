@@ -211,7 +211,7 @@ export function RoleProfile(props: Props) {
   );
 }
 
-/** The collapsed left column: each role's count and bar, and the deck's top tags. Editing means expanding it. */
+/** The narrow left column: each role's count and bar, and the deck's top tags. Editing means expanding it. */
 export function RoleRail({
   roles,
   counts,
@@ -220,6 +220,7 @@ export function RoleRail({
   onHighlightRole,
   onHighlightTag,
   onExpand,
+  compact,
 }: {
   roles: ResolvedRole[];
   counts: Record<string, number>;
@@ -228,6 +229,8 @@ export function RoleRail({
   onHighlightRole: (key: string) => void;
   onHighlightTag: (value: string) => void;
   onExpand: () => void;
+  /** The narrowest size: only each role and its numbers. */
+  compact?: boolean;
 }) {
   return (
     <div className="space-y-4 text-[13px]">
@@ -244,23 +247,25 @@ export function RoleRail({
                 onClick={() => onHighlightRole(r.key)}
                 aria-pressed={highlight === `role:${r.key}`}
                 title={`Highlight the ${r.name} cards`}
-                className={`block min-h-10 w-full rounded px-1 py-0.5 text-left hover:bg-foreground/5 ${highlight === `role:${r.key}` ? "bg-amber-400/20" : ""}`}
+                className={`block ${compact ? "min-h-8" : "min-h-10"} w-full rounded px-1 py-0.5 text-left hover:bg-foreground/5 ${highlight === `role:${r.key}` ? "bg-amber-400/20" : ""}`}
               >
                 <span className="flex justify-between gap-1">
-                  <span className="truncate">{r.name}</span>
+                  <span className={compact ? "min-w-0" : "truncate"}>{r.name}</span>
                   <span className={`shrink-0 tabular-nums ${n < r.target ? "text-amber-400" : "text-green-400"}`}>
                     {n}/{r.target}
                   </span>
                 </span>
-                <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-foreground/10">
-                  <span className="block h-full" style={{ width: `${Math.min(100, r.target ? (n / r.target) * 100 : 100)}%`, background: roleColor(r.name) }} />
-                </span>
+                {!compact && (
+                  <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-foreground/10">
+                    <span className="block h-full" style={{ width: `${Math.min(100, r.target ? (n / r.target) * 100 : 100)}%`, background: roleColor(r.name) }} />
+                  </span>
+                )}
               </button>
             </li>
           );
         })}
       </ul>
-      {tags.length > 0 && (
+      {!compact && tags.length > 0 && (
         <div className="border-t border-foreground/10 pt-3">
           <h3 className="eyebrow mb-1">Top tags</h3>
           <ul>

@@ -310,6 +310,7 @@ function Tile({
   return (
     <button
       type="button"
+      data-preview-card
       {...drag}
       onClick={onOpen}
       onMouseEnter={onHover}
@@ -340,6 +341,7 @@ function Stack({ section, onOpen, onHover, onCardDrop }: { section: ViewSection 
         <li key={it.line.card.oracle_id} style={{ marginTop: i === 0 ? 0 : "-124%" }} className="relative">
           <button
             type="button"
+            data-preview-card
             onClick={(e) => onOpen(it.line, e)}
             onMouseEnter={() => onHover(it.line)}
             onFocus={() => onHover(it.line)}

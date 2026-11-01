@@ -24,6 +24,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
 
   return (
     <li
+      data-preview-card
       {...drag}
       onMouseEnter={onHover}
       className={`group flex items-center gap-2 rounded px-1.5 text-[15px] ${fresh ? "fresh" : ""} ${
