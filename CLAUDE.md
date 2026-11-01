@@ -123,6 +123,12 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Deck image (David, Nov 1, 2026):** "Use as deck image" in the card sheet saves `decks.cover_oracle_id` (migration 0026, directly, not Ctrl+Z). The hero and My decks tile use that card's art, following its chosen printing; a card no longer in the deck falls back to the commander. Shared viewers see it too.
 - **Judge panel tips:** run judges one at a time (they share one browser pane), and give each a scratch deck in the test account.
 
+## Playtester on desktop (David, Nov 1, 2026)
+
+- **The field gets the room.** The table covers the site header and footer (`fixed inset-0`), so the Scryfall credit sits in its top bar. Top bar: ← Deck, Turn, Next turn, **Actions ▾** (`TableMenu`: everything else, with its shortcut key), life. Side zone cards are 72 px, hand cards 90 px.
+- **Card preview floats** (`HoverPreview`): only while hovering, on the side away from the mouse, takes no clicks. No permanent commander portrait.
+- **Commander tax shows only in the Command zone**, as "Tax: N" (by name for partners), even while the commander is out of the zone.
+
 ## Playtester on phones (built Nov 1, 2026)
 
 - **David's rule:** never block a feature by screen size; let the user decide if it's too cramped. The playtester works everywhere.
