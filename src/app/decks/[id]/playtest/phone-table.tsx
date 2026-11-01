@@ -63,8 +63,8 @@ function useCardPress(onDrop: (iid: string, target: DropName, ghost: { x: number
   useEffect(() => () => stopCurrent.current?.(), []);
 
   const ghostAt = useCallback(
-    // Fully above the fingertip, so the card never hides what it's about to land on.
-    (x: number, y: number) => ({ x: x - ghostWidth / 2, y: y - ghostWidth * 1.4 - 24 }),
+    // Its bottom edge tucks just under the fingertip: it feels held, and the card still shows above the finger.
+    (x: number, y: number) => ({ x: x - ghostWidth / 2, y: y - ghostWidth * 1.4 + 8 }),
     [ghostWidth],
   );
   const place = useCallback(() => {
@@ -437,8 +437,8 @@ export function PhoneTable({
 
   const topBar = (
       <header className="relative flex h-12 shrink-0 items-center gap-1 border-b border-foreground/10 px-1">
-        <Link href={`/decks/${deck.id}`} aria-label={`Back to ${deck.name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-lg">
-          ←
+        <Link href={`/decks/${deck.id}`} aria-label={`Back to ${deck.name}`} className="btn h-10 shrink-0 gap-1 px-2.5 text-sm font-bold">
+          <span aria-hidden className="text-base leading-none">←</span> Deck
         </Link>
         <span className="text-sm font-semibold tabular-nums">Turn {game.turn}</span>
         <button type="button" onClick={() => setSheet("life")} aria-label={`Life ${game.life}. Change life`} className="mx-auto flex h-11 min-w-20 items-center justify-center gap-1.5 rounded-md px-2">
