@@ -85,7 +85,7 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
         </label>
       </fieldset>
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
       {preview && (
         <div className="mt-4 rounded-md border border-foreground/15 p-3 text-sm">

@@ -48,7 +48,7 @@ export function FeedbackButton() {
               className="w-full rounded-md border border-foreground/20 bg-background p-3 text-sm"
             />
             {status !== "idle" && status !== "sending" && (
-              <p className={`text-sm ${status === "sent" ? "text-green-700 dark:text-green-400" : "text-red-600"}`}>{status === "sent" ? "Thanks! Sent." : status}</p>
+              <p className={`text-sm ${status === "sent" ? "text-green-700 dark:text-green-400" : "text-red-400"}`}>{status === "sent" ? "Thanks! Sent." : status}</p>
             )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-lg border border-foreground/20 px-4 text-sm">

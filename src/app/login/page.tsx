@@ -20,7 +20,7 @@ export default async function LoginPage({
       <h1 className="text-2xl font-semibold">Sign in</h1>
       <p className="mt-2 mb-6 text-sm opacity-70">Your decks are saved to your account and follow you between devices.</p>
       {error && (
-        <p className="mb-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-600">
+        <p className="mb-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">
           Sign-in didn&apos;t complete. Please try again.
         </p>
       )}

@@ -1,24 +1,153 @@
 @import "tailwindcss";
 
+/* The site has one look, dark, so card art stands out. Every dark: style always applies. */
+@custom-variant dark (&:where(html, html *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --background: #0c0d12;
+  --foreground: #f3efe6;
+  --panel: #161821;
+  --panel-raised: #20232f;
+  --gold: #e8b54d;
+  --gold-ink: #1d1505;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(1100px 520px at 50% -160px, #1c2030, transparent), var(--background);
+  background-repeat: no-repeat;
   color: var(--foreground);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
+}
+
+button,
+summary,
+select,
+label:has(input[type="checkbox"]) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--gold);
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  }
+
+  .btn {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.6rem;
+    border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+    background: color-mix(in srgb, var(--panel-raised) 82%, transparent);
+    padding: 0 0.85rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    backdrop-filter: blur(6px);
+    transition:
+      transform 120ms,
+      background-color 120ms,
+      border-color 120ms;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+    background: var(--panel-raised);
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+  }
+  .btn[aria-pressed="true"] {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  .btn-gold {
+    border-color: var(--gold);
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-weight: 650;
+    box-shadow: 0 6px 22px -10px var(--gold);
+  }
+  .btn-gold:hover:not(:disabled) {
+    border-color: #f4cb74;
+    background: #f4cb74;
+  }
+  .btn-gold[aria-pressed="true"] {
+    color: var(--gold-ink);
+    box-shadow: inset 0 0 0 2px var(--gold-ink);
+  }
+
+  .panel {
+    border-radius: 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+    background: var(--panel);
+  }
+
+  .card-lift {
+    transition:
+      transform 140ms,
+      box-shadow 140ms;
+  }
+  .card-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 30px -14px #000;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+
+.toast {
+  animation: toast-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }

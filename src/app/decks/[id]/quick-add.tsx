@@ -10,10 +10,12 @@ export type QuickAddHandle = { focus: () => void };
 type Props = {
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary | null) => void;
+  /** Picking a commander: only cards that can lead a deck are offered, shown with their art. */
+  commanderOnly?: boolean;
 };
 
 /** Type a card name, pick with arrow keys. Enter = mainboard, Shift+Enter = maybeboard, Ctrl+Enter = commander. */
-export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ onAdd, onPreview }, ref) {
+export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ onAdd, onPreview, commanderOnly }, ref) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
@@ -33,14 +35,15 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     }
     const id = ++latest.current;
     const timer = setTimeout(async () => {
-      const { data } = await supabase.rpc("search_cards", { q, lim: 8 });
+      const { data } = await supabase.rpc("search_cards", { q, lim: commanderOnly ? 30 : 8 });
       if (id !== latest.current) return;
-      setResults((data ?? []) as CardSummary[]);
+      const found = (data ?? []) as CardSummary[];
+      setResults(commanderOnly ? found.filter((c) => c.can_be_commander).slice(0, 8) : found);
       setActive(0);
       setOpen(true);
     }, 120);
     return () => clearTimeout(timer);
-  }, [text, supabase]);
+  }, [text, supabase, commanderOnly]);
 
   useEffect(() => {
     onPreview(open ? (results[active] ?? null) : null);
@@ -65,7 +68,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       setActive((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const board: Board = e.ctrlKey || e.metaKey ? "commander" : e.shiftKey ? "maybe" : "main";
+      const board: Board = commanderOnly || e.ctrlKey || e.metaKey ? "commander" : e.shiftKey ? "maybe" : "main";
       choose(results[active], board);
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -81,22 +84,23 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         onKeyDown={onKeyDown}
         onFocus={() => results.length && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Add a card: type a name and press Enter"
-        aria-label="Add a card"
+        placeholder={commanderOnly ? "Type a commander's name" : "Add a card by name"}
+        aria-label={commanderOnly ? "Pick a commander" : "Add a card"}
         role="combobox"
         aria-expanded={open}
         aria-controls="quick-add-results"
-        className="w-full rounded-md border border-foreground/20 bg-transparent px-3 py-2"
+        className="min-h-12 w-full rounded-lg border border-foreground/25 bg-background/60 px-3 text-base"
       />
-      <p className="mt-1 hidden text-xs opacity-60 sm:block">
-        Enter adds to the mainboard · Shift+Enter to the maybeboard · Ctrl+Enter makes it your commander · press / to
-        come back here
-      </p>
+      {!commanderOnly && (
+        <p className="mt-1 hidden text-[13px] opacity-70 md:block" title="Press / to come back to this box">
+          Enter: main · Shift+Enter: maybe · Ctrl+Enter: commander
+        </p>
+      )}
       {open && results.length > 0 && (
         <ul
           id="quick-add-results"
           role="listbox"
-          className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-lg"
+          className="absolute z-30 mt-1 max-h-96 w-full overflow-auto rounded-lg border border-foreground/15 bg-panel-raised text-left shadow-2xl"
         >
           {results.map((card, i) => (
             <li
@@ -106,15 +110,16 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
               onMouseEnter={() => setActive(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
-                choose(card, "main");
+                choose(card, commanderOnly ? "commander" : "main");
               }}
-              className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-sm ${
+              className={`flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-sm ${
                 i === active ? "bg-foreground/10" : ""
               }`}
             >
-              <span className="min-w-0 truncate">
+              {card.image_art_crop && <img src={card.image_art_crop} alt="" loading="lazy" className="h-9 w-12 shrink-0 rounded object-cover" />}
+              <span className="min-w-0 flex-1 truncate">
                 {card.name}
-                <span className="ml-2 text-xs opacity-50">{card.type_line.split(" — ")[0]}</span>
+                <span className="ml-2 text-[13px] opacity-65">{card.type_line.split(" — ")[0]}</span>
               </span>
               <ManaCost cost={card.mana_cost} />
             </li>

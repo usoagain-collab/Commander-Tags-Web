@@ -371,7 +371,7 @@ function TagEditor({
           <button type="button" onClick={onDone} className="min-h-11 rounded-lg border border-foreground/20 px-3">
             Cancel
           </button>
-          <button type="button" onClick={() => setConfirming(true)} className="min-h-11 rounded-lg px-3 text-red-600">
+          <button type="button" onClick={() => setConfirming(true)} className="min-h-11 rounded-lg px-3 text-red-400">
             Delete…
           </button>
         </div>

@@ -71,7 +71,7 @@ export function useHiddenTags(initial: string[], userId: string | null) {
 
 export function DeckToolbar({ settings, onChange }: { settings: ViewSettings; onChange: (s: ViewSettings) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+    <div className="flex items-center gap-x-1.5 text-sm sm:gap-x-3">
       <Select label="View" value={settings.view} options={VIEW_LABELS} onChange={(v) => onChange({ ...settings, view: v as ViewMode })} />
       <Select label="Group" value={settings.group} options={GROUP_LABELS} onChange={(v) => onChange({ ...settings, group: v as GroupBy })} />
       <Select label="Sort" value={settings.sort} options={SORT_LABELS} onChange={(v) => onChange({ ...settings, sort: v as SortBy })} />
@@ -91,12 +91,13 @@ function Select({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="flex items-center gap-2">
-      <span className="opacity-70">{label}</span>
+    <label className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+      <span className="sr-only opacity-75 lg:not-sr-only">{label}</span>
       <select
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-9 rounded-md border border-foreground/20 bg-background px-2"
+        className="min-h-10 w-full min-w-0 rounded-lg border border-foreground/20 bg-background px-1.5 sm:px-2"
       >
         {Object.entries(options).map(([k, v]) => (
           <option key={k} value={k}>

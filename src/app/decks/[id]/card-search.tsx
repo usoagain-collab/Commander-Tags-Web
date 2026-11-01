@@ -298,7 +298,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           Scryfall: {w}
         </p>
       ))}
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       {total === 0 && !error && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
       {hideInDeck && hiddenCount > 0 && (
         <p className="mt-2 text-xs opacity-60">
@@ -420,7 +420,7 @@ function FetchNewCard({ scryfallId, onFetched }: { scryfallId: string; onFetched
       >
         {state === "busy" ? "Fetching…" : "New card: fetch + add"}
       </button>
-      {state !== "idle" && state !== "busy" && <p className="mt-1 text-red-600">{state}</p>}
+      {state !== "idle" && state !== "busy" && <p className="mt-1 text-red-400">{state}</p>}
     </div>
   );
 }

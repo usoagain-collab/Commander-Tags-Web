@@ -125,7 +125,7 @@ function QuickButton({
       title={label}
       aria-label={label}
       className={`h-7 min-w-7 rounded border border-foreground/15 px-1.5 text-xs hover:bg-foreground/10 ${
-        danger ? "text-red-600" : ""
+        danger ? "text-red-400" : ""
       }`}
     >
       {children}

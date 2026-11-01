@@ -77,7 +77,7 @@ describe("sorting", () => {
 
 describe("saved view settings", () => {
   it("falls back to defaults for missing or unknown values", () => {
-    expect(readViewSettings(null)).toEqual({ view: "text", group: "type", sort: "mv" });
+    expect(readViewSettings(null)).toEqual({ view: "grid", group: "type", sort: "mv" });
     expect(readViewSettings({ view: "grid", group: "bogus" })).toEqual({ view: "grid", group: "type", sort: "mv" });
   });
 });

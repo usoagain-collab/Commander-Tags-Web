@@ -139,7 +139,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
           {busy ? "Saving…" : "Save version"}
         </button>
       </form>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
 
       <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
         <ul className="max-h-[28rem] space-y-1 overflow-y-auto">
@@ -173,7 +173,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
                       {s.plus || s.minus ? (
                         <>
                           <span className="text-green-700 dark:text-green-400">+{s.plus}</span> /{" "}
-                          <span className="text-red-600">−{s.minus}</span> since
+                          <span className="text-red-400">−{s.minus}</span> since
                         </>
                       ) : (
                         "same as now"
@@ -258,7 +258,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
                     >
                       Restore this version…
                     </button>
-                    <button type="button" onClick={() => setConfirm("delete")} className="min-h-11 rounded-lg px-3 text-red-600">
+                    <button type="button" onClick={() => setConfirm("delete")} className="min-h-11 rounded-lg px-3 text-red-400">
                       Delete version…
                     </button>
                   </>
@@ -293,7 +293,7 @@ function DiffView({ diff, cards }: { diff: DeckDiff; cards: Record<string, CardS
         </DiffList>
       )}
       {diff.removed.length > 0 && (
-        <DiffList title={`Removed (${diff.removed.length})`} tone="text-red-600">
+        <DiffList title={`Removed (${diff.removed.length})`} tone="text-red-400">
           {[...diff.removed].sort(byName).map((l) => (
             <li key={`${l.board}|${l.oracle_id}`}>
               − {l.from} {name(l)}

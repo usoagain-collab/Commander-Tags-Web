@@ -12,7 +12,7 @@ export type ViewSettings = { view: ViewMode; group: GroupBy; sort: SortBy };
 export const VIEW_LABELS: Record<ViewMode, string> = { text: "Text", grid: "Visual grid", stacks: "Stacks" };
 export const GROUP_LABELS: Record<GroupBy, string> = { type: "Type", role: "Role", mv: "Mana value", color: "Color", mytags: "My tags" };
 export const SORT_LABELS: Record<SortBy, string> = { name: "Name", mv: "Mana value", price: "Price" };
-export const DEFAULT_VIEW: ViewSettings = { view: "text", group: "type", sort: "mv" };
+export const DEFAULT_VIEW: ViewSettings = { view: "grid", group: "type", sort: "mv" };
 
 /** Reads saved settings defensively (they come from the user's profile JSON). */
 export function readViewSettings(saved: unknown): ViewSettings {
