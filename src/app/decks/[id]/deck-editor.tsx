@@ -900,8 +900,8 @@ export function DeckEditor({
             )}
             <Link
               href={`/decks/${deck.id}/playtest`}
-              title="Goldfish this deck: shuffle, draw, mulligan and play (needs a tablet or computer)"
-              className="btn hidden md:inline-flex"
+              title="Goldfish this deck: shuffle, draw, mulligan and play"
+              className="btn"
             >
               ▶ Playtest
             </Link>

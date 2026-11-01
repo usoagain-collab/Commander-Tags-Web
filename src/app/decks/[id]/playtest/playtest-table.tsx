@@ -1,12 +1,14 @@
 "use client";
 
-// The playtest table (Phase 6a): solo goldfish, desktop/tablet only (David, Oct 22, 2026). All game logic lives in
-// src/lib/playtest/game.ts; this file draws it and turns drags, clicks and keys into those functions. The game is
-// kept in session storage, so a refresh doesn't lose it (this tab only; nothing goes to the database).
+// The playtest table (Phase 6a): solo goldfish on any screen. All game logic lives in src/lib/playtest/game.ts; this
+// file draws the wide-screen table and the shared dialogs, and turns drags, clicks and keys into those functions.
+// Narrow, short or touch screens get the layout in phone-table.tsx. The game is kept in session storage, so a refresh
+// doesn't lose it (this tab only; nothing goes to the database).
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { tokenImage, type DeckToken } from "@/lib/deck/tokens";
+import { CardSheet, PhoneTable } from "./phone-table";
 import {
   createToken,
   addCounter,
@@ -43,8 +45,28 @@ const storageKey = (deckId: string) => `playtest:${deckId}`;
 
 type Props = { deck: { id: string; name: string }; cards: DeckCard[]; tokens: DeckToken[]; canFlag: boolean };
 
+/** Reads a CSS media query, live. */
+function useMedia(query: string) {
+  return useSyncExternalStore(
+    (changed) => {
+      const list = window.matchMedia(query);
+      list.addEventListener("change", changed);
+      return () => list.removeEventListener("change", changed);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
+
 export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
   const key = deckKey(cards);
+  // A narrow window, a sideways phone, or any touch screen: mouse-style dragging doesn't suit these.
+  const compact = useMedia("(max-width: 767px), (max-height: 520px), (pointer: coarse)");
+  const tablet = useMedia("(min-width: 700px) and (min-height: 600px)");
+  const sideways = useMedia("(max-height: 520px) and (orientation: landscape)");
+  // The card seen big in the phone layout's card sheet.
+  const [inspect, setInspect] = useState<string | null>(null);
+  const freeSpot = useRef<((g: GameState) => { x: number; y: number }) | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   const [preview, setPreview] = useState<Instance | null>(null);
   const [viewing, setViewing] = useState<Zone | null>(null);
@@ -105,6 +127,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
         setMenu(null);
         setTool(null);
         setHelp(false);
+        setInspect(null);
       }
       if (e.key === "?") {
         setHelp((h) => !h);
@@ -150,17 +173,17 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
     );
   if (!game) return <p className="p-6 text-sm opacity-70">Shuffling…</p>;
   const card = (iid: string) => game.cards[iid];
-  const drop = (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => update((g) => move(g, iid, to, opts));
+  // A card played without a drop position takes the phone layout's next free spot when that layout is showing.
+  const drop = (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) =>
+    update((g) => move(g, iid, to, to === "battlefield" && !opts?.at && freeSpot.current ? { ...opts, at: freeSpot.current(g) } : opts));
+  const onInspect = compact ? setInspect : undefined;
 
   return (
     <>
-      <p className="p-6 text-sm md:hidden">
-        The playtester needs a bigger screen (a tablet or computer). Phone playtesting is planned for a later version.{" "}
-        <Link href={`/decks/${deck.id}`} className="underline">
-          Back to the deck
-        </Link>
-      </p>
-      <main className="hidden h-[calc(100vh-7rem)] min-h-[640px] flex-col gap-2 px-3 pb-2 md:flex">
+      {compact ? (
+        <PhoneTable game={game} deck={deck} update={update} onMove={drop} onNewGame={restart} onTool={setTool} onView={setViewing} onInspect={setInspect} freeSpotRef={freeSpot} scale={tablet ? 1.5 : 1} landscape={sideways} />
+      ) : (
+      <main className="flex h-[calc(100vh-7rem)] min-h-[640px] flex-col gap-2 px-3 pb-2">
         <TopBar game={game} deck={deck} update={update} onNewGame={restart} onTool={setTool} onHelp={() => setHelp(true)} />
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Side zones: scrolls on short screens rather than spilling into the hand. */}
@@ -184,19 +207,21 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
         </div>
         <Hand game={game} onDrop={(iid) => drop(iid, "hand")} onPreview={setPreview} onBottom={(iid) => update((g) => putOnBottom(g, iid))} onPlay={(iid) => drop(iid, "battlefield")} />
       </main>
+      )}
 
-      {game.stage === "mulligan" && <MulliganDialog game={game} update={update} card={card} />}
-      {viewing && <ZoneViewer zone={viewing} game={game} onClose={() => setViewing(null)} onMove={drop} onPreview={setPreview} />}
+      {game.stage === "mulligan" && <MulliganDialog game={game} update={update} card={card} onInspect={onInspect} />}
+      {viewing && <ZoneViewer zone={viewing} game={game} onClose={() => setViewing(null)} onMove={drop} onPreview={setPreview} onInspect={onInspect} />}
+      {inspect && compact && <CardSheet game={game} iid={inspect} update={update} onMove={drop} onFlag={flag} canFlag={canFlag} onClose={() => setInspect(null)} />}
       {menu && zoneOf(game, menu.iid) === "battlefield" && (
         <CardMenu game={game} at={menu} update={update} onMove={drop} onFlag={flag} onClose={() => setMenu(null)} />
       )}
-      {tool === "search" && <LibrarySearch game={game} update={update} onMove={drop} onPreview={setPreview} onClose={() => setTool(null)} />}
-      {tool === "scry" && <ScryDialog game={game} update={update} onClose={() => setTool(null)} />}
-      {tool === "mill" && <MillDialog game={game} update={update} onClose={() => setTool(null)} />}
-      {tool === "tokens" && <TokenPicker tokens={tokens} update={update} onClose={() => setTool(null)} />}
+      {tool === "search" && <LibrarySearch game={game} update={update} onMove={drop} onPreview={setPreview} onInspect={onInspect} onClose={() => setTool(null)} />}
+      {tool === "scry" && <ScryDialog compact={compact} game={game} update={update} onClose={() => setTool(null)} />}
+      {tool === "mill" && <MillDialog compact={compact} game={game} update={update} onClose={() => setTool(null)} />}
+      {tool === "tokens" && <TokenPicker compact={compact} tokens={tokens} update={update} onClose={() => setTool(null)} />}
       {help && <ShortcutSheet onClose={() => setHelp(false)} />}
       {toast && (
-        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-gold px-4 py-2 text-sm text-gold-ink shadow-lg">
+        <div role="status" className={`fixed left-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-gold px-4 py-2 text-sm text-gold-ink shadow-lg ${compact ? "top-14" : "bottom-6"}`}>
           {toast}
         </div>
       )}
@@ -687,10 +712,12 @@ function MulliganDialog({
   game,
   update,
   card,
+  onInspect,
 }: {
   game: GameState;
   update: (fn: (g: GameState) => GameState) => void;
   card: (iid: string) => Instance;
+  onInspect?: (iid: string) => void;
 }) {
   const cost = bottomCount(game.mulligans + 1, game.freeMulligan);
   const lands = game.zones.hand.filter((iid) => card(iid).land).length;
@@ -702,19 +729,20 @@ function MulliganDialog({
   }, [update]);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 ${onInspect ? "p-2" : "p-6"}`}
       role="dialog"
       aria-modal="true"
       aria-label="Opening hand"
-      onClick={() => update(keep)}
+      // On a phone a stray tap beside the cards shouldn't decide the hand: the buttons do that.
+      onClick={onInspect ? undefined : () => update(keep)}
     >
-      <div className="relative w-full max-w-5xl rounded-2xl bg-background p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className={`relative max-h-full w-full max-w-5xl overflow-y-auto rounded-2xl bg-background shadow-xl ${onInspect ? "p-3" : "p-5"}`} onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={() => update(keep)}
           title="Close and keep this hand"
           aria-label="Close and keep this hand"
-          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-md opacity-70 hover:bg-foreground/10 hover:opacity-100"
+          className={`absolute right-2 top-2 flex items-center justify-center rounded-md opacity-70 hover:bg-foreground/10 hover:opacity-100 ${onInspect ? "h-11 w-11" : "h-9 w-9"}`}
         >
           ✕
         </button>
@@ -722,18 +750,29 @@ function MulliganDialog({
           <h2 className="text-lg font-semibold">
             Opening hand{game.mulligans > 0 && ` (mulligan ${game.mulligans})`}: {lands} {lands === 1 ? "land" : "lands"}
           </h2>
-          <label className="flex items-center gap-2 text-sm">
+          <label className={`flex items-center gap-2 text-sm ${onInspect ? "min-h-11" : ""}`}>
             <input
               type="checkbox"
+              className={onInspect ? "h-5 w-5" : ""}
               checked={game.freeMulligan}
               onChange={(e) => update((g) => ({ ...g, freeMulligan: e.target.checked }))}
             />
             First mulligan is free (multiplayer rule)
           </label>
         </div>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <div className={onInspect ? "mt-3 grid grid-cols-4 gap-1.5" : "mt-4 flex flex-wrap justify-center gap-2"}>
           {game.zones.hand.map((iid) => {
             const c = card(iid);
+            if (onInspect)
+              return (
+                <button key={iid} type="button" onClick={() => onInspect(iid)} aria-label={`See ${c.name}`}>
+                  {c.image ? (
+                    <img src={c.image} alt="" draggable={false} className="w-full rounded-[4.75%/3.5%] shadow" />
+                  ) : (
+                    <span className="flex aspect-[63/88] w-full items-center justify-center rounded-lg border p-1 text-center text-[11px]">{c.name}</span>
+                  )}
+                </button>
+              );
             return c.image ? (
               <img key={iid} src={c.image} alt={c.name} className="w-[130px] rounded-[4.75%/3.5%] shadow" />
             ) : (
@@ -748,7 +787,7 @@ function MulliganDialog({
             {bottomCount(game.mulligans, game.freeMulligan) > 0
               ? `Keeping puts ${bottomCount(game.mulligans, game.freeMulligan)} on the bottom.`
               : "Keeping this hand costs nothing."}{" "}
-            Closing this keeps the hand.
+            Closing also keeps your hand.
           </p>
           <button
             type="button"
@@ -773,38 +812,43 @@ function ZoneViewer({
   onClose,
   onMove,
   onPreview,
+  onInspect,
 }: {
   zone: Zone;
   game: GameState;
   onClose: () => void;
   onMove: (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
   onPreview: (c: Instance | null) => void;
+  onInspect?: (iid: string) => void;
 }) {
   const ids = [...game.zones[zone]].reverse(); // newest first
   const title = zone === "graveyard" ? "Graveyard" : zone === "exile" ? "Exile" : zone;
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[55vh] overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur" role="dialog" aria-label={title}>
+    <div className={`fixed inset-x-0 bottom-0 z-50 overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur ${onInspect ? "max-h-[85dvh]" : "max-h-[55vh]"}`} role="dialog" aria-label={title}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-semibold">
           {title} ({ids.length})
         </h2>
-        <button type="button" onClick={onClose} className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
-          Close (Esc)
+        <button type="button" onClick={onClose} className="btn">
+          {onInspect ? "Close" : "Close (Esc)"}
         </button>
       </div>
       {ids.length === 0 ? (
         <p className="text-sm opacity-60">Empty.</p>
       ) : (
-        <ul className="flex flex-wrap gap-3">
+        <ul className={onInspect ? "grid grid-cols-3 gap-2" : "flex flex-wrap gap-3"}>
           {ids.map((iid) => (
-            <li key={iid} className="flex w-[120px] flex-col gap-1">
-              <CardView inst={game.cards[iid]} size={120} onPreview={onPreview} />
-              <div className="grid grid-cols-2 gap-1 text-[11px]">
-                <MiniButton onClick={() => onMove(iid, "hand")}>Hand</MiniButton>
-                <MiniButton onClick={() => onMove(iid, "battlefield")}>Play</MiniButton>
-                <MiniButton onClick={() => onMove(iid, "library", { library: "top" })}>Lib top</MiniButton>
-                <MiniButton onClick={() => onMove(iid, zone === "graveyard" ? "exile" : "graveyard")}>{zone === "graveyard" ? "Exile" : "Graveyard"}</MiniButton>
-              </div>
+            <li key={iid} className={`flex flex-col gap-1 ${onInspect ? "" : "w-[120px]"}`}>
+              <ListCard inst={game.cards[iid]} size={120} onPreview={onPreview} onInspect={onInspect} />
+              {/* Touch layouts: a tap on the card opens its sheet, with these same moves in bigger buttons. */}
+              {!onInspect && (
+                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                  <MiniButton onClick={() => onMove(iid, "hand")}>Hand</MiniButton>
+                  <MiniButton onClick={() => onMove(iid, "battlefield")}>Play</MiniButton>
+                  <MiniButton onClick={() => onMove(iid, "library", { library: "top" })}>Lib top</MiniButton>
+                  <MiniButton onClick={() => onMove(iid, zone === "graveyard" ? "exile" : "graveyard")}>{zone === "graveyard" ? "Exile" : "Graveyard"}</MiniButton>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -813,9 +857,23 @@ function ZoneViewer({
   );
 }
 
+/** A card in a zone list: draggable with a mouse; on touch layouts a tap shows it big. */
+function ListCard({ inst, size, onPreview, onInspect }: { inst: Instance; size: number; onPreview: (c: Instance | null) => void; onInspect?: (iid: string) => void }) {
+  if (!onInspect) return <CardView inst={inst} size={size} onPreview={onPreview} />;
+  return (
+    <button type="button" onClick={() => onInspect(inst.iid)} aria-label={`See ${inst.name}`} className="block w-full">
+      {inst.image ? (
+        <img src={inst.image} alt="" draggable={false} className="w-full rounded-[4.75%/3.5%] shadow" />
+      ) : (
+        <span className="flex aspect-[63/88] w-full items-center justify-center rounded-lg border bg-foreground/5 p-1 text-center text-[11px]">{inst.name}</span>
+      )}
+    </button>
+  );
+}
+
 function MiniButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="min-h-7 rounded border border-foreground/20 px-1 hover:bg-foreground/10">
+    <button type="button" onClick={onClick} className="min-h-7 rounded border border-foreground/20 px-1 hover:bg-foreground/10 [@media(pointer:coarse),(max-width:767px)]:min-h-11">
       {children}
     </button>
   );
@@ -1005,12 +1063,14 @@ function LibrarySearch({
   update,
   onMove,
   onPreview,
+  onInspect,
   onClose,
 }: {
   game: GameState;
   update: (fn: (g: GameState) => GameState) => void;
   onMove: (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
   onPreview: (c: Instance | null) => void;
+  onInspect?: (iid: string) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -1019,16 +1079,18 @@ function LibrarySearch({
     .filter((iid) => !needle || game.cards[iid].name.toLowerCase().includes(needle) || game.cards[iid].typeLine.toLowerCase().includes(needle))
     .sort((a, b) => game.cards[a].name.localeCompare(game.cards[b].name));
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur" role="dialog" aria-label="Search library">
+    <div className={`fixed inset-x-0 bottom-0 z-50 overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur ${onInspect ? "max-h-[92dvh]" : "max-h-[70vh]"}`} role="dialog" aria-label="Search library">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="font-semibold">Search library ({game.zones.library.length})</h2>
         <input
-          autoFocus
+          // A phone's keyboard shouldn't jump up and cover the list before it's wanted.
+          autoFocus={!onInspect}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Filter by name or type, e.g. forest, creature"
+          placeholder={onInspect ? "Name or type" : "Filter by name or type, e.g. forest, creature"}
           aria-label="Filter"
-          className="min-h-9 min-w-0 flex-1 rounded-md border border-foreground/20 bg-background px-3 text-sm"
+          // 16 px text on touch layouts: iPhones zoom the page when focusing anything smaller.
+          className={`min-h-9 min-w-0 flex-1 rounded-md border border-foreground/20 bg-background px-3 ${onInspect ? "basis-full text-base" : "text-sm"}`}
         />
         <button
           type="button"
@@ -1036,7 +1098,7 @@ function LibrarySearch({
             update(shuffleLibrary);
             onClose();
           }}
-          className="min-h-9 rounded-md bg-gold px-3 text-sm font-medium text-gold-ink"
+          className="btn btn-gold"
         >
           Shuffle and close
         </button>
@@ -1044,16 +1106,18 @@ function LibrarySearch({
           Close without shuffling
         </button>
       </div>
-      <ul className="flex flex-wrap gap-3">
+      <ul className={onInspect ? "grid grid-cols-3 gap-2" : "flex flex-wrap gap-3"}>
         {ids.map((iid) => (
-          <li key={iid} className="flex w-[110px] flex-col gap-1">
-            <CardView inst={game.cards[iid]} size={110} onPreview={onPreview} />
-            <div className="grid grid-cols-2 gap-1 text-[11px]">
-              <MiniButton onClick={() => onMove(iid, "hand")}>Hand</MiniButton>
-              <MiniButton onClick={() => onMove(iid, "battlefield")}>Play</MiniButton>
-              <MiniButton onClick={() => onMove(iid, "graveyard")}>Graveyard</MiniButton>
-              <MiniButton onClick={() => onMove(iid, "library", { library: "top" })}>Top</MiniButton>
-            </div>
+          <li key={iid} className={`flex flex-col gap-1 ${onInspect ? "" : "w-[110px]"}`}>
+            <ListCard inst={game.cards[iid]} size={110} onPreview={onPreview} onInspect={onInspect} />
+            {!onInspect && (
+              <div className="grid grid-cols-2 gap-1 text-[11px]">
+                <MiniButton onClick={() => onMove(iid, "hand")}>Hand</MiniButton>
+                <MiniButton onClick={() => onMove(iid, "battlefield")}>Play</MiniButton>
+                <MiniButton onClick={() => onMove(iid, "graveyard")}>Graveyard</MiniButton>
+                <MiniButton onClick={() => onMove(iid, "library", { library: "top" })}>Top</MiniButton>
+              </div>
+            )}
           </li>
         ))}
         {ids.length === 0 && <li className="text-sm opacity-60">No cards match.</li>}
@@ -1063,7 +1127,29 @@ function LibrarySearch({
 }
 
 /** Scry or surveil N: look at the top N, choose top / bottom / graveyard for each, and order the ones on top. */
-function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+/** A number you change with big buttons, for touch layouts; a typed box otherwise. */
+function CountInput({ compact, value, min, max, onChange }: { compact: boolean; value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const set = (n: number) => onChange(Math.max(min, Math.min(max, n)));
+  if (!compact)
+    return <input type="number" min={min} max={max} value={value} onChange={(e) => set(Number(e.target.value) || min)} className="w-16 rounded-md border border-foreground/20 bg-background px-2 py-1" autoFocus />;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button type="button" aria-label="One fewer" onClick={() => set(value - 1)} className="btn h-12 w-12 p-0 text-lg">
+        −
+      </button>
+      <span className="w-9 text-center text-xl font-semibold tabular-nums">{value}</span>
+      <button type="button" aria-label="One more" onClick={() => set(value + 1)} className="btn h-12 w-12 p-0 text-lg">
+        +
+      </button>
+    </span>
+  );
+}
+
+function CountField({ compact, children }: { compact: boolean; children: React.ReactNode }) {
+  return compact ? <div className="flex items-center gap-2 text-sm">{children}</div> : <label className="flex items-center gap-2 text-sm">{children}</label>;
+}
+
+function ScryDialog({ compact, game, update, onClose }: { compact: boolean; game: GameState; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
   const [count, setCount] = useState(1);
   const [order, setOrder] = useState<string[] | null>(null);
   const [choice, setChoice] = useState<Record<string, ScryChoice>>({});
@@ -1077,8 +1163,8 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
       return next;
     });
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Scry or surveil">
-      <div className="w-full max-w-4xl rounded-2xl bg-background p-5 shadow-xl">
+    <div className={`fixed inset-0 z-50 flex justify-center bg-black/60 ${compact ? "items-end" : "items-center p-6"}`} role="dialog" aria-modal="true" aria-label="Scry or surveil">
+      <div className={`w-full max-w-4xl overflow-y-auto bg-background shadow-xl ${compact ? "max-h-[92dvh] rounded-t-2xl p-3" : "max-h-full rounded-2xl p-5"}`}>
         {!order ? (
           <form
             className="flex flex-wrap items-center gap-3"
@@ -1090,33 +1176,27 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
             }}
           >
             <h2 className="text-lg font-semibold">Scry / surveil</h2>
-            <label className="flex items-center gap-2 text-sm">
+            {/* Not a label on touch layouts: tapping its words would press the first button inside. */}
+            <CountField compact={compact}>
               Look at the top
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={count}
-                onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-                className="w-16 rounded-md border border-foreground/20 bg-background px-2 py-1"
-                autoFocus
-              />
+              <CountInput compact={compact} value={count} min={1} max={20} onChange={setCount} />
               cards
-            </label>
-            <button type="submit" className="min-h-10 rounded-lg bg-gold px-4 font-medium text-gold-ink">
+            </CountField>
+            <button type="submit" className={`btn btn-gold ${compact ? "min-h-12 flex-1" : ""}`}>
               Look
             </button>
-            <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
+            <button type="button" onClick={onClose} className={`btn ${compact ? "min-h-12 flex-1" : ""}`}>
               Cancel
             </button>
           </form>
         ) : (
           <>
             <h2 className="text-lg font-semibold">Top {order.length}: choose where each goes</h2>
-            <p className="text-sm opacity-70">Cards kept on top go back in this order, leftmost on top. Graveyard = surveil.</p>
-            <ul className="mt-3 flex flex-wrap gap-3">
+            <p className="text-sm opacity-70">{compact ? "Cards kept on top go back in this order, 1st on top. Graveyard = surveil." : "Cards kept on top go back in this order, leftmost on top. Graveyard = surveil."}</p>
+            <ul className={compact ? "mt-3 grid grid-cols-2 gap-3" : "mt-3 flex flex-wrap gap-3"}>
               {order.map((iid, i) => (
-                <li key={iid} className="flex w-[130px] flex-col gap-1">
+                <li key={iid} className={`flex flex-col gap-1 ${compact ? "" : "w-[130px]"}`}>
+                  {compact && <span className="text-sm font-semibold tabular-nums">{["1st", "2nd", "3rd"][i] ?? `${i + 1}th`}</span>}
                   {game.cards[iid].image ? (
                     <img src={game.cards[iid].image!} alt={game.cards[iid].name} className="w-full rounded-[4.75%/3.5%] shadow" />
                   ) : (
@@ -1126,21 +1206,21 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
                     value={choice[iid]}
                     onChange={(e) => setChoice((c) => ({ ...c, [iid]: e.target.value as ScryChoice }))}
                     aria-label={`Where ${game.cards[iid].name} goes`}
-                    className="min-h-9 rounded-md border border-foreground/20 bg-background px-1 text-sm"
+                    className={`rounded-md border border-foreground/20 bg-background px-1 ${compact ? "min-h-11 text-base" : "min-h-9 text-sm"}`}
                   >
                     <option value="top">Top</option>
                     <option value="bottom">Bottom</option>
                     <option value="graveyard">Graveyard</option>
                   </select>
-                  <div className="flex gap-1 text-xs">
-                    <MiniButton onClick={() => nudge(i, -1)}>← Earlier</MiniButton>
-                    <MiniButton onClick={() => nudge(i, 1)}>Later →</MiniButton>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    <MiniButton onClick={() => nudge(i, -1)}>{compact ? "Move up" : "← Earlier"}</MiniButton>
+                    <MiniButton onClick={() => nudge(i, 1)}>{compact ? "Move down" : "Later →"}</MiniButton>
                   </div>
                 </li>
               ))}
             </ul>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
+            <div className="sticky bottom-0 mt-4 flex justify-end gap-2 bg-background py-1">
+              <button type="button" onClick={onClose} className={`btn ${compact ? "min-h-12 flex-1" : ""}`}>
                 Cancel (leave as is)
               </button>
               <button
@@ -1149,7 +1229,7 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
                   update((g) => resolveScry(g, order, choice));
                   onClose();
                 }}
-                className="min-h-10 rounded-lg bg-gold px-5 font-medium text-gold-ink"
+                className={`btn btn-gold ${compact ? "min-h-12 flex-1" : ""}`}
               >
                 Done
               </button>
@@ -1161,12 +1241,12 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
   );
 }
 
-function MillDialog({ game, update, onClose }: { game: GameState; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+function MillDialog({ compact, game, update, onClose }: { compact: boolean; game: GameState; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
   const [count, setCount] = useState(1);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label="Mill">
+    <div className={`fixed inset-0 z-50 flex justify-center bg-black/60 ${compact ? "items-end" : "items-center p-6"}`} role="dialog" aria-modal="true" aria-label="Mill">
       <form
-        className="flex flex-wrap items-center gap-3 rounded-2xl bg-background p-5 shadow-xl"
+        className={`flex flex-wrap items-center gap-3 bg-background shadow-xl ${compact ? "w-full rounded-t-2xl p-3" : "rounded-2xl p-5"}`}
         onSubmit={(e) => {
           e.preventDefault();
           update((g) => mill(g, count));
@@ -1174,23 +1254,15 @@ function MillDialog({ game, update, onClose }: { game: GameState; update: (fn: (
         }}
       >
         <h2 className="text-lg font-semibold">Mill</h2>
-        <label className="flex items-center gap-2 text-sm">
+        <CountField compact={compact}>
           Put the top
-          <input
-            type="number"
-            min={1}
-            max={Math.max(1, game.zones.library.length)}
-            value={count}
-            onChange={(e) => setCount(Math.max(1, Number(e.target.value) || 1))}
-            className="w-16 rounded-md border border-foreground/20 bg-background px-2 py-1"
-            autoFocus
-          />
-          cards into the graveyard
-        </label>
-        <button type="submit" className="min-h-10 rounded-lg bg-gold px-4 font-medium text-gold-ink">
+          <CountInput compact={compact} value={count} min={1} max={Math.max(1, game.zones.library.length)} onChange={setCount} />
+          {compact ? "cards" : "cards into the graveyard"}
+        </CountField>
+        <button type="submit" className={`btn btn-gold ${compact ? "min-h-12 flex-1" : ""}`}>
           Mill
         </button>
-        <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
+        <button type="button" onClick={onClose} className={`btn ${compact ? "min-h-12 flex-1" : ""}`}>
           Cancel
         </button>
       </form>
@@ -1201,7 +1273,7 @@ function MillDialog({ game, update, onClose }: { game: GameState; update: (fn: (
 // ---------- tokens (6c) ----------
 
 /** The deck's tokens (from its cards) to put onto the battlefield, plus any other token by name. */
-function TokenPicker({ tokens, update, onClose }: { tokens: DeckToken[]; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+function TokenPicker({ compact, tokens, update, onClose }: { compact: boolean; tokens: DeckToken[]; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
   const [name, setName] = useState("");
   const [made, setMade] = useState<string | null>(null);
   const make = (spec: { name: string; image: string | null; typeLine: string }) => {
@@ -1209,12 +1281,17 @@ function TokenPicker({ tokens, update, onClose }: { tokens: DeckToken[]; update:
     setMade(spec.name);
   };
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur" role="dialog" aria-label="Tokens">
+    <div className={`fixed inset-x-0 bottom-0 z-50 overflow-y-auto border-t border-foreground/20 bg-background/95 p-4 shadow-2xl backdrop-blur ${compact ? "max-h-[85dvh]" : "max-h-[60vh]"}`} role="dialog" aria-label="Tokens">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="font-semibold">Create a token</h2>
-        {made && <span className="text-sm opacity-70">Made a {made}. Click again for another.</span>}
+        <h2 className={`font-semibold ${compact ? "mr-auto" : ""}`}>Create a token</h2>
+        {compact && (
+          <button type="button" onClick={onClose} className="btn min-h-11">
+            Close
+          </button>
+        )}
+        {made && <span className={`text-sm opacity-70 ${compact ? "basis-full" : ""}`}>Made a {made}. {compact ? "Tap" : "Click"} again for another.</span>}
         <form
-          className="ml-auto flex gap-2"
+          className={compact ? "flex basis-full gap-2" : "ml-auto flex gap-2"}
           onSubmit={(e) => {
             e.preventDefault();
             if (name.trim()) make({ name: name.trim(), image: null, typeLine: "Token" });
@@ -1227,29 +1304,32 @@ function TokenPicker({ tokens, update, onClose }: { tokens: DeckToken[]; update:
             placeholder="Other token, e.g. 1/1 Soldier"
             maxLength={40}
             aria-label="Other token name"
-            className="min-h-9 rounded-md border border-foreground/20 bg-background px-3 text-sm"
+            className={`rounded-md border border-foreground/20 bg-background px-3 ${compact ? "min-h-11 min-w-0 flex-1 text-base" : "min-h-9 text-sm"}`}
           />
-          <button type="submit" className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
+          <button type="submit" className={`btn ${compact ? "min-h-11" : ""}`}>
             Create
           </button>
         </form>
-        <button type="button" onClick={onClose} className="min-h-9 rounded-md border border-foreground/20 px-3 text-sm">
-          Close (Esc)
-        </button>
+        {!compact && (
+          <button type="button" onClick={onClose} className="btn">
+            Close (Esc)
+          </button>
+        )}
       </div>
       {tokens.length === 0 ? (
         <p className="text-sm opacity-60">No cards in this deck make tokens. Use “Other token” for anything else.</p>
       ) : (
-        <ul className="flex flex-wrap gap-3">
+        <ul className={compact ? "grid grid-cols-3 gap-2" : "flex flex-wrap gap-3"}>
           {tokens.map((t) => (
             <li key={t.token_id}>
               <button
                 type="button"
                 onClick={() => make({ name: t.name, image: tokenImage(t.token_id), typeLine: t.type_line })}
                 title={`Create a ${t.name}`}
-                className="block w-[110px] text-left text-xs"
+                className={`block text-left text-xs ${compact ? "w-full" : "w-[110px]"}`}
               >
-                <img src={tokenImage(t.token_id)} alt={t.name} loading="lazy" draggable={false} className="w-full rounded-[4.75%/3.5%] shadow hover:ring-2 hover:ring-amber-400" />
+                {/* A fixed card shape, so the button is big while the picture loads. */}
+                <img src={tokenImage(t.token_id)} alt={t.name} loading="lazy" draggable={false} style={{ aspectRatio: "63 / 88" }} className="w-full rounded-[4.75%/3.5%] shadow hover:ring-2 hover:ring-amber-400" />
                 <span className="mt-1 block font-medium">{t.name}</span>
               </button>
             </li>
