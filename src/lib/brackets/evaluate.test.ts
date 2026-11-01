@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
-import { candidateIssues, estimateBracket, estimateLabel, overTarget, type ComboRow } from "./evaluate";
+import { bracketSections, candidateIssues, estimateBracket, estimateLabel, overTarget, type BracketEstimate, type ComboRow } from "./evaluate";
 
 const line = (name: string, extra: Partial<CardSummary> = {}, quantity = 1): DeckLine => ({
   board: "main",
@@ -130,5 +130,21 @@ describe("candidateIssues (5c)", () => {
   it("doesn't blame a harmless card when the deck is already over", () => {
     const deck = deckInput([gc("A"), gc("B"), gc("C"), gc("D")]);
     expect(candidateIssues(deck, { line: line("Cultivate"), tags: [] }, 3)).toEqual([]);
+  });
+});
+
+describe("bracketSections", () => {
+  const estimate = (findings: BracketEstimate["findings"]): BracketEstimate => ({ floor: 1, findings });
+
+  it("always lists all three limits, with what the target allows", () => {
+    const s = bracketSections(estimate([]), 3);
+    expect(s.map((x) => x.limit)).toEqual(["up to 3 in bracket 3", "none in bracket 3", "up to 2 in bracket 3"]);
+    expect(s.every((x) => !x.over && x.cards.length === 0)).toBe(true);
+  });
+
+  it("marks a section over the target and carries its cards", () => {
+    const f = { kind: "game-changers" as const, minBracket: 4 as const, label: "", cards: ["a", "b", "c", "d"] };
+    expect(bracketSections(estimate([f]), 3)[0]).toMatchObject({ over: true, cards: ["a", "b", "c", "d"] });
+    expect(bracketSections(estimate([f]), 4)[0]).toMatchObject({ over: false, limit: "any number in bracket 4" });
   });
 });

@@ -114,6 +114,33 @@ export function estimateLabel(floor: BracketNumber) {
 /** Findings that push the deck above the target (what the banner lists and the badges mark). */
 export const overTarget = (e: BracketEstimate, target: BracketNumber) => e.findings.filter((f) => f.minBracket > target);
 
+const limitWords = (max: number, target: BracketNumber) =>
+  `${max === Infinity ? "any number" : max === 0 ? "none" : `up to ${max}`} in bracket ${target}`;
+
+export type BracketSection = {
+  kind: "game-changers" | "mass-land-denial" | "extra-turns";
+  title: string;
+  /** What the target bracket allows, in words. */
+  limit: string;
+  over: boolean;
+  /** Oracle ids; empty when the deck has none. */
+  cards: string[];
+};
+
+/** The three card limits for the bracket screen. They always show, so "none" reads as checked rather than forgotten. */
+export function bracketSections(e: BracketEstimate, target: BracketNumber): BracketSection[] {
+  const R = BRACKET_RULES;
+  const section = (kind: BracketSection["kind"], title: string, max: number): BracketSection => {
+    const f = e.findings.find((x) => x.kind === kind);
+    return { kind, title, limit: limitWords(max, target), over: !!f && f.minBracket > target, cards: f?.cards ?? [] };
+  };
+  return [
+    section("game-changers", "Game Changers", R.gameChangersMax[target]),
+    section("mass-land-denial", "Mass land denial", target >= R.massLandDenialFrom ? Infinity : 0),
+    section("extra-turns", "Extra turns", R.extraTurnsMax[target]),
+  ];
+}
+
 /**
  * Phase 5c: what adding one more card would push above the target. Re-runs the estimate with the card added and
  * keeps only the over-target findings that involve it (a deck already over its Game Changer limit doesn't make

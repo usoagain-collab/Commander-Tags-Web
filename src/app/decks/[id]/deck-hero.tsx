@@ -23,6 +23,7 @@ export function DeckHero({
   actions,
   onOpenCommander,
   wide,
+  coverArt,
 }: {
   name: string;
   commanders: CardSummary[];
@@ -42,8 +43,10 @@ export function DeckHero({
   onOpenCommander: (index: number) => void;
   /** No docked preview: the page runs the full width of the screen. */
   wide?: boolean;
+  /** Art the owner picked for this deck, instead of the commander's. */
+  coverArt?: string | null;
 }) {
-  const art = commanders.find((c) => c.image_art_crop)?.image_art_crop;
+  const art = coverArt || commanders.find((c) => c.image_art_crop)?.image_art_crop;
   const pips = identity ? WUBRG.filter((c) => identity.has(c)) : [];
   return (
     <header className="relative isolate z-30 border-b border-foreground/10">
