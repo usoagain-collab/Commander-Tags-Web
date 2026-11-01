@@ -20,6 +20,9 @@ export async function SiteHeader() {
               <Link href="/decks" className="flex min-h-11 items-center px-2 font-medium hover:text-gold">
                 My decks
               </Link>
+              <Link href="/settings" className="flex min-h-11 items-center px-2 hover:text-gold">
+                Settings
+              </Link>
               <FeedbackButton />
               <form action="/auth/signout" method="post" className="ml-2 border-l border-foreground/15 pl-2 sm:ml-4 sm:pl-4">
                 <button className="min-h-11 px-1 opacity-70 hover:opacity-100">Sign out</button>

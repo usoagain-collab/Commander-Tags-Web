@@ -87,7 +87,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
   }
 
   return (
-    <div className="relative">
+    <div data-preview-card className="relative">
       <input
         ref={inputRef}
         value={text}

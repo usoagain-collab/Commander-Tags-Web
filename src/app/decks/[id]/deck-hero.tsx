@@ -22,6 +22,7 @@ export function DeckHero({
   status,
   actions,
   onOpenCommander,
+  wide,
 }: {
   name: string;
   commanders: CardSummary[];
@@ -39,6 +40,8 @@ export function DeckHero({
   status?: React.ReactNode;
   actions: React.ReactNode;
   onOpenCommander: (index: number) => void;
+  /** No docked preview: the page runs the full width of the screen. */
+  wide?: boolean;
 }) {
   const art = commanders.find((c) => c.image_art_crop)?.image_art_crop;
   const pips = identity ? WUBRG.filter((c) => identity.has(c)) : [];
@@ -51,7 +54,7 @@ export function DeckHero({
         <div className="absolute inset-0 bg-gradient-to-r from-background/85 via-background/30 to-transparent" />
         {celebrate && <div className="shimmer absolute inset-0" />}
       </div>
-      <div className={`mx-auto flex max-w-[1500px] items-end gap-5 px-4 pb-4 sm:px-6 ${art ? "pt-2 lg:pt-8" : "pt-2 sm:pt-4"}`}>
+      <div className={`mx-auto flex ${wide ? "" : "max-w-[1500px]"} items-end gap-5 px-4 pb-4 sm:px-6 ${art ? "pt-2 lg:pt-8" : "pt-2 sm:pt-4"}`}>
         {commanders.length > 0 && (
           <div className="hidden shrink-0 md:flex lg:hidden">
             {commanders.map((c, i) => (
