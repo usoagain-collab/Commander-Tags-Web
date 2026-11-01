@@ -24,6 +24,9 @@ type Props = {
   onRemoveCustom: (key: string) => void;
   onSaveDefaults: () => Promise<string>;
   onResetDefaults: () => void;
+  /** Roles left out of the profile and the deck's groups; listed only while adjusting. */
+  hiddenRoles: { key: string; name: string }[];
+  onHideRole: (key: string, hidden: boolean) => void;
   /** Hidden when the profile sits inside a section that already has the title (narrow screens). */
   hideTitle?: boolean;
 };
@@ -105,6 +108,15 @@ export function RoleProfile(props: Props) {
               </p>
               {!readOnly && adjust && (
                 <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => props.onHideRole(r.key, true)}
+                    aria-label={`Hide the ${r.name} role`}
+                    title="Stop tracking this role in this deck. Bring it back from the list below."
+                    className="order-last min-h-8 shrink-0 rounded border border-foreground/15 px-2 text-xs"
+                  >
+                    Hide
+                  </button>
                   <input
                     type="range"
                     min={0}
@@ -139,6 +151,21 @@ export function RoleProfile(props: Props) {
 
       {!readOnly && adjust && (
         <div className="space-y-2 border-t border-foreground/10 pt-3">
+          {props.hiddenRoles.length > 0 && (
+            <div>
+              <h3 className="eyebrow mb-1">Hidden roles</h3>
+              <ul className="space-y-1">
+                {props.hiddenRoles.map((r) => (
+                  <li key={r.key} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate opacity-80">{r.name}</span>
+                    <button type="button" onClick={() => props.onHideRole(r.key, false)} className="min-h-8 shrink-0 rounded border border-foreground/20 px-2 text-xs">
+                      Show
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {adding ? (
             <AddRole
               existing={roles.map((r) => r.key)}
@@ -178,6 +205,80 @@ export function RoleProfile(props: Props) {
               {message}
             </p>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The collapsed left column: each role's count and bar, and the deck's top tags. Editing means expanding it. */
+export function RoleRail({
+  roles,
+  counts,
+  highlight,
+  tags,
+  onHighlightRole,
+  onHighlightTag,
+  onExpand,
+}: {
+  roles: ResolvedRole[];
+  counts: Record<string, number>;
+  highlight: string | null;
+  tags: { key: string; label: string; count: number; value: string }[];
+  onHighlightRole: (key: string) => void;
+  onHighlightTag: (value: string) => void;
+  onExpand: () => void;
+}) {
+  return (
+    <div className="space-y-4 text-[13px]">
+      <button type="button" onClick={onExpand} className="btn w-full" title="Show the full panel to edit targets and tags">
+        Edit ›
+      </button>
+      <ul className="space-y-1">
+        {roles.map((r) => {
+          const n = counts[r.key] ?? 0;
+          return (
+            <li key={r.key}>
+              <button
+                type="button"
+                onClick={() => onHighlightRole(r.key)}
+                aria-pressed={highlight === `role:${r.key}`}
+                title={`Highlight the ${r.name} cards`}
+                className={`block min-h-10 w-full rounded px-1 py-0.5 text-left hover:bg-foreground/5 ${highlight === `role:${r.key}` ? "bg-amber-400/20" : ""}`}
+              >
+                <span className="flex justify-between gap-1">
+                  <span className="truncate">{r.name}</span>
+                  <span className={`shrink-0 tabular-nums ${n < r.target ? "text-amber-400" : "text-green-400"}`}>
+                    {n}/{r.target}
+                  </span>
+                </span>
+                <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-foreground/10">
+                  <span className="block h-full" style={{ width: `${Math.min(100, r.target ? (n / r.target) * 100 : 100)}%`, background: roleColor(r.name) }} />
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {tags.length > 0 && (
+        <div className="border-t border-foreground/10 pt-3">
+          <h3 className="eyebrow mb-1">Top tags</h3>
+          <ul>
+            {tags.map((t) => (
+              <li key={t.key}>
+                <button
+                  type="button"
+                  onClick={() => onHighlightTag(t.value)}
+                  aria-pressed={highlight === t.value}
+                  title={`Highlight the cards tagged ${t.label}`}
+                  className={`flex min-h-8 w-full items-center justify-between gap-1 rounded px-1 text-left hover:bg-foreground/5 ${highlight === t.value ? "bg-amber-400/20" : ""}`}
+                >
+                  <span className="truncate">{t.label}</span>
+                  <span className="shrink-0 tabular-nums opacity-60">{t.count}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
