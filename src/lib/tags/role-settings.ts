@@ -9,6 +9,16 @@ export type CustomRole = { slug: string; name: string; target: number };
 export const MAX_TARGET = 99;
 export const customKey = (slug: string) => `c:${slug}`;
 
+/** A hidden role is stored beside the targets as "hide:<key>": 1, so defaults and new decks carry it too. */
+const HIDE_PREFIX = "hide:";
+export const hiddenRoleKeys = (targets: Record<string, number>) =>
+  new Set(Object.keys(targets).filter((k) => k.startsWith(HIDE_PREFIX) && targets[k]).map((k) => k.slice(HIDE_PREFIX.length)));
+export function withRoleHidden(targets: Record<string, number>, key: string, hidden: boolean) {
+  const rest = { ...targets };
+  delete rest[HIDE_PREFIX + key];
+  return hidden ? { ...rest, [HIDE_PREFIX + key]: 1 } : rest;
+}
+
 /** Saved targets, cleaned up: whole numbers between 0 and 99, unknown junk dropped. */
 export function readTargets(saved: unknown): Record<string, number> {
   const out: Record<string, number> = {};

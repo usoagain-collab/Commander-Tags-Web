@@ -37,7 +37,7 @@ import {
 } from "@/lib/deck/model";
 import { groupLines, readViewSettings, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
-import { buildRoleDefs, customKey, roleCounts, roleStatus, type CustomRole } from "@/lib/tags/role-settings";
+import { buildRoleDefs, customKey, hiddenRoleKeys, roleCounts, roleStatus, withRoleHidden, type CustomRole } from "@/lib/tags/role-settings";
 import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
@@ -61,7 +61,7 @@ import { assignSubgroups, landSubgroup, subgroupCandidates, subgroupTitle } from
 import { myTagHighlight, tagsOfCard, type MyTag } from "@/lib/tags/my-tags";
 import { useMyTags } from "@/lib/tags/use-my-tags";
 import { createClient } from "@/lib/supabase/client";
-import { CardPanel } from "./card-panel";
+import { CardPanel, FloatingPreview } from "./card-panel";
 import { CardSearch } from "./card-search";
 import { CardSheet } from "./card-sheet";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
@@ -82,7 +82,7 @@ import { useSuggestSettings } from "@/lib/suggest/use-suggest-settings";
 import { useDismissed } from "@/lib/suggest/use-dismissed";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
-import { RoleProfile } from "./role-profile";
+import { RoleProfile, RoleRail } from "./role-profile";
 import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
@@ -187,6 +187,14 @@ type Props = {
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
 
+/** Written out whole so Tailwind sees each class. */
+const EDITOR_COLUMNS: Record<string, string> = {
+  "full-none": "xl:grid-cols-[280px_minmax(0,1fr)]",
+  "rail-none": "xl:grid-cols-[160px_minmax(0,1fr)]",
+  "full-docked": "lg:grid-cols-[minmax(0,1fr)_240px] xl:grid-cols-[280px_minmax(0,1fr)_240px]",
+  "rail-docked": "lg:grid-cols-[minmax(0,1fr)_240px] xl:grid-cols-[160px_minmax(0,1fr)_240px]",
+};
+
 export function DeckEditor({
   deck,
   initialEntries,
@@ -219,6 +227,7 @@ export function DeckEditor({
   const { status, save, retry } = useAutosave(deck.id);
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<CardSummary | null>(null);
+  const [previewSide, setPreviewSide] = useState<"left" | "right">("right");
   const [sheet, setSheet] = useState<{ oracle_id: string; board: Board } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -247,6 +256,19 @@ export function DeckEditor({
   const [prefs, updatePrefs] = useTagViewPrefs(readOnly ? { ...savedTagView, view: "grid" } : savedTagView, userId);
   const view = readViewSettings(prefs);
   const setView = (v: ViewSettings) => updatePrefs(v);
+  const railCollapsed = prefs.leftCollapsed === true;
+  const previewMode = prefs.previewMode === "docked" || prefs.previewMode === "off" ? prefs.previewMode : "float";
+  // The floating preview sits on the side away from the mouse, and goes away when the mouse leaves the cards.
+  useEffect(() => {
+    if (previewMode !== "float") return;
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      setPreviewSide(e.clientX < window.innerWidth / 2 ? "right" : "left");
+      if (!(e.target instanceof Element && e.target.closest("[data-preview-zone]"))) setPreview(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [previewMode]);
   const themeSettings = readThemeSettings(prefs);
   const [hidden, toggleHidden] = useHiddenTags(hiddenTags, userId);
   const quickAdd = useRef<QuickAddHandle>(null);
@@ -369,11 +391,16 @@ export function DeckEditor({
   const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
   const [defaults, setDefaults] = useState(profileDefaults);
   const roleDefs = useMemo(() => buildRoleDefs(roleSettings.targets, roleSettings.custom), [roleSettings.targets, roleSettings.custom]);
-  const roles = useMemo(() => (tags.tree ? resolveRoles(roleDefs, tags.tree) : []), [tags.tree, roleDefs]);
-  const roleKeysOf = useCallback(
-    (card: CardSummary) => rolesOf(card, tags.oracleTags[card.oracle_id], roles),
-    [tags.oracleTags, roles],
+  const allRoles = useMemo(() => (tags.tree ? resolveRoles(roleDefs, tags.tree) : []), [tags.tree, roleDefs]);
+  const hiddenRoles = useMemo(() => hiddenRoleKeys(roleSettings.targets), [roleSettings.targets]);
+  const roles = useMemo(() => allRoles.filter((r) => !hiddenRoles.has(r.key)), [allRoles, hiddenRoles]);
+  // Worked out against every role, then filtered: a card that is a board wipe stays out of Targeted removal
+  // even while Board wipes is hidden.
+  const visibleRoleKeys = useCallback(
+    (card: Parameters<typeof rolesOf>[0], slugs: string[] | undefined) => rolesOf(card, slugs, allRoles).filter((k) => !hiddenRoles.has(k)),
+    [allRoles, hiddenRoles],
   );
+  const roleKeysOf = useCallback((card: CardSummary) => visibleRoleKeys(card, tags.oracleTags[card.oracle_id]), [tags.oracleTags, visibleRoleKeys]);
   /** Roles a deck row counts toward: its manual category when set (step 3f), otherwise its tags. */
   const lineRoleKeys = (l: DeckLine) => {
     const c = categories[entryKey(l.board, l.card.oracle_id)];
@@ -624,6 +651,11 @@ export function DeckEditor({
         if (highlight === `role:${key}`) setHighlight(null);
       }}
       onSaveDefaults={saveDefaults}
+      hiddenRoles={allRoles.filter((r) => hiddenRoles.has(r.key)).map((r) => ({ key: r.key, name: r.name }))}
+      onHideRole={(key, hide) => {
+        roleSettings.setTargets((t) => withRoleHidden(t, key, hide));
+        if (highlight === `role:${key}`) setHighlight(null);
+      }}
       onResetDefaults={() => {
         roleSettings.setTargets(defaults.targets);
         roleSettings.setCustom(defaults.custom);
@@ -844,7 +876,7 @@ export function DeckEditor({
       <div className="mx-auto max-w-[1500px] px-4 sm:px-6">
 
       {panel === "search" && !readOnly && (
-        <div className="drawer">
+        <div className="drawer" data-preview-zone>
         <CardSearch
           entries={entries}
           identity={identity}
@@ -859,7 +891,7 @@ export function DeckEditor({
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} printings={printings} onApply={applyImport} onClose={() => setPanel(null)} />}
       {panel === "suggest" && suggestFor && !readOnly && (
-        <div id="suggest-panel" className="drawer scroll-mt-4">
+        <div id="suggest-panel" className="drawer scroll-mt-4" data-preview-zone>
           <SuggestPanel
             source={suggestFor}
             identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
@@ -870,7 +902,7 @@ export function DeckEditor({
             score={{
               themes: suggestThemes,
               keysOf: (c: PoolCard) => (trees ? cardKeys({ oracle: c.tags, art: [], commander: false, land: false }, themeSettings.specific, trees) : []),
-              rolesOf: (c: PoolCard) => rolesOf(c, c.tags, roles),
+              rolesOf: (c: PoolCard) => visibleRoleKeys(c, c.tags),
               under: new Set(roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key)),
               settings: suggestStyle.settings,
             }}
@@ -939,14 +971,31 @@ export function DeckEditor({
       )}
       {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={printings} cards={cards} onClose={() => setPanel(null)} />}
 
-      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+      <div className={`mt-6 grid gap-6 ${EDITOR_COLUMNS[`${railCollapsed ? "rail" : "full"}-${previewMode === "docked" ? "docked" : "none"}`]}`}>
         {/* Wide screens: the role profile gets its own column on the left. */}
         <aside className="hidden xl:block">
+          {railCollapsed ? (
+            <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">
+              <RoleRail
+                roles={roles}
+                counts={counts}
+                highlight={highlight}
+                tags={themes.slice(0, 6).map((t) => ({ key: t.key, label: prettyTag(t.label), count: t.count, value: highlightValue(t) }))}
+                onHighlightRole={(key) => toggleHighlight(`role:${key}`)}
+                onHighlightTag={toggleHighlight}
+                onExpand={() => updatePrefs({ leftCollapsed: false })}
+              />
+            </div>
+          ) : (
           <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">
+            <button type="button" onClick={() => updatePrefs({ leftCollapsed: true })} className="mb-2 min-h-8 text-[13px] underline opacity-80 hover:opacity-100" title="Shrink this column so the cards get the room">
+              ‹ Collapse
+            </button>
             {renderProfile()}
             <div className="mt-6 border-t border-foreground/10 pt-4">{renderTopTags()}</div>
             {!readOnly && <div className="mt-6 border-t border-foreground/10 pt-4">{renderMyTags()}</div>}
           </div>
+          )}
         </aside>
 
         <div className="min-w-0">
@@ -1036,6 +1085,20 @@ export function DeckEditor({
             <div className="min-w-0 basis-full sm:basis-auto">
               <DeckToolbar settings={view} onChange={setView} />
             </div>
+            <label className="hidden items-center gap-1.5 text-sm lg:flex">
+              <span className="opacity-75">Preview</span>
+              <select
+                value={previewMode}
+                aria-label="Card preview"
+                onChange={(e) => updatePrefs({ previewMode: e.target.value })}
+                title="Floating: appears while you hover a card. Docked: always there, with clickable tags. Off: no preview."
+                className="min-h-10 rounded-lg border border-foreground/20 bg-background px-2"
+              >
+                <option value="float">Floating</option>
+                <option value="docked">Docked</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
             {!readOnly && (
               <div className="flex items-center gap-2 sm:ml-auto">
                 <button
@@ -1073,13 +1136,14 @@ export function DeckEditor({
             </div>
           )}
 
-          <div className={`mt-4 ${selecting ? "select-none" : ""}`}>
+          <div data-preview-zone className={`mt-4 ${selecting ? "select-none" : ""}`}>
             {sections.length === 0 ? (
               commanders.length > 0 ? null : <p className="px-1.5 text-center text-sm opacity-75">You can also drag cards in from Scryfall.</p>
             ) : (
               <DeckView
                 sections={sections}
                 view={view.view}
+                roomy={railCollapsed}
                 collapsed={collapsed}
                 readOnly={readOnly}
                 onToggle={(k) =>
@@ -1101,7 +1165,7 @@ export function DeckEditor({
           </div>
         </div>
 
-        <aside className="hidden lg:block">
+        {previewMode === "docked" && <aside className="hidden lg:block">
           <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6">
             <CardPanel
               card={shown}
@@ -1125,8 +1189,19 @@ export function DeckEditor({
               }}
             />
           </div>
-        </aside>
+        </aside>}
       </div>
+      {previewMode === "float" && preview && !sheet && (
+        <FloatingPreview
+          side={previewSide}
+          card={preview}
+          roleKeys={shownLine ? lineRoleKeys(shownLine) : roleKeysOf(preview)}
+          extra={<PanelMyTags tags={myTagsOfCard(preview.oracle_id)} highlight={highlight} onHighlight={() => {}} />}
+          roles={roles}
+          tags={tags}
+          highlight={highlight}
+        />
+      )}
 
       <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards, undefined, printings)} />
 

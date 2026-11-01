@@ -50,6 +50,8 @@ type Props = {
    * that's allowed; phones use the Category picker in the card sheet instead.
    */
   onCardDrop?: (card: { oracle_id: string; board: string }, sectionKey: string) => void;
+  /** The left column is collapsed, so the cards take the room and grow. */
+  roomy?: boolean;
 };
 
 /** Our own drag type, so the Scryfall drop overlay (which looks for links and text) ignores these drags. */
@@ -130,12 +132,13 @@ function withParents(sections: ViewSection[], collapsed: Set<string>) {
 export function DeckView(props: Props) {
   const { sections, view } = props;
   if (view === "stacks") {
-    // Stacks are columns, so each subgroup is its own column titled "Role › Subgroup".
+    // Archidekt's Stacks: big cards in columns of uneven height, groups flowing to fill each column.
+    // Each subgroup is its own stack titled "Role › Subgroup".
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
+      <div className={`gap-x-4 ${props.roomy ? "[column-width:150px] sm:[column-width:190px] xl:[column-width:230px]" : "[column-width:150px] sm:[column-width:190px]"}`}>
         {sections.map((s) => (
-          <DropZone key={s.key} sectionKey={s.key} onCardDrop={props.onCardDrop} className="min-w-0">
-            <Heading section={s} {...props} prefix={s.parent?.title} />
+          <DropZone key={s.key} sectionKey={s.key} onCardDrop={props.onCardDrop} className="mb-6 min-w-0 break-inside-avoid">
+            <StackHeading section={s} {...props} />
             {!props.collapsed.has(s.key) && <Stack section={s} {...props} />}
           </DropZone>
         ))}
@@ -155,7 +158,7 @@ export function DeckView(props: Props) {
             <DropZone key={b.section.key} sectionKey={b.section.key} onCardDrop={props.onCardDrop} className={b.section.parent ? "pl-3" : ""}>
               <Heading section={b.section} {...props} sub={!!b.section.parent} />
               {!props.collapsed.has(b.section.key) && (
-                <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
+                <ul className={`grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 ${props.roomy ? "xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]" : ""}`}>
                   {b.section.items.map((it) => (
                     <li key={it.line.card.oracle_id}>
                       <Tile
@@ -270,6 +273,27 @@ function Heading({
   );
 }
 
+/** A stack's heading: its name over its card count and total price, like Archidekt's. */
+function StackHeading({ section, collapsed, onToggle }: { section: ViewSection; collapsed: Set<string>; onToggle: (k: string) => void }) {
+  const isOpen = !collapsed.has(section.key);
+  const price = section.items.reduce((sum, it) => sum + Number(it.line.card.price_usd ?? 0) * it.line.quantity, 0);
+  return (
+    <button type="button" onClick={() => onToggle(section.key)} aria-expanded={isOpen} className="mb-1.5 block min-h-11 w-full px-0.5 text-left hover:text-gold">
+      <span className="block truncate text-sm font-semibold">
+        <span aria-hidden className={`mr-1.5 inline-block transition-transform ${isOpen ? "rotate-90" : ""}`}>
+          ›
+        </span>
+        {section.parent && <span className="font-normal opacity-80">{section.parent.title} › </span>}
+        {section.title}
+      </span>
+      <span className="flex justify-between text-xs tabular-nums opacity-70">
+        <span>Qty: {section.count}</span>
+        <span>${price.toFixed(2)}</span>
+      </span>
+    </button>
+  );
+}
+
 /** A card image tile (Visual grid). Badges sit beside the image's edge, never as tiny buttons on it. */
 function Tile({
   item,
@@ -305,12 +329,15 @@ function Tile({
   );
 }
 
-/** Stacks: each group's cards overlap so only their name bars show; the last card is shown whole. */
+/**
+ * Stacks: each group's cards overlap so only their name bars show; the last card is shown whole. A hovered card
+ * doesn't jump to the front, or it would cover the name bars below it; the preview shows it whole.
+ */
 function Stack({ section, onOpen, onHover, onCardDrop }: { section: ViewSection } & Pick<Props, "onOpen" | "onHover" | "onCardDrop">) {
   return (
     <ul className="flex flex-col pb-2">
       {section.items.map((it, i) => (
-        <li key={it.line.card.oracle_id} style={{ marginTop: i === 0 ? 0 : "-118%" }} className="relative hover:z-10 focus-within:z-10">
+        <li key={it.line.card.oracle_id} style={{ marginTop: i === 0 ? 0 : "-124%" }} className="relative">
           <button
             type="button"
             onClick={(e) => onOpen(it.line, e)}
@@ -319,7 +346,7 @@ function Stack({ section, onOpen, onHover, onCardDrop }: { section: ViewSection 
             {...dragProps(it.line, !!onCardDrop)}
             title={`Open ${it.line.card.name}`}
             aria-pressed={it.selected}
-            className={`relative block w-full rounded-[5%/3.6%] ${it.selected ? "ring-4 ring-blue-500" : it.highlighted ? "ring-4 ring-amber-400" : ""}`}
+            className={`relative block w-full rounded-[5%/3.6%] hover:brightness-125 ${it.fresh ? "fresh" : ""} ${it.selected ? "ring-4 ring-blue-500" : it.highlighted ? "ring-4 ring-gold" : ""}`}
           >
             <CardImage name={it.line.card.name} src={it.line.card.image_normal} foil={it.line.printing?.foil} />
             <TileBadges item={it} quantity={it.line.quantity} />

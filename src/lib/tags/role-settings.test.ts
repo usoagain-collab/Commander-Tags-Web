@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DeckLine } from "@/lib/deck/model";
 import {
   buildRoleDefs,
+  hiddenRoleKeys,
+  withRoleHidden,
   readCustomRoles,
   readTargets,
   roleCounts,
@@ -28,6 +30,15 @@ describe("saved role settings", () => {
       { slug: "sacrifice-outlet", name: "Sac outlets", target: 6 },
       { slug: "landfall", name: "landfall", target: 4 },
     ]);
+  });
+});
+
+describe("hidden roles", () => {
+  it("hides and shows a role without touching its target", () => {
+    const hidden = withRoleHidden({ recursion: 4 }, "recursion", true);
+    expect(hiddenRoleKeys(readTargets(hidden))).toEqual(new Set(["recursion"]));
+    expect(buildRoleDefs(hidden, []).find((r) => r.key === "recursion")!.target).toBe(4);
+    expect(withRoleHidden(hidden, "recursion", false)).toEqual({ recursion: 4 });
   });
 });
 

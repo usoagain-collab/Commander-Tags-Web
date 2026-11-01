@@ -17,6 +17,24 @@ type Props = {
   extra?: React.ReactNode;
 };
 
+/**
+ * The roomier preview: floats over the side of the screen away from the mouse only while a card is hovered, so
+ * no column stays reserved for it. It never takes clicks; the card sheet has the clickable tags.
+ */
+export function FloatingPreview({ side, card, ...rest }: Omit<Props, "onOpen" | "onTag" | "card"> & { side: "left" | "right"; card: CardSummary }) {
+  return (
+    <div aria-hidden className={`panel pointer-events-none fixed top-4 z-30 hidden max-h-[calc(100vh-2rem)] w-[270px] space-y-2 overflow-hidden p-2.5 shadow-2xl lg:block ${side === "left" ? "left-4" : "right-4"}`}>
+      {card.image_normal && <img src={card.image_normal} alt="" width={250} height={349} className="w-full rounded-[4.75%/3.5%]" />}
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="font-medium">{card.name}</span>
+        <span className="tabular-nums opacity-60">{card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}</span>
+      </div>
+      {rest.extra}
+      <CardTags card={card} roleKeys={rest.roleKeys} roles={rest.roles} tags={rest.tags} highlight={rest.highlight} onTag={() => {}} />
+    </div>
+  );
+}
+
 /** Right-hand panel on wide screens: the hovered card's image, the roles it fills, and its tags. */
 export function CardPanel({ card, roleKeys, roles, tags, highlight, onTag, onOpen, extra }: Props) {
   if (!card) {
