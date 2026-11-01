@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "./model";
-import { colorBalance, manaCurve, pipsOf, typeCounts } from "./stats";
+import { colorBalance, creatureTypeCounts, deckOverview, inCurveBucket, landMakes, manaCurve, pipCount, pipsOf, priceBandOf, priceBands, typeCounts } from "./stats";
 
 const line = (name: string, extra: Partial<CardSummary>, quantity = 1): DeckLine => ({
   board: "main",
@@ -84,5 +84,50 @@ describe("typeCounts", () => {
       { type: "Instant", count: 1 },
       { type: "Land", count: 12 },
     ]);
+  });
+});
+
+describe("what sits behind each stat", () => {
+  it("puts a spell in one curve bucket, and lands in none", () => {
+    expect(inCurveBucket(reach, 3)).toBe(true);
+    expect(inCurveBucket(reach, 2)).toBe(false);
+    expect(inCurveBucket(pool, 0)).toBe(false);
+    expect(inCurveBucket(line("Big", { mana_value: 12 }), 7)).toBe(true);
+  });
+
+  it("counts pips on spells and sources on lands", () => {
+    expect(pipCount(krasis, "U")).toBe(1);
+    expect(pipCount(pool, "U")).toBe(0);
+    expect(landMakes(pool, "U")).toBe(true);
+    expect(landMakes(forest, "U")).toBe(false);
+    expect(landMakes(krasis, "G")).toBe(false);
+  });
+
+  it("counts creature types, most common first", () => {
+    const elf = line("Elf", { type_line: "Creature — Elf Druid" }, 2);
+    const druid = line("Druid", { type_line: "Legendary Creature — Human Druid" });
+    expect(creatureTypeCounts([elf, druid, reach])).toEqual([
+      { type: "Druid", count: 3 },
+      { type: "Elf", count: 2 },
+      { type: "Human", count: 1 },
+    ]);
+  });
+
+  it("sorts prices into bands, with copies, and shows No price only when needed", () => {
+    const cheap = line("Cheap", { price_usd: 0.5 }, 2);
+    const edge = line("Edge", { price_usd: 5 });
+    expect(priceBandOf(edge)).toBe("5to20");
+    expect(priceBands([cheap, edge]).map((b) => [b.key, b.count, b.value])).toEqual([
+      ["under1", 2, 1],
+      ["1to5", 0, 0],
+      ["5to20", 1, 5],
+      ["over20", 0, 0],
+    ]);
+    expect(priceBands([krasis]).at(-1)?.key).toBe("none");
+  });
+
+  it("gives the headline numbers", () => {
+    const o = deckOverview([krasis, reach, pool, forest]);
+    expect(o).toMatchObject({ cards: 13, lands: 11, creatures: 1, medianValue: 2.5 });
   });
 });

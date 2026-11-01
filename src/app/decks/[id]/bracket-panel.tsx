@@ -1,11 +1,11 @@
 "use client";
 
-// Bracket targeting in the editor (Phase 5b): the header badge, the Bracket panel (target picker and every
-// finding), and the banner shown while the deck's cards go above the target. Nothing is ever blocked.
-import { useEffect } from "react";
+// Bracket targeting in the editor (Phase 5b): the header badge, the one place that says the deck is above its
+// target, and the Bracket panel it opens (target picker and every finding). Nothing is ever blocked.
 import { bracketSections, estimateLabel, overTarget, type BracketEstimate, type Finding } from "@/lib/brackets/evaluate";
 import { BRACKETS, COMBO_TAG_NAMES, type BracketNumber } from "@/lib/brackets/rules";
 import type { DeckLine } from "@/lib/deck/model";
+import { GlassOverlay } from "./glass-overlay";
 
 /** "Bracket 3 · cards 4+": target and estimate; amber when the cards go above the target. */
 export function BracketBadge({
@@ -20,12 +20,13 @@ export function BracketBadge({
   onClick: () => void;
 }) {
   const over = estimate ? estimate.floor > target : false;
+  const reasons = estimate ? overTarget(estimate, target).map((f) => f.label) : [];
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      title="Target bracket, and the bracket this deck's cards fit. Click for details."
+      title={over ? `Above your target:\n${reasons.join("\n")}\nClick for details.` : "Target bracket, and the bracket this deck's cards fit. Click for details."}
       className={`min-h-9 rounded-lg border bg-background/65 px-3 text-sm backdrop-blur ${
         active
           ? "border-gold bg-gold text-gold-ink"
@@ -38,30 +39,6 @@ export function BracketBadge({
       <span className="opacity-80">{!estimate ? "" : " · "}{!estimate ? "" : over ? `cards fit ${estimateLabel(estimate.floor)}` : "on target"}</span>
       {over && <span aria-label="above target"> ⚠</span>}
     </button>
-  );
-}
-
-/** Under the toolbar while the cards go above the target: what crossed the line, highest first. */
-export function BracketBanner({ target, estimate, onDetails }: { target: BracketNumber; estimate: BracketEstimate; onDetails: () => void }) {
-  const over = overTarget(estimate, target);
-  if (!over.length) return null;
-  return (
-    <div role="status" className="mt-3 rounded-md border border-amber-500/50 bg-amber-400/15 px-3 py-2 text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="font-medium">
-          Above your target, bracket {target} ({BRACKETS[target - 1].name}): the cards fit {estimateLabel(estimate.floor)}.
-        </p>
-        <button type="button" onClick={onDetails} className="min-h-8 rounded border border-foreground/20 px-2 text-xs">
-          Details
-        </button>
-      </div>
-      <ul className="mt-1 list-disc pl-5">
-        {over.slice(0, 3).map((f) => (
-          <li key={findingKey(f)}>{f.label}</li>
-        ))}
-        {over.length > 3 && <li className="list-none opacity-70">and {over.length - 3} more (see Details)</li>}
-      </ul>
-    </div>
   );
 }
 
@@ -91,32 +68,14 @@ export function BracketPanel({
   onOpenCard: (line: DeckLine) => void;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !paused) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
-    };
-  }, [paused, onClose]);
-
   const lineOf = new Map(lines.map((l) => [l.card.oracle_id, l]));
   const linesIn = (ids: string[]) => ids.flatMap((id) => lineOf.get(id) ?? []);
   const combos = estimate?.findings.filter((f) => f.combo) ?? [];
   const over = estimate ? estimate.floor > target : false;
+  const reasons = estimate ? overTarget(estimate, target) : [];
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Bracket"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 z-50 overflow-y-auto bg-background/70 p-4 backdrop-blur-xl sm:p-8"
-    >
+    <GlassOverlay label="Bracket" paused={paused} onClose={onClose}>
       <div className="mx-auto max-w-5xl space-y-8 text-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -126,6 +85,13 @@ export function BracketPanel({
             <p className={`mt-1 text-base ${over ? "text-amber-300" : ""}`}>
               {!estimate ? "Checking the cards…" : over ? `⚠ The cards fit ${estimateLabel(estimate.floor)}, above your target.` : `The cards fit ${estimateLabel(estimate.floor)}, within your target.`}
             </p>
+            {reasons.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 text-amber-300">
+                {reasons.map((f) => (
+                  <li key={findingKey(f)}>{f.label}</li>
+                ))}
+              </ul>
+            )}
           </div>
           <button type="button" autoFocus onClick={onClose} className="btn shrink-0">
             Close
@@ -222,7 +188,7 @@ export function BracketPanel({
           Cards can&apos;t show intent, so 1 vs 2, &quot;early&quot; combos, chained extra turns and cEDH are up to you.
         </p>
       </div>
-    </div>
+    </GlassOverlay>
   );
 }
 

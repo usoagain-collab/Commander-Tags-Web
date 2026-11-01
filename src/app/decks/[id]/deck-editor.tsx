@@ -69,7 +69,7 @@ import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
 import { BulkBar } from "./bulk-bar";
 import { DropOverlay } from "./drop-overlay";
-import { BracketBadge, BracketBanner, BracketPanel, cardFlag } from "./bracket-panel";
+import { BracketBadge, BracketPanel, cardFlag } from "./bracket-panel";
 import { estimateBracket, overTarget, type ComboRow } from "@/lib/brackets/evaluate";
 import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
@@ -734,7 +734,7 @@ export function DeckEditor({
   // The card panel rests on the commander until a card is hovered.
   const shown = preview ?? commanders[0]?.card ?? null;
   const shownLine = shown ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === shown.oracle_id) : undefined;
-  const closeBracket = useCallback(() => setPanel(null), []);
+  const closePanel = useCallback(() => setPanel(null), []);
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
   /**
    * A click on a card. While selecting (or with Ctrl/Cmd) it toggles the card; Shift selects everything between
@@ -993,15 +993,19 @@ export function DeckEditor({
           paused={!!sheet}
           onTarget={bracket.setTarget}
           onOpenCard={openLine}
-          onClose={closeBracket}
+          onClose={closePanel}
         />
       )}
       {panel === "stats" && (
         <StatsPanel
           lines={[...commanders, ...companions, ...mainLines]}
           identity={identity}
-          isRamp={(l) => lineRoleKeys(l).includes("ramp")}
-          onClose={() => setPanel(null)}
+          roles={roles}
+          roleCounts={counts}
+          roleKeysOf={lineRoleKeys}
+          paused={!!sheet}
+          onOpenCard={openLine}
+          onClose={closePanel}
         />
       )}
       {panel === "history" && !readOnly && (
@@ -1164,9 +1168,6 @@ export function DeckEditor({
             {tags.error && <span className="w-full text-sm text-amber-400">{tags.error}</span>}
           </div>
 
-          {estimate && panel !== "bracket" && (
-            <BracketBanner target={bracket.target} estimate={estimate} onDetails={() => setPanel("bracket")} />
-          )}
           {highlight && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-amber-400/15 px-3 py-2 text-sm">
               {highlight.startsWith("role:") ? "Highlighting cards that fill" : "Highlighting cards tagged"}{" "}
