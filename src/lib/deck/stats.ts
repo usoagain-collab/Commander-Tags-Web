@@ -95,3 +95,67 @@ export function typeCounts(lines: DeckLine[]): { type: string; count: number }[]
   }
   return TYPES.filter((t) => counts.has(t)).map((type) => ({ type, count: counts.get(type)! }));
 }
+
+// Which cards sit behind each number, so every bar in the Stats screen can list them.
+
+export const isSpell = (l: DeckLine) => !frontIsLand(l);
+export const isCreature = (l: DeckLine) => /\bCreature\b/.test(front(l.card.type_line));
+export const hasType = (l: DeckLine, type: string) => new RegExp(`\\b${type}\\b`).test(front(l.card.type_line));
+export const inCurveBucket = (l: DeckLine, mv: number) => isSpell(l) && Math.min(7, Math.max(0, Math.floor(l.card.mana_value))) === mv;
+export const pipCount = (l: DeckLine, c: Color) => (isSpell(l) ? pipsOf(l.card.mana_cost)[c] ?? 0 : 0);
+export const landMakes = (l: DeckLine, c: Color) => l.card.counts_as_land && (l.card.produced_mana ?? []).includes(c);
+
+/** The subtypes on a creature's front face ("Elf Druid" gives both). */
+export function creatureTypesOf(l: DeckLine): string[] {
+  if (!isCreature(l)) return [];
+  return (front(l.card.type_line).split("—")[1] ?? "").trim().split(/\s+/).filter(Boolean);
+}
+
+/** Most common creature types, most first, ties by name. */
+export function creatureTypeCounts(lines: DeckLine[]): { type: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const l of lines) for (const t of creatureTypesOf(l)) counts.set(t, (counts.get(t) ?? 0) + l.quantity);
+  return [...counts].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+}
+
+export const PRICE_BANDS = [
+  { key: "under1", label: "Under $1", min: 0, max: 1 },
+  { key: "1to5", label: "$1 to $5", min: 1, max: 5 },
+  { key: "5to20", label: "$5 to $20", min: 5, max: 20 },
+  { key: "over20", label: "$20 and up", min: 20, max: Infinity },
+] as const;
+export type PriceBandKey = (typeof PRICE_BANDS)[number]["key"] | "none";
+
+export function priceBandOf(l: DeckLine): PriceBandKey {
+  if (l.card.price_usd == null) return "none";
+  const p = Number(l.card.price_usd);
+  return PRICE_BANDS.find((b) => p >= b.min && p < b.max)?.key ?? "none";
+}
+
+/** Cards and dollars in each price band (copies included); cards with no price come last, when there are any. */
+export function priceBands(lines: DeckLine[]): { key: PriceBandKey; label: string; count: number; value: number }[] {
+  const rows: { key: PriceBandKey; label: string; count: number; value: number }[] = [
+    ...PRICE_BANDS.map((b) => ({ key: b.key as PriceBandKey, label: b.label, count: 0, value: 0 })),
+    { key: "none", label: "No price", count: 0, value: 0 },
+  ];
+  for (const l of lines) {
+    const row = rows.find((r) => r.key === priceBandOf(l))!;
+    row.count += l.quantity;
+    row.value += Number(l.card.price_usd ?? 0) * l.quantity;
+  }
+  return rows.filter((r) => r.key !== "none" || r.count > 0);
+}
+
+/** The headline numbers. Median is the middle spell's mana value, copies included. */
+export function deckOverview(lines: DeckLine[]) {
+  const values = lines.filter(isSpell).flatMap((l) => Array.from({ length: l.quantity }, () => l.card.mana_value)).sort((a, b) => a - b);
+  const mid = values.length >> 1;
+  const sum = (pick: (l: DeckLine) => boolean) => lines.filter(pick).reduce((n, l) => n + l.quantity, 0);
+  return {
+    cards: sum(() => true),
+    lands: sum((l) => l.card.counts_as_land),
+    creatures: sum(isCreature),
+    medianValue: !values.length ? 0 : values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2,
+    price: lines.reduce((n, l) => n + Number(l.card.price_usd ?? 0) * l.quantity, 0),
+  };
+}
