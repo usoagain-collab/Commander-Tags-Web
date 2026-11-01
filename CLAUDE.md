@@ -127,6 +127,7 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - **The field gets the room.** The table covers the site header and footer (`fixed inset-0`), so the Scryfall credit sits in its top bar. Top bar: ← Deck, Turn, Next turn, **Actions ▾** (`TableMenu`: everything else, with its shortcut key), life. Side zone cards are 72 px, hand cards 90 px.
 - **Card preview floats** (`HoverPreview`): only while hovering, on the side away from the mouse, takes no clicks. No permanent commander portrait.
+- **Lands and tokens stack in piles (`pilesOf` in `game.ts`, shared with the phone):** by name, tapped ones in their own pile, a card with counters apart. A click anywhere on a pile taps or untaps its next card, and the pile keeps its width as it shrinks, so repeated clicks land on the same pile.
 - **Commander tax shows only in the Command zone**, as "Tax: N" (by name for partners), even while the commander is out of the zone.
 
 ## Playtester on phones (built Nov 1, 2026)

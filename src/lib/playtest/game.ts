@@ -164,6 +164,25 @@ export function toggleTap(state: GameState, iid: string): GameState {
   return { ...state, battlefield: { ...state.battlefield, [iid]: { ...p, tapped: !p.tapped } } };
 }
 
+export type Pile = { key: string; ids: string[]; tapped: boolean };
+
+/**
+ * Lands and tokens stack by name. Tapped ones form their own pile, so you can read your mana at a glance, and a card
+ * with counters stands apart because it's no longer interchangeable.
+ */
+export function pilesOf(state: GameState, ids: string[]): Pile[] {
+  const piles = new Map<string, Pile>();
+  for (const iid of ids) {
+    const p = state.battlefield[iid];
+    const key = `${state.cards[iid].name}|${p.tapped}|${JSON.stringify(p.counters ?? {})}`;
+    const pile = piles.get(key);
+    if (pile) pile.ids.push(iid);
+    else piles.set(key, { key, ids: [iid], tapped: p.tapped });
+  }
+  // Same-named piles stay together however the tapping went.
+  return [...piles.values()].sort((a, b) => state.cards[a.ids[0]].name.localeCompare(state.cards[b.ids[0]].name) || Number(a.tapped) - Number(b.tapped));
+}
+
 export function untapAll(state: GameState): GameState {
   const battlefield: Record<string, Placed> = {};
   for (const [iid, p] of Object.entries(state.battlefield)) battlefield[iid] = p.tapped ? { ...p, tapped: false } : p;
