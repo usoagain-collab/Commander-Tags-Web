@@ -9,6 +9,7 @@ import {
   applyTagCards,
   BOARD_LABELS,
   dropTagFromChanges,
+  effectivePrintings,
   entryKey,
   keepCategories,
   keepPrintings,
@@ -32,6 +33,7 @@ import {
   type DeckLine,
   type Entries,
   type Plan,
+  type PreferredPrintings,
   type Printings,
   type TagCards,
 } from "@/lib/deck/model";
@@ -42,6 +44,7 @@ import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
 import { useArtTree } from "@/lib/tags/use-art-tree";
+import { usePreferredPrintings } from "@/lib/deck/use-preferred-printings";
 import { useChosenArtTags } from "@/lib/tags/use-chosen-art-tags";
 import type { ChosenPrinting } from "@/lib/deck/printing";
 import {
@@ -171,6 +174,7 @@ type Props = {
   initialEntries: Entries;
   initialCategories: Categories;
   initialPrintings: Printings;
+  initialPreferred: PreferredPrintings;
   initialCards: Record<string, CardSummary>;
   /** The deck's tags, loaded with the page (undefined if that failed: the editor then fetches them). */
   initialTags?: InitialTags;
@@ -200,6 +204,7 @@ export function DeckEditor({
   initialEntries,
   initialCategories,
   initialPrintings,
+  initialPreferred,
   initialCards,
   initialTags,
   initialCombos,
@@ -407,6 +412,9 @@ export function DeckEditor({
   }, [readOnly, undo, redo, selecting, stopSelecting, panel, sheet]);
 
   const { entries, cards, categories, tagCards, printings } = state;
+  // What each row shows: its own pick, else your default. Edits and undo work on the picks alone.
+  const { preferred, setDefault } = usePreferredPrintings(initialPreferred);
+  const shownPrintings = useMemo(() => effectivePrintings(entries, printings, preferred), [entries, printings, preferred]);
 
   // ---------- bracket targeting (Phase 5b) ----------
   const bracket = useBracketTarget(deck.id, targetBracket, readOnly);
@@ -426,7 +434,7 @@ export function DeckEditor({
     () => [...new Set([...Object.keys(cards), ...(preview ? [preview.oracle_id] : [])])],
     [cards, preview],
   );
-  const tags = useChosenArtTags(useTagData(tagIds, initialTags), printings);
+  const tags = useChosenArtTags(useTagData(tagIds, initialTags), shownPrintings);
 
   // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
   const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
@@ -471,10 +479,10 @@ export function DeckEditor({
   // ---------- what's on screen ----------
   const identity = deckIdentity(entries, cards);
   const size = deckSize(entries);
-  const commanders = linesFor(entries, cards, "commander", printings);
-  const companions = linesFor(entries, cards, "companion", printings);
-  const mainLines = linesFor(entries, cards, "main", printings);
-  const maybeLines = linesFor(entries, cards, "maybe", printings);
+  const commanders = linesFor(entries, cards, "commander", shownPrintings);
+  const companions = linesFor(entries, cards, "companion", shownPrintings);
+  const mainLines = linesFor(entries, cards, "main", shownPrintings);
+  const maybeLines = linesFor(entries, cards, "maybe", shownPrintings);
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
   // The deck as the bracket check sees it (also used to screen suggestions, 5c).
@@ -724,7 +732,7 @@ export function DeckEditor({
   const order = sections.flatMap((s) => s.items.map((i) => i.line));
   // The deck image: a card's art, following its chosen printing. A card no longer in the deck falls back to the commander.
   const coverArt = coverId
-    ? (["commander", "companion", "main", "maybe"] as Board[]).flatMap((b) => linesFor(entries, cards, b, printings)).find((l) => l.card.oracle_id === coverId)?.card.image_art_crop
+    ? (["commander", "companion", "main", "maybe"] as Board[]).flatMap((b) => linesFor(entries, cards, b, shownPrintings)).find((l) => l.card.oracle_id === coverId)?.card.image_art_crop
     : null;
   const sheetIndex = sheet ? order.findIndex((l) => l.card.oracle_id === sheet.oracle_id && l.board === sheet.board) : -1;
   const sheetLine = sheetIndex >= 0 ? order[sheetIndex] : null;
@@ -855,7 +863,7 @@ export function DeckEditor({
         commanders={commanders.map((l) => l.card)}
         identity={identity}
         size={size}
-        price={totalPrice(entries, cards, undefined, printings)}
+        price={totalPrice(entries, cards, undefined, shownPrintings)}
         backLink={!readOnly}
         complete={complete}
         celebrate={celebrate}
@@ -1024,7 +1032,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={printings} cards={cards} onClose={() => setPanel(null)} />}
+      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={shownPrintings} cards={cards} onClose={() => setPanel(null)} />}
 
       <div ref={editorGrid} style={{ "--rail": `${railWidth}px` } as React.CSSProperties} className={`mt-6 grid gap-6 ${EDITOR_COLUMNS[previewMode === "docked" ? "docked" : "none"]}`}>
         {/* Wide screens: the role profile gets its own column on the left, as wide as the user drags it. */}
@@ -1246,7 +1254,7 @@ export function DeckEditor({
         />
       )}
 
-      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards, undefined, printings)} />
+      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards, undefined, shownPrintings)} />
 
       {selecting && !readOnly && (
         <>
@@ -1321,6 +1329,17 @@ export function DeckEditor({
           }}
           onQuantity={(n) => {
             if (run(planSetQuantity(entries, sheetLine.card, sheetLine.board, n)) && n === 0) say(`Removed ${sheetLine.card.name}.`, true);
+          }}
+          pickedHere={!!printings[entryKey(sheetLine.board, sheetLine.card.oracle_id)]}
+          myDefault={preferred[sheetLine.card.oracle_id] ?? null}
+          onSetDefault={async (to) => {
+            const { card, board } = sheetLine;
+            const problem = await setDefault(card.oracle_id, to);
+            if (problem) return say(problem);
+            say(to ? `${to.set_name} is now your default ${card.name} in all your decks.` : `Cleared your default ${card.name}.`);
+            // A plain pick of the same printing would stop this deck following the default later. Foil stays a pick.
+            const own = printings[entryKey(board, card.oracle_id)];
+            if (to && own?.id === to.id && !own.foil) run(planPrinting(printings, card, board, null));
           }}
           onPrinting={(to) => {
             const plan = planPrinting(printings, sheetLine.card, sheetLine.board, to);

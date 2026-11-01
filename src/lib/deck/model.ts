@@ -4,7 +4,7 @@
 // Applying a change forward sets the new counts; applying it backward restores the old ones. That makes
 // undo/redo exact, and the same row list is what autosave sends to the database.
 
-import { printingImage, printingPrice, type ChosenPrinting } from "./printing";
+import { foilFor, printingImage, printingPrice, type ChosenPrinting } from "./printing";
 
 export type Board = "commander" | "main" | "maybe" | "companion";
 export const BOARDS: Board[] = ["commander", "main", "companion", "maybe"];
@@ -360,6 +360,22 @@ const row = (card: CardSummary, board: Board, from: number, to: number): RowChan
 });
 
 // ---------- reading the deck ----------
+
+/** Your default printing of each card (oracle_id -> printing), for rows with no printing of their own. */
+export type PreferredPrintings = Record<string, ChosenPrinting>;
+
+/**
+ * What each row shows: the printing picked in this deck, else your default. Use the result to display, price and
+ * export; edits, undo and versions work on the deck's own picks. A default that only comes in foil shows as foil.
+ */
+export function effectivePrintings(entries: Entries, printings: Printings, preferred: PreferredPrintings): Printings {
+  const out: Printings = { ...printings };
+  for (const k of Object.keys(entries)) {
+    const fallback = preferred[parseKey(k).oracle_id];
+    if (!out[k] && fallback) out[k] = { ...fallback, foil: foilFor(fallback.finishes, false) };
+  }
+  return out;
+}
 
 /** `card` already shows the row's chosen printing: its image, art and price. */
 export type DeckLine = { board: Board; quantity: number; card: CardSummary; printing?: ChosenPrinting };

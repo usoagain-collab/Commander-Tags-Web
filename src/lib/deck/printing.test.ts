@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyChange,
   applyPrintings,
+  effectivePrintings,
   keepPrintings,
   linesFor,
   planMove,
@@ -204,6 +205,28 @@ describe("import and export", () => {
     expect(change.printings).toEqual([{ oracle_id: "sol", board: "main", from: null, to: pick() }]);
     const same = planImport(entries, lines, found, "replace", { printingOf: () => pick(), current: { "main|sol": pick() } });
     expect(same.change.printings).toBeUndefined();
+  });
+});
+
+describe("effectivePrintings", () => {
+  const entries = { "main|sol": 1, "maybe|sol": 1, "main|other": 1 };
+  const mine = pick({ id: "default", set_name: "Default" });
+
+  it("fills rows with no pick from your default, and a pick wins", () => {
+    const shown = effectivePrintings(entries, { "maybe|sol": pick() }, { sol: mine });
+    expect(shown["main|sol"].id).toBe("default");
+    expect(shown["maybe|sol"].id).toBe(ID);
+    expect(shown["main|other"]).toBeUndefined();
+  });
+
+  it("is never foil unless the default only comes in foil", () => {
+    expect(effectivePrintings(entries, {}, { sol: mine })["main|sol"].foil).toBe(false);
+    expect(effectivePrintings(entries, {}, { sol: pick({ finishes: ["foil"] }) })["main|sol"].foil).toBe(true);
+  });
+
+  it("leaves out cards not in the deck, and feeds the price", () => {
+    expect(effectivePrintings({}, {}, { sol: mine })).toEqual({});
+    expect(totalPrice({ "main|sol": 1 }, { sol }, undefined, effectivePrintings({ "main|sol": 1 }, {}, { sol: mine }))).toBe(3);
   });
 });
 

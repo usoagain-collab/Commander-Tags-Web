@@ -166,7 +166,6 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Feature | What it means | Added |
 | --- | --- | --- |
 | Mixed copies of one card | Different printings or foil for copies of the same card on one board, such as 10 Forests with different art. Today one row holds one printing | Oct 31, 2026 |
-| Preferred printing | Remember a favourite printing per card across all your decks (needs printings) | Oct 18, 2026 |
 | Pricing details | Prices per store and price settings (foil and per-printing prices are built) | Oct 18, 2026 |
 | Collection tracking | Ownership checkmarks, "add to collection", the "unowned" price total (also listed under Out of scope for v1) | Oct 18, 2026 |
 | Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |

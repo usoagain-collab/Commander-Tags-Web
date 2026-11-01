@@ -40,6 +40,7 @@ type Bundle = {
   combos: ComboRow[] | null;
   tokens: DeckToken[] | null;
   profile: Profile | null;
+  preferred: Record<string, ChosenPrinting> | null;
 };
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,5 +55,5 @@ export const loadDeck = cache(async (id: string, kind: "editor" | "playtest") =>
   const b = res.data as Bundle | null;
   if (!b) return { user, deck: null } as const;
   const tags: InitialTags | undefined = b.tags ? { ...b.tags, ids: b.cards.map((c) => c.oracle_id) } : undefined;
-  return { user, deck: b.deck, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile } as const;
+  return { user, deck: b.deck, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile, preferred: b.preferred ?? {} } as const;
 });
