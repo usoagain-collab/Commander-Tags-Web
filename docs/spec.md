@@ -180,6 +180,8 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Light / dark mode switch | Friend test: a visible light/dark toggle (v1 only follows the device setting) | Oct 24, 2026 |
 | Link sign-in methods | A "Link Google / Discord to this account" button, so one account works with both. Supabase merges sign-ins automatically only when both report the same verified email; otherwise each method makes its own account. Needs manual identity linking turned on in Supabase | Oct 24, 2026 |
 | Refined bracket estimate | A smarter bracket estimator that weighs combos, Game Changers and, most importantly, theme cohesiveness (how tightly the deck's cards share themes), instead of v1's floor from rule-breaking cards alone. Exact specs to be decided in the v2 build | Oct 24, 2026 |
+| Copy to my decks | Design judges: a button on a shared deck that copies it into the viewer's own decks, so a friend can start from it | Oct 31, 2026 |
+| Built by <name> | Design judges: show the builder's name on a shared deck | Oct 31, 2026 |
 
 ## Not intended
 
