@@ -20,6 +20,10 @@ export default async function DecksPage() {
     .eq("owner_id", user!.id)
     .order("updated_at", { ascending: false });
 
+  // Your default printings, for the art on each tile.
+  const { data: defaults } = await supabase.from("preferred_printings").select("oracle_id, printing_id");
+  const defaultOf = new Map((defaults ?? []).map((p) => [p.oracle_id as string, p.printing_id as string]));
+
   type Row = { quantity: number; board: string; oracle_id: string; printing_id: string | null };
   const rowsOf = (d: { deck_cards?: unknown }) => (d.deck_cards ?? []) as Row[];
   // Batches of 100: too many ids in one request make its URL too long.
@@ -37,7 +41,8 @@ export default async function DecksPage() {
     const cards = rowsOf(d);
     const own = cards.filter((r) => r.board === "commander").flatMap((r) => commanders.get(r.oracle_id) ?? []);
     const cover = cards.find((r) => r.oracle_id === d.cover_oracle_id);
-    const chosenArt = cover ? cover.printing_id : cards.find((r) => r.board === "commander" && r.printing_id)?.printing_id;
+    const shownPrinting = (r: Row) => r.printing_id ?? defaultOf.get(r.oracle_id) ?? null;
+    const chosenArt = cover ? shownPrinting(cover) : cards.filter((r) => r.board === "commander").map(shownPrinting).find(Boolean);
     const defaultArt = cover ? commanders.get(cover.oracle_id)?.image_art_crop : own[0]?.image_art_crop;
     return {
       id: d.id as string,

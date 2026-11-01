@@ -27,6 +27,10 @@ type Props = {
   onMove: (to: Board) => void;
   onQuantity: (n: number) => void;
   onPrinting: (to: ChosenPrinting | null) => void;
+  /** This deck has its own pick, rather than following your default. */
+  pickedHere: boolean;
+  myDefault: ChosenPrinting | null;
+  onSetDefault: (to: ChosenPrinting | null) => void;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -169,6 +173,7 @@ export function CardSheet(props: Props) {
                 <p className="mt-1 text-sm opacity-85">
                   {printing.set_name} ({printing.set.toUpperCase()}) #{printing.number}
                   {printing.foil && <span className="text-gold"> · ✦ Foil</span>}
+                  {printing.id === props.myDefault?.id && <span> · ★ Your default</span>}
                 </p>
               )}
               <CommanderLegality details={details} />
@@ -225,7 +230,15 @@ export function CardSheet(props: Props) {
             )}
 
             {!readOnly && panel === "printing" && (
-              <PrintingPicker card={card} printing={printing ?? null} onPick={props.onPrinting} onDone={() => setPanel("main")} />
+              <PrintingPicker
+                card={card}
+                printing={printing ?? null}
+                pickedHere={props.pickedHere}
+                myDefault={props.myDefault}
+                onPick={props.onPrinting}
+                onSetDefault={props.onSetDefault}
+                onDone={() => setPanel("main")}
+              />
             )}
 
             <RulesText details={details} error={error} onRetry={retry} />

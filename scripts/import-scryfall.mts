@@ -186,7 +186,7 @@ async function main() {
     const cards = (await downloadRecords<ScryfallCard>(entry("oracle_cards"))).filter((c) => c.oracle_id);
     log(`  ${cards.length} cards`);
     log("Downloading default_cards for prices ...");
-    const inDecks = await client.query<{ printing_id: string }>("select distinct printing_id from public.deck_cards where printing_id is not null");
+    const inDecks = await client.query<{ printing_id: string }>("select printing_id from public.deck_cards where printing_id is not null union select printing_id from public.preferred_printings");
     const printingPrices = new Map<string, PrintingPrices>();
     const cheapest = await cheapestPrices(entry("default_cards"), new Set(inDecks.rows.map((r) => r.printing_id)), printingPrices).catch((e) => {
       log(`  Couldn't read default_cards, using oracle_cards prices: ${e}`);
@@ -303,8 +303,16 @@ async function main() {
           [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
         );
         await client.query("alter table public.deck_cards enable trigger deck_cards_touch");
+        const defaults = await client.query(
+          `update public.preferred_printings c
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric)
+           where c.printing_id = p.id
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)`,
+          [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
+        );
         await client.query("commit");
-        log(`  ${updated.rowCount} chosen printings repriced`);
+        log(`  ${updated.rowCount} chosen printings and ${defaults.rowCount} default printings repriced`);
       } catch (e) {
         await client.query("rollback").catch(() => {});
         log(`  Couldn't refresh chosen printing prices: ${e}`);

@@ -14,12 +14,18 @@ const money = (n: number | null) => (n == null ? null : `$${n.toFixed(2)}`);
 export function PrintingPicker({
   card,
   printing,
+  pickedHere,
+  myDefault,
   onPick,
+  onSetDefault,
   onDone,
 }: {
   card: CardSummary;
   printing: ChosenPrinting | null;
+  pickedHere: boolean;
+  myDefault: ChosenPrinting | null;
   onPick: (to: ChosenPrinting | null) => void;
+  onSetDefault: (to: ChosenPrinting | null) => void;
   onDone: () => void;
 }) {
   const [prints, setPrints] = useState<ChosenPrinting[] | null>(null);
@@ -95,12 +101,30 @@ export function PrintingPicker({
         </button>
         <button
           type="button"
-          disabled={!printing}
+          disabled={!pickedHere}
           onClick={() => onPick(null)}
           className="min-h-11 rounded-lg border border-foreground/20 px-3 text-sm font-medium hover:bg-foreground/10 disabled:opacity-50"
         >
-          Back to default
+          {myDefault ? "Use my default" : "Back to default"}
         </button>
+        {shown && shown.id === myDefault?.id ? (
+          <button
+            type="button"
+            onClick={() => onSetDefault(null)}
+            className="col-span-2 min-h-11 rounded-lg border border-gold px-3 text-sm font-medium text-gold"
+          >
+            ★ My default in all decks: clear it
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={!shown}
+            onClick={() => shown && onSetDefault(shown)}
+            className="col-span-2 min-h-11 rounded-lg border border-foreground/20 px-3 text-sm font-medium hover:bg-foreground/10 disabled:opacity-50"
+          >
+            ★ Make this my default in all decks
+          </button>
+        )}
       </div>
       {shown && foilLocked && (
         <p className="mt-1 text-xs opacity-70">{hasFoil(shown.finishes) ? "This printing only comes in foil." : "This printing has no foil. Pick one that does."}</p>
@@ -133,6 +157,7 @@ export function PrintingPicker({
                     className="block w-full rounded-[4.75%/3.5%]"
                   />
                   <span className="mt-1 block truncate">{p.set_name}</span>
+                  {p.id === myDefault?.id && <span className="block text-gold">★ Your default</span>}
                   <span className="block opacity-70">
                     {p.set.toUpperCase()} #{p.number}
                   </span>

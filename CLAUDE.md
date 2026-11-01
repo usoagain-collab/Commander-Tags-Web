@@ -29,7 +29,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026); Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` set up and checked live. Left: the friend test itself |
 | Design pass | Done (merged Oct 31, 2026): three judge-panel rounds. Final scores UI 14, UX 15, Visual 15, Readability 14, Fun 15, Bugs 17 (baseline 13, 12, 8, 13, 9, 15) |
 | Printings + foil | Built Oct 31, 2026 (from the v2 backlog, at David's request). See "Printings and foil" below |
-| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (pricing details, mixed copies of one card, collection, wish list, change mana cost, preferred printing, multiplayer playtesting, stats drill-down) |
+| v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (pricing details, mixed copies of one card, collection, wish list, change mana cost, multiplayer playtesting, stats drill-down) |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
 
@@ -144,6 +144,7 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Art tags** follow the chosen illustration through `useChosenArtTags` and SQL `art_tags_for_illustrations`; a card on two boards uses its deck printing over its maybeboard one.
 - **Import/export:** Moxfield, Archidekt and plain lists write `(SET) number *F*` (or `*E*`), and import reads them through Scryfall's `/cards/collection`, ignoring a code that names a different card. Arena and MTGO stay names only. Dragging a printing from Scryfall stores it when that adds the row.
 - **Nightly:** the import reprices chosen printings while it reads `default_cards`, in its own short transaction with `deck_cards_touch` disabled, so decks don't all look edited. Disabling the trigger locks `deck_cards` until commit, so keep it out of the long tag transaction.
+- **Your default printing (David chose, Nov 1, 2026: all your decks):** "Make this my default in all decks" in the picker. Table `preferred_printings` (migration 0028), private to the owner; `deck_preferred_printings` gives a shared deck's viewers only the defaults for cards in it, and the owner all of them. Order: pick in this deck, then your default, then the site's. `effectivePrintings` in `model.ts` merges them for display, price and export; edits, undo and versions still use the deck's own picks. Saved directly, not Ctrl+Z (`use-preferred-printings.ts`). The default never includes foil. Making the deck's plain pick your default clears that pick, so the deck follows later changes. Search and Suggest still show the site's image until a card is added.
 - **Known limit:** one printing per card per board, so 10 Forests share one art and foil state (v2 backlog: mixed copies). Add to another deck doesn't carry the printing.
 
 ## Stack (decided)
