@@ -61,7 +61,7 @@ export default async function DecksPage() {
               className="min-h-11 min-w-48 flex-1 rounded-lg border border-foreground/20 bg-background/60 px-3"
             />
             <label className="flex items-center gap-2 text-sm">
-              <span className="opacity-80">Power level</span>
+              <span className="opacity-80">Bracket</span>
               <select
                 name="bracket"
                 defaultValue="3"

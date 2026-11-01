@@ -136,7 +136,7 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
           <button
             onClick={check}
             disabled={busy || !text.trim()}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink disabled:opacity-50"
           >
             {busy ? "Looking up cards…" : "Check list"}
           </button>
@@ -144,7 +144,7 @@ export function ImportPanel({ entries, onApply, onClose }: ImportProps) {
           <button
             onClick={() => onApply(preview.change, preview.cards)}
             disabled={preview.change.rows.length === 0}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink disabled:opacity-50"
           >
             {preview.change.rows.length === 0 ? "Nothing to change" : mode === "replace" ? "Replace deck" : "Add cards"}
           </button>
@@ -194,7 +194,7 @@ export function ExportPanel({ deckName, entries, cards, onClose }: ExportProps) 
             aria-selected={f === format}
             onClick={() => setFormat(f)}
             className={`rounded-md border px-3 py-1 text-sm ${
-              f === format ? "border-foreground bg-foreground text-background" : "border-foreground/20"
+              f === format ? "border-gold bg-gold text-gold-ink" : "border-foreground/20"
             }`}
           >
             {EXPORT_FORMATS[f]}
@@ -210,7 +210,7 @@ export function ExportPanel({ deckName, entries, cards, onClose }: ExportProps) 
         className="mt-3 w-full rounded-md border border-foreground/20 bg-transparent p-3 font-mono text-sm"
       />
       <div className="mt-3 flex gap-3">
-        <button onClick={copy} className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background">
+        <button onClick={copy} className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink">
           {copied ? "Copied" : "Copy"}
         </button>
         <button onClick={download} className="rounded-md border border-foreground/20 px-4 py-2 text-sm">

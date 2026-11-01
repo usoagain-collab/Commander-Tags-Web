@@ -19,7 +19,9 @@ export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; 
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span className={size === 100 ? "font-semibold text-green-700 dark:text-green-400" : "font-semibold"}>{size} / 100</span>
+        <span className={size === 100 ? "font-semibold text-green-400" : size > 100 ? "font-semibold text-red-400" : "font-semibold"}>
+          {size} / 100{size > 100 && " ⚠"}
+        </span>
         {types.map((g) => (
           <span key={g.section} className="hidden opacity-70 sm:inline">
             {g.section} {g.count}
@@ -28,7 +30,7 @@ export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; 
         {lands > 0 && (
           <span className="opacity-70" title={mdfc ? `${mdfc} modal double-faced card(s) with a land face count as lands` : undefined}>
             Land {lands}
-            {mdfc > 0 && ` (incl. ${mdfc} MDFC)`}
+            {mdfc > 0 && ` (${mdfc} can be spells)`}
           </span>
         )}
         <span className="ml-auto tabular-nums opacity-70">${price.toFixed(2)}</span>

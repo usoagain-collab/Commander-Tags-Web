@@ -44,7 +44,9 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
         {deck.art ? (
           <img src={deck.art} alt="" loading="lazy" className="h-full w-full object-cover object-[center_25%]" />
         ) : (
-          <span className="flex h-full items-center justify-center px-4 pb-10 text-center text-sm opacity-70">Pick a commander to bring this deck to life</span>
+          <span className="m-3 flex h-[calc(100%-1.5rem)] items-start justify-center rounded-lg border border-dashed border-gold/50 px-4 pt-3 text-center text-sm font-medium text-gold">
+            + Choose a commander
+          </span>
         )}
         <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-panel via-panel/30 to-transparent" />
         <span className="absolute inset-x-0 bottom-0 px-4 pb-2">
@@ -62,7 +64,9 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
           </span>
         )}
         <span className={deck.card_count === 100 ? "font-semibold text-green-400" : "font-medium"}>{deck.card_count} / 100</span>
-        <span className="opacity-70">{ago(deck.updated_at)}</span>
+        <span className="opacity-70" suppressHydrationWarning>
+          {ago(deck.updated_at)}
+        </span>
         {mode === "view" && (
           <span className="ml-auto flex gap-1">
             <button onClick={() => setMode("rename")} className="min-h-9 px-1.5 opacity-75 hover:opacity-100">

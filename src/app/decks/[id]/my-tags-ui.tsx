@@ -130,7 +130,7 @@ export function SheetMyTags({
           <ScopeChoice value={scope} onChange={setScope} />
           {message && <p className="text-amber-700 dark:text-amber-400">{message}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={busy} className="min-h-11 flex-1 rounded-lg bg-foreground px-3 font-medium text-background disabled:opacity-50">
+            <button type="submit" disabled={busy} className="min-h-11 flex-1 rounded-lg bg-gold px-3 font-medium text-gold-ink disabled:opacity-50">
               {busy ? "Adding…" : "Add tag to this card"}
             </button>
             <button type="button" onClick={() => setAdding(false)} className="min-h-11 rounded-lg border border-foreground/20 px-3">
@@ -365,7 +365,7 @@ function TagEditor({
         </div>
       ) : (
         <div className="flex gap-2">
-          <button type="submit" className="min-h-11 flex-1 rounded-lg bg-foreground px-3 font-medium text-background">
+          <button type="submit" className="min-h-11 flex-1 rounded-lg bg-gold px-3 font-medium text-gold-ink">
             Save
           </button>
           <button type="button" onClick={onDone} className="min-h-11 rounded-lg border border-foreground/20 px-3">

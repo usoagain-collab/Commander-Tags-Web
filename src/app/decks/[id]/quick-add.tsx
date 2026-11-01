@@ -23,6 +23,9 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
   const latest = useRef(0);
+  // What the shown results are for, and a board waiting on them: Enter can arrive before the search answers.
+  const answered = useRef("");
+  const pendingBoard = useRef<Board | null>(null);
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }));
 
@@ -38,11 +41,18 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       const { data } = await supabase.rpc("search_cards", { q, lim: commanderOnly ? 30 : 8 });
       if (id !== latest.current) return;
       const found = (data ?? []) as CardSummary[];
-      setResults(commanderOnly ? found.filter((c) => c.can_be_commander).slice(0, 8) : found);
+      const usable = commanderOnly ? found.filter((c) => c.can_be_commander).slice(0, 8) : found;
+      answered.current = q;
+      const waiting = pendingBoard.current;
+      pendingBoard.current = null;
+      if (waiting && usable[0]) return choose(usable[0], waiting);
+      setResults(usable);
       setActive(0);
       setOpen(true);
     }, 120);
     return () => clearTimeout(timer);
+    // choose only touches this box and calls onAdd; re-running the search for a new onAdd would be wrong.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, supabase, commanderOnly]);
 
   useEffect(() => {
@@ -69,7 +79,8 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     } else if (e.key === "Enter") {
       e.preventDefault();
       const board: Board = commanderOnly || e.ctrlKey || e.metaKey ? "commander" : e.shiftKey ? "maybe" : "main";
-      choose(results[active], board);
+      if (answered.current === text.trim()) choose(results[active], board);
+      else if (text.trim().length >= 2) pendingBoard.current = board;
     } else if (e.key === "Escape") {
       setOpen(false);
     }
@@ -92,7 +103,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         className="min-h-12 w-full rounded-lg border border-foreground/25 bg-background/60 px-3 text-base"
       />
       {!commanderOnly && (
-        <p className="mt-1 hidden text-[13px] opacity-70 md:block" title="Press / to come back to this box">
+        <p className="mt-1 hidden text-[13px] opacity-75 lg:block" title="Press / to come back to this box">
           Enter: main · Shift+Enter: maybe · Ctrl+Enter: commander
         </p>
       )}
@@ -127,7 +138,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         </ul>
       )}
       {open && text.trim().length >= 2 && results.length === 0 && (
-        <p className="absolute z-20 mt-1 w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm opacity-70 shadow-lg">
+        <p className="absolute z-30 mt-1 w-full rounded-lg border border-foreground/15 bg-panel-raised px-3 py-2 text-sm shadow-2xl">
           No Commander-legal card matches “{text.trim()}”.
         </p>
       )}

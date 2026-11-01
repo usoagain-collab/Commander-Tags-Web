@@ -15,6 +15,8 @@ export function DeckHero({
   size,
   price,
   backLink,
+  complete,
+  themes,
   note,
   status,
   actions,
@@ -26,6 +28,10 @@ export function DeckHero({
   size: number;
   price: number;
   backLink: boolean;
+  /** 100 cards and every role target met. */
+  complete: boolean;
+  /** The deck's top themes, in words. */
+  themes: string[];
   note?: React.ReactNode;
   status?: React.ReactNode;
   actions: React.ReactNode;
@@ -34,23 +40,23 @@ export function DeckHero({
   const art = commanders.find((c) => c.image_art_crop)?.image_art_crop;
   const pips = identity ? WUBRG.filter((c) => identity.has(c)) : [];
   return (
-    <header className="relative isolate border-b border-foreground/10">
+    <header className="relative isolate z-30 border-b border-foreground/10">
       {/* The art sits in its own clipped layer, so the More menu can hang outside the hero. */}
       <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden">
         {art && <img src={art} alt="" className="h-full w-full scale-105 object-cover object-[center_25%] opacity-75" />}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/65 to-background/10" />
         <div className="absolute inset-0 bg-gradient-to-r from-background/85 via-background/30 to-transparent" />
       </div>
-      <div className={`mx-auto flex max-w-[1500px] items-end gap-5 px-4 pb-5 sm:px-6 ${art ? "pt-8 sm:pt-16" : "pt-6"}`}>
+      <div className={`mx-auto flex max-w-[1500px] items-end gap-5 px-4 pb-5 sm:px-6 ${art ? "pt-3 sm:pt-12" : "pt-3 sm:pt-6"}`}>
         {commanders.length > 0 && (
-          <div className="hidden shrink-0 sm:flex">
+          <div className="hidden shrink-0 sm:flex lg:hidden">
             {commanders.map((c, i) => (
               <button
                 key={c.oracle_id}
                 type="button"
                 onClick={() => onOpenCommander(i)}
                 title={`Open ${c.name}`}
-                className={`card-lift w-36 rounded-[4.75%/3.5%] shadow-2xl lg:w-44 ${i > 0 ? "-ml-24 lg:-ml-32" : ""}`}
+                className={`card-lift w-36 rounded-[4.75%/3.5%] shadow-2xl ${i > 0 ? "-ml-24" : ""}`}
               >
                 {c.image_normal && <img src={c.image_normal} alt={c.name} className="w-full rounded-[4.75%/3.5%]" />}
               </button>
@@ -76,10 +82,21 @@ export function DeckHero({
           </div>
           {note}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            <Stat good={size === 100}>{size} / 100 cards</Stat>
+            {complete && <span className="complete inline-flex min-h-9 items-center rounded-lg bg-gold px-3 font-semibold text-gold-ink">✦ Deck complete</span>}
+            <Stat good={size === 100}>
+              <span key={size} className="pop inline-block">
+                {size} / 100 cards
+              </span>
+            </Stat>
             <Stat>${price.toFixed(0)}</Stat>
             {status}
           </div>
+          {themes.length > 0 && (
+            <p className="mt-2 text-sm [text-shadow:0_1px_8px_#000]">
+              <span className="opacity-75">Plays: </span>
+              {themes.join(" · ")}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>
         </div>
       </div>

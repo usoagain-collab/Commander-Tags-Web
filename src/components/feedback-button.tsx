@@ -54,7 +54,7 @@ export function FeedbackButton() {
               <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-lg border border-foreground/20 px-4 text-sm">
                 Cancel
               </button>
-              <button type="submit" disabled={!text.trim() || status === "sending"} className="min-h-11 rounded-lg bg-foreground px-4 text-sm font-medium text-background disabled:opacity-40">
+              <button type="submit" disabled={!text.trim() || status === "sending"} className="min-h-11 rounded-lg bg-gold px-4 text-sm font-medium text-gold-ink disabled:opacity-40">
                 {status === "sending" ? "Sending…" : "Send"}
               </button>
             </div>

@@ -79,6 +79,7 @@ import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile } from "./role-profile";
 import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
+import { prettyTag, roleColor } from "@/lib/tags/pretty";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 
 type State = {
@@ -229,7 +230,8 @@ export function DeckEditor({
     anchor.current = null;
   }, []);
   // Remembered per user: View / Group / Sort and the top-tags switches (one writer), plus hidden tags.
-  const [prefs, updatePrefs] = useTagViewPrefs(savedTagView, userId);
+  // A friend opening a shared deck sees the cards first, whatever they last used themselves.
+  const [prefs, updatePrefs] = useTagViewPrefs(readOnly ? { ...savedTagView, view: "grid" } : savedTagView, userId);
   const view = readViewSettings(prefs);
   const setView = (v: ViewSettings) => updatePrefs(v);
   const themeSettings = readThemeSettings(prefs);
@@ -300,16 +302,18 @@ export function DeckEditor({
       const el = e.target as HTMLElement;
       const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
       const mod = e.ctrlKey || e.metaKey;
+      // An empty box has no typing to undo (quick add keeps focus after adding), so the shortcut means the deck.
+      const blank = el instanceof HTMLInputElement && el.value === "";
       if (e.key === "Escape" && selecting && !typing) {
         stopSelecting();
       } else if (e.key === "/" && !typing) {
         e.preventDefault();
         quickAdd.current?.focus();
-      } else if (mod && !typing && e.key.toLowerCase() === "z") {
+      } else if (mod && (!typing || blank) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
-      } else if (mod && !typing && e.key.toLowerCase() === "y") {
+      } else if (mod && (!typing || blank) && e.key.toLowerCase() === "y") {
         e.preventDefault();
         redo();
       }
@@ -372,7 +376,7 @@ export function DeckEditor({
       ? (myTags.tags.find((t) => myTagHighlight(t.id) === highlight)?.name ?? "a deleted tag")
       : highlight.startsWith("art:")
       ? (Object.values(tags.artTags).flat().find(([s]) => `art:${s}` === highlight)?.[1] ?? highlight.slice(4))
-      : (tags.tree?.label(highlight) ?? highlight)
+      : prettyTag(tags.tree?.label(highlight) ?? highlight)
     : null;
 
   // ---------- what's on screen ----------
@@ -414,7 +418,10 @@ export function DeckEditor({
       untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
       flags: flags[id] ?? 0,
       highlighted: matchesHighlight(line),
-      extraRoles: Math.max(0, lineRoleKeys(line).length - 1),
+      // In Group by Role the heading already names the first role.
+      roleNames: lineRoleKeys(line)
+        .slice(view.group === "role" ? 1 : 0)
+        .map((k) => roles.find((r) => r.key === k)?.name ?? k),
       myTags: showMyTags ? myTagsOfCard(id) : [],
       manual: !!categories[entryKey(line.board, id)],
       selected: selecting ? selected.has(entryKey(line.board, id)) : undefined,
@@ -639,6 +646,8 @@ export function DeckEditor({
     }
     anchor.current = key;
   };
+  // Select all leaves the commander and companion alone, so bulk removal can't take them by accident.
+  const selectable = order.filter((o) => o.board === "main" || o.board === "maybe");
   const selectedLines = selecting ? order.filter((o) => selected.has(entryKey(o.board, o.card.oracle_id))) : [];
   /** Runs a bulk plan and says what happened, including cards that were skipped and why. */
   const runBulk = (r: { plan: Plan; done: number; skipped: string[] }) => {
@@ -724,6 +733,8 @@ export function DeckEditor({
         size={size}
         price={totalPrice(entries, cards)}
         backLink={!readOnly}
+        complete={size === 100 && roles.length > 0 && underTarget === 0}
+        themes={themes.slice(0, 3).map((t) => prettyTag(t.label))}
         onOpenCommander={(i) => openLine(commanders[i])}
         note={
           readOnly && (
@@ -756,7 +767,7 @@ export function DeckEditor({
                 aria-pressed={panel === "suggest"}
                 onClick={() => (panel === "suggest" ? setPanel(null) : suggestOverall())}
               >
-                ✦ Suggest cards
+                ✦ Suggest<span className="hidden sm:inline"> cards</span>
               </button>
             )}
             {!readOnly && (
@@ -769,11 +780,11 @@ export function DeckEditor({
               title="Goldfish this deck: shuffle, draw, mulligan and play (needs a tablet or computer)"
               className="btn hidden md:inline-flex"
             >
-              Playtest
+              ▶ Playtest
             </Link>
             {!readOnly && (
               <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
-                Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
+                ↗ Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
               </HeaderButton>
             )}
             <MoreMenu
@@ -790,6 +801,7 @@ export function DeckEditor({
       <div className="mx-auto max-w-[1500px] px-4 sm:px-6">
 
       {panel === "search" && !readOnly && (
+        <div className="lg:max-h-[78vh] lg:overflow-y-auto">
         <CardSearch
           entries={entries}
           identity={identity}
@@ -800,10 +812,11 @@ export function DeckEditor({
           hideInDeck={prefs.searchHideInDeck === true}
           onHideInDeck={(hide) => updatePrefs({ searchHideInDeck: hide })}
         />
+        </div>
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
       {panel === "suggest" && suggestFor && !readOnly && (
-        <div id="suggest-panel" className="scroll-mt-4">
+        <div id="suggest-panel" className="scroll-mt-4 lg:max-h-[78vh] lg:overflow-y-auto">
           <SuggestPanel
             source={suggestFor}
             identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
@@ -834,7 +847,17 @@ export function DeckEditor({
         </div>
       )}
       {panel === "share" && !readOnly && (
-        <SharePanel deckId={deck.id} visibility={visibility} onChange={setVisibility} onClose={() => setPanel(null)} />
+        <SharePanel
+          deckId={deck.id}
+          visibility={visibility}
+          onChange={setVisibility}
+          onClose={() => setPanel(null)}
+          preview={{
+            name: deck.name,
+            art: commanders.find((l) => l.card.image_art_crop)?.card.image_art_crop ?? null,
+            line: `${commanders.map((l) => l.card.name).join(" & ") || "Commander deck"} · ${size} cards · Bracket ${bracket.target}`,
+          }}
+        />
       )}
       {panel === "bracket" && (
         <BracketPanel
@@ -873,7 +896,7 @@ export function DeckEditor({
       )}
       {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />}
 
-      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[250px_minmax(0,1fr)_300px]">
+      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_300px]">
         {/* Wide screens: the role profile gets its own column on the left. */}
         <aside className="hidden xl:block">
           <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">
@@ -902,15 +925,38 @@ export function DeckEditor({
               </button>
             </div>
           )}
-          {/* Narrower screens: the same profile and tags behind one row of tabs, so the deck comes first. */}
+          {/* Narrower screens: roles stay in view as a strip; targets and tags sit behind one row of tabs. */}
+          {roles.length > 0 && (
+            <ul className="-mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
+              {roles.map((r) => {
+                const n = counts[r.key] ?? 0;
+                return (
+                  <li key={r.key} className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleHighlight(`role:${r.key}`)}
+                      aria-pressed={highlight === `role:${r.key}`}
+                      title={`Highlight the ${r.name} cards`}
+                      className={`panel block min-h-11 min-w-24 px-2.5 py-1 text-left text-[13px] ${highlight === `role:${r.key}` ? "border-gold" : ""}`}
+                    >
+                      <span className="flex justify-between gap-2">
+                        <span className="font-medium">{r.name}</span>
+                        <span className={`tabular-nums ${n < r.target ? "text-amber-400" : "text-green-400"}`}>
+                          {n}/{r.target}
+                        </span>
+                      </span>
+                      <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-foreground/10">
+                        <span className="block h-full" style={{ width: `${Math.min(100, r.target ? (n / r.target) * 100 : 100)}%`, background: roleColor(r.name) }} />
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <div className="mb-3 flex gap-2 xl:hidden">
             <FoldTab active={fold === "roles"} onClick={() => setFold(fold === "roles" ? null : "roles")}>
-              Roles
-              {roles.length > 0 && (
-                <span className={`text-[13px] font-normal ${underTarget ? "text-amber-400" : "text-green-400"}`}>
-                  {underTarget ? `${underTarget} low` : "✓"}
-                </span>
-              )}
+              Targets
             </FoldTab>
             <FoldTab active={fold === "tags"} onClick={() => setFold(fold === "tags" ? null : "tags")}>
               Top tags
@@ -941,11 +987,11 @@ export function DeckEditor({
 
           {/* Stays in reach while scrolling a long deck. */}
           <div className="sticky top-0 z-20 -mx-4 mt-2 flex flex-wrap items-center gap-2 border-b border-foreground/10 bg-background/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0">
-            <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+            <div className="min-w-0 basis-full sm:basis-auto">
               <DeckToolbar settings={view} onChange={setView} />
             </div>
             {!readOnly && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 sm:ml-auto">
                 <button
                   type="button"
                   onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
@@ -1000,7 +1046,9 @@ export function DeckEditor({
                 }
                 onOpen={clickLine}
                 onHover={(l) => setPreview(l.card)}
-                onQuantity={(l, n) => run(planSetQuantity(entries, l.card, l.board, n))}
+                onQuantity={(l, n) => {
+                  if (run(planSetQuantity(entries, l.card, l.board, n)) && n === 0) say(`Removed ${l.card.name}.`, true);
+                }}
                 onCardDrop={view.group === "role" && !readOnly && roles.length > 0 ? dropOnRole : undefined}
               />
             )}
@@ -1042,14 +1090,14 @@ export function DeckEditor({
           <div aria-hidden className="h-40" />
           <BulkBar
             count={selectedLines.length}
-            total={order.length}
+            total={selectable.length}
             tags={userId ? myTags.tags : []}
             canSetCopies={selectedLines.some((l) => l.card.max_copies > 1)}
             onMove={bulkMove}
             onTag={bulkTag}
             onCopies={bulkCopies}
             onRemove={bulkRemove}
-            onSelectAll={() => setSelected(new Set(order.map((o) => entryKey(o.board, o.card.oracle_id))))}
+            onSelectAll={() => setSelected(new Set(selectable.map((o) => entryKey(o.board, o.card.oracle_id))))}
             onClear={() => setSelected(new Set())}
             onDone={stopSelecting}
           />
@@ -1105,7 +1153,9 @@ export function DeckEditor({
           onMove={(to) => {
             if (run(planMove(entries, sheetLine.card, sheetLine.board, to))) setSheet({ oracle_id: sheetLine.card.oracle_id, board: to });
           }}
-          onQuantity={(n) => run(planSetQuantity(entries, sheetLine.card, sheetLine.board, n))}
+          onQuantity={(n) => {
+            if (run(planSetQuantity(entries, sheetLine.card, sheetLine.board, n)) && n === 0) say(`Removed ${sheetLine.card.name}.`, true);
+          }}
           onPrev={() => step(-1)}
           onNext={() => step(1)}
           onClose={() => setSheet(null)}

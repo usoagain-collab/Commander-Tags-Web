@@ -89,7 +89,7 @@ export function CardSheet(props: Props) {
         aria-modal="true"
         aria-label={card.name}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl sm:max-w-4xl sm:rounded-2xl sm:p-6"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-foreground/10 bg-panel p-4 shadow-2xl sm:max-w-4xl sm:rounded-2xl sm:p-6"
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -122,7 +122,7 @@ export function CardSheet(props: Props) {
                 alt={details?.flippable ? details.faces[face].name : card.name}
                 width={300}
                 height={418}
-                className="w-full rounded-[4.75%/3.5%] shadow-lg"
+                className="mx-auto max-h-[38vh] w-auto rounded-[4.75%/3.5%] shadow-lg sm:max-h-none sm:w-full"
               />
             ) : (
               <div className="flex aspect-[63/88] items-center justify-center rounded-xl border p-4 text-center">{card.name}</div>
@@ -141,7 +141,7 @@ export function CardSheet(props: Props) {
           <div className="min-w-0 space-y-4">
             <div>
               <div className="flex items-start justify-between gap-3">
-                <h2 className="text-xl font-semibold">{card.name}</h2>
+                <h2 className="display text-2xl leading-tight">{card.name}</h2>
                 <ManaCost cost={card.mana_cost} size={18} />
               </div>
               <p className="text-sm opacity-70">{card.type_line}</p>
@@ -167,8 +167,6 @@ export function CardSheet(props: Props) {
                 </p>
               ))}
             </div>
-
-            <RulesText details={details} error={error} onRetry={retry} />
 
             {!readOnly && panel === "main" && (
               <div className="grid grid-cols-2 gap-2">
@@ -198,6 +196,8 @@ export function CardSheet(props: Props) {
             {!readOnly && panel === "decks" && (
               <OtherDecks deckId={props.deckId} line={line} onDone={() => setPanel("main")} />
             )}
+
+            <RulesText details={details} error={error} onRetry={retry} />
 
             {props.extra}
 

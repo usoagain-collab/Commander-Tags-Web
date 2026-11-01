@@ -18,11 +18,14 @@ export function SharePanel({
   visibility,
   onChange,
   onClose,
+  preview,
 }: {
   deckId: string;
   visibility: Visibility;
   onChange: (v: Visibility) => void;
   onClose: () => void;
+  /** What a pasted link shows in Discord and other chats. */
+  preview: { name: string; art: string | null; line: string };
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +54,7 @@ export function SharePanel({
               aria-checked={visibility === o.value}
               onClick={() => choose(o.value)}
               className={`min-h-11 rounded-lg border px-3 py-2 text-left ${
-                visibility === o.value ? "border-foreground bg-foreground text-background" : "border-foreground/20 hover:bg-foreground/10"
+                visibility === o.value ? "border-gold bg-gold text-gold-ink" : "border-foreground/20 hover:bg-foreground/10"
               }`}
             >
               <span className="block font-semibold">{o.title}</span>
@@ -70,11 +73,23 @@ export function SharePanel({
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
-            className="min-h-11 rounded-lg bg-foreground px-4 font-medium text-background disabled:opacity-40"
+            className="min-h-11 rounded-lg bg-gold px-4 font-medium text-gold-ink disabled:opacity-40"
           >
             {copied ? "Copied" : "Copy link"}
           </button>
         </div>
+        {visibility !== "private" && (
+          <div>
+            <p className="eyebrow mb-1.5">How your link looks in chat</p>
+            <div className="max-w-sm overflow-hidden rounded-lg border-l-4 border-gold bg-panel-raised">
+              <div className="p-3">
+                <p className="font-semibold">{preview.name} · Commander Tags</p>
+                <p className="mt-0.5 opacity-80">{preview.line}</p>
+              </div>
+              {preview.art && <img src={preview.art} alt="" className="aspect-[16/9] w-full object-cover" />}
+            </div>
+          </div>
+        )}
         {visibility === "private" && <p className="opacity-70">Choose “Anyone with the link” or “Public” to share it.</p>}
       </div>
     </Panel>

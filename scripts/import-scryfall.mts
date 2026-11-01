@@ -9,6 +9,7 @@
 //     Until it commits, every reader keeps seeing the previous data; if anything fails, it rolls back.
 import { gunzipSync } from "node:zlib";
 import { pipeline } from "node:stream/promises";
+import { createRequire } from "node:module";
 import { Readable } from "node:stream";
 import pg from "pg";
 import { from as copyFrom } from "pg-copy-streams";
@@ -20,7 +21,7 @@ type Face = { image_uris?: Record<string, string>; illustration_id?: string; typ
 type ScryfallCard = {
   oracle_id?: string; name: string; layout: string; mana_cost?: string; cmc?: number; type_line?: string;
   oracle_text?: string; color_identity?: string[]; legalities?: Record<string, string>; games?: string[];
-  edhrec_rank?: number; prices?: { usd?: string | null }; image_uris?: Record<string, string>;
+  edhrec_rank?: number; prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null }; image_uris?: Record<string, string>;
   illustration_id?: string; card_faces?: Face[]; game_changer?: boolean; produced_mana?: string[];
   id?: string; all_parts?: { id: string; component: string; name: string; type_line?: string }[];
 };
@@ -49,6 +50,34 @@ async function downloadRecords<T>(entry: BulkEntry): Promise<T[]> {
   const text = buf.toString("utf8").trimStart();
   if (text.startsWith("[")) return JSON.parse(text) as T[];
   return text.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line) as T);
+}
+
+/**
+ * The cheapest USD price per card across every printing. oracle_cards carries one printing, which is often a promo
+ * with no regular price (Sol Ring, Command Tower). Streamed, because default_cards is about 500 MB. Foil prices count
+ * only when a card has no regular price at all. If this fails, the import still runs on oracle_cards prices.
+ */
+async function cheapestPrices(entry: BulkEntry) {
+  const require = createRequire(import.meta.url);
+  const { parser } = require("stream-json") as typeof import("stream-json");
+  const { streamArray } = require("stream-json/streamers/StreamArray") as typeof import("stream-json/streamers/StreamArray");
+  if (!entry.download_uri) throw new Error("default_cards has no JSON download link");
+  const res = await fetch(entry.download_uri, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok || !res.body) throw new Error(`GET ${entry.download_uri} -> HTTP ${res.status}`);
+  const regular = new Map<string, number>();
+  const foil = new Map<string, number>();
+  const keepLowest = (map: Map<string, number>, id: string, price: string | null | undefined) => {
+    const n = Number(price);
+    if (price && n > 0 && !(map.get(id)! <= n)) map.set(id, n);
+  };
+  const stream = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream).pipe(parser()).pipe(streamArray());
+  for await (const { value } of stream as AsyncIterable<{ value: ScryfallCard }>) {
+    if (!value.oracle_id) continue;
+    keepLowest(regular, value.oracle_id, value.prices?.usd);
+    keepLowest(foil, value.oracle_id, value.prices?.usd_foil);
+    keepLowest(foil, value.oracle_id, value.prices?.usd_etched);
+  }
+  return new Map([...foil, ...regular]);
 }
 
 // ---------- CSV encoding for COPY ----------
@@ -91,9 +120,9 @@ function joinFaces(card: ScryfallCard, key: "type_line" | "oracle_text" | "mana_
   return parts.length ? parts.join(sep) : null;
 }
 
-function cardRow(c: ScryfallCard): Cell[] {
+function cardRow(c: ScryfallCard, cheapest: Map<string, number>): Cell[] {
   const front = c.card_faces?.[0];
-  const price = c.prices?.usd;
+  const price = cheapest.get(c.oracle_id!) ?? c.prices?.usd;
   return [
     c.oracle_id,
     c.name,
@@ -146,6 +175,12 @@ async function main() {
     log("Downloading oracle_cards ...");
     const cards = (await downloadRecords<ScryfallCard>(entry("oracle_cards"))).filter((c) => c.oracle_id);
     log(`  ${cards.length} cards`);
+    log("Downloading default_cards for prices ...");
+    const cheapest = await cheapestPrices(entry("default_cards")).catch((e) => {
+      log(`  Couldn't read default_cards, using oracle_cards prices: ${e}`);
+      return new Map<string, number>();
+    });
+    log(`  ${cheapest.size} cards priced`);
     log("Downloading oracle_tags ...");
     const oracleTags = await downloadRecords<ScryfallTag>(entry("oracle_tags"));
     log(`  ${oracleTags.length} oracle tags`);
@@ -210,7 +245,7 @@ async function main() {
     await client.query(
       `create temp table cards_stage as select ${CARD_COLUMNS.join(", ")} from public.cards with no data`,
     );
-    await copyRows(client, "cards_stage", CARD_COLUMNS, cards.map(cardRow));
+    await copyRows(client, "cards_stage", CARD_COLUMNS, cards.map((c) => cardRow(c, cheapest)));
     const updates = CARD_COLUMNS.filter((c) => c !== "oracle_id").map((c) => `${c} = excluded.${c}`).join(", ");
     await client.query(
       `insert into public.cards (${CARD_COLUMNS.join(", ")})

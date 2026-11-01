@@ -25,16 +25,16 @@ export function BracketBadge({
       onClick={onClick}
       aria-pressed={active}
       title="Target bracket, and the bracket this deck's cards fit. Click for details."
-      className={`min-h-9 rounded-md border px-3 text-sm ${
+      className={`min-h-9 rounded-lg border bg-background/65 px-3 text-sm backdrop-blur ${
         active
-          ? "border-foreground bg-foreground text-background"
+          ? "border-gold bg-gold text-gold-ink"
           : over
             ? "border-amber-500 bg-amber-400/15 text-amber-800 dark:text-amber-300"
             : "border-foreground/20"
       }`}
     >
       Bracket {target}
-      <span className="opacity-70"> · cards {estimate ? estimateLabel(estimate.floor) : "…"}</span>
+      <span className="opacity-80"> · {!estimate ? "…" : over ? `cards fit ${estimateLabel(estimate.floor)}` : "on target"}</span>
       {over && <span aria-label="above target"> ⚠</span>}
     </button>
   );
@@ -97,7 +97,7 @@ export function BracketPanel({
                 onClick={() => onTarget(b.n)}
                 title={b.blurb}
                 className={`min-h-11 rounded-lg border px-3 py-1.5 text-left ${
-                  target === b.n ? "border-foreground bg-foreground text-background" : "border-foreground/20 hover:bg-foreground/10"
+                  target === b.n ? "border-gold bg-gold text-gold-ink" : "border-foreground/20 hover:bg-foreground/10"
                 }`}
               >
                 <span className="font-semibold">{b.n}</span> {b.name}

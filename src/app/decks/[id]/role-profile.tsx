@@ -7,6 +7,7 @@ import { rankTags } from "@/lib/search/query";
 import { roleNameFromLabel, roleStatus, statusText, type CustomRole } from "@/lib/tags/role-settings";
 import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagTree } from "@/lib/tags/tree";
+import { roleColor } from "@/lib/tags/pretty";
 
 type Props = {
   roles: ResolvedRole[];
@@ -27,15 +28,10 @@ type Props = {
   hideTitle?: boolean;
 };
 
-const BAR: Record<string, string> = {
-  under: "bg-amber-500",
-  met: "bg-green-600",
-  over: "bg-foreground/35",
-};
 const TEXT: Record<string, string> = {
   under: "text-amber-700 dark:text-amber-400",
   met: "text-green-700 dark:text-green-400",
-  over: "opacity-60",
+  over: "opacity-75",
 };
 
 /**
@@ -49,7 +45,7 @@ export function RoleProfile(props: Props) {
 
   return (
     <div className="space-y-3">
-      {!props.hideTitle && <h2 className="text-xs font-semibold uppercase tracking-wide opacity-60">Role profile</h2>}
+      {!props.hideTitle && <h2 className="display text-lg">What this deck needs</h2>}
       {roles.length === 0 && <p className="text-sm opacity-60">Loading roles…</p>}
       <ul className="space-y-3">
         {roles.map((r) => {
@@ -60,7 +56,8 @@ export function RoleProfile(props: Props) {
           return (
             <li key={r.key} className="relative">
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="flex min-w-0 items-center gap-1">
+                <span className="flex min-w-0 items-center gap-0.5">
+                  <span aria-hidden className="mr-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: roleColor(r.name) }} />
                   <button
                     type="button"
                     onClick={() => props.onHighlight(r.key)}
@@ -73,23 +70,28 @@ export function RoleProfile(props: Props) {
                   <InfoTip role={r} tree={props.tree} />
                 </span>
                 <span className="flex shrink-0 items-center gap-1 tabular-nums">
-                  {count} / {r.target} <span className={`text-xs ${TEXT[status]}`}>{statusText(count, r.target)}</span>
                   {props.onSuggest && (
                     <button
                       type="button"
                       onClick={() => props.onSuggest!(r.key)}
                       aria-label={`Suggest cards for ${r.name}`}
                       title={`Suggest cards for ${r.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded opacity-60 hover:bg-foreground/10 hover:opacity-100"
+                      className="flex min-h-8 items-center rounded px-1.5 text-[13px] font-medium text-gold hover:bg-foreground/10"
                     >
-                      💡
+                      ✦ Suggest
                     </button>
                   )}
                 </span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10" aria-hidden>
-                <div className={`h-full ${BAR[status]}`} style={{ width: `${Math.min(100, r.target ? (count / r.target) * 100 : 100)}%` }} />
+              <div className="h-2 overflow-hidden rounded-full bg-foreground/10" aria-hidden>
+                <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.min(100, r.target ? (count / r.target) * 100 : 100)}%`, background: roleColor(r.name) }} />
               </div>
+              <p className="mt-1 flex justify-between text-[13px] tabular-nums">
+                <span>
+                  {count} of {r.target}
+                </span>
+                <span className={TEXT[status]}>{status === "over" ? `${count - r.target} over` : status === "met" ? "✓ on target" : statusText(count, r.target)}</span>
+              </p>
               {!readOnly && (
                 <div className="mt-1 flex items-center gap-2">
                   <input
@@ -99,7 +101,7 @@ export function RoleProfile(props: Props) {
                     value={r.target}
                     onChange={(e) => props.onTarget(r.key, Number(e.target.value))}
                     aria-label={`${r.name} target`}
-                    className="h-8 min-w-0 flex-1 accent-foreground"
+                    className="h-8 min-w-0 flex-1 accent-gold"
                   />
                   {r.custom && (
                     <button
@@ -209,7 +211,7 @@ function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
       >
         <span
           aria-hidden
-          className="flex h-4 w-4 items-center justify-center rounded-full border border-foreground/40 text-[10px] font-semibold italic leading-none opacity-70"
+          className="flex h-4 w-4 items-center justify-center rounded-full border border-foreground/60 text-[11px] font-semibold italic leading-none"
         >
           i
         </span>
@@ -341,7 +343,7 @@ function AddRole({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (r:
           type="button"
           disabled={!picked || duplicate || !name.trim()}
           onClick={() => picked && onAdd({ slug: picked.slug, name: name.trim(), target })}
-          className="min-h-9 flex-1 rounded bg-foreground text-background disabled:opacity-40"
+          className="min-h-9 flex-1 rounded bg-gold text-gold-ink disabled:opacity-40"
         >
           Add role
         </button>

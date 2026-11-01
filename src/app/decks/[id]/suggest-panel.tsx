@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
+import { prettyTag } from "@/lib/tags/pretty";
 import type { Board, CardSummary } from "@/lib/deck/model";
 import {
   scorePool,
@@ -117,7 +118,16 @@ export function SuggestPanel(props: Props) {
       {props.saveError && <p className="mt-1 text-sm text-red-400">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
       {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-      {!error && (pool === null || combos === null) && <p className="mt-3 text-sm opacity-60">Finding cards…</p>}
+      {!error && (pool === null || combos === null) && (
+        <>
+          <p className="mt-3 text-sm opacity-80">Finding cards that fit… the first search can take a few seconds.</p>
+          <ul aria-hidden className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+            {Array.from({ length: 6 }, (_, i) => (
+              <li key={i} className="aspect-[63/88] animate-pulse rounded-xl bg-foreground/10" />
+            ))}
+          </ul>
+        </>
+      )}
       {(hiddenAbove > 0 || showAbove) && (
         <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
           <input type="checkbox" checked={showAbove} onChange={(e) => setShowAbove(e.target.checked)} />
@@ -227,13 +237,17 @@ function SuggestionCard({
         <p className="truncate font-medium" title={card.name}>
           {card.name}
         </p>
-        <p className="text-xs tabular-nums opacity-60">
+        <p className="text-[13px] tabular-nums opacity-80">
           {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "no price"} ·{" "}
           {card.edhrec_rank ? `EDHREC #${card.edhrec_rank.toLocaleString()}` : "unranked"}
         </p>
-        <p className="text-[11px] tabular-nums opacity-50" title="How well it fits this deck, and how often it's played (0-100)">
-          fit {Math.round(row.fit * 100)} · played {Math.round(row.pop * 100)}
-        </p>
+        <div className="mt-1 flex items-center gap-2 text-[13px]" title={`Fit ${Math.round(row.fit * 100)} of 100. Played ${Math.round(row.pop * 100)} of 100.`}>
+          <span className="opacity-80">Fit</span>
+          <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
+            <span className="block h-full rounded-full bg-gold" style={{ width: `${Math.round(row.fit * 100)}%` }} />
+          </span>
+          <span className="tabular-nums">{Math.round(row.fit * 100)}</span>
+        </div>
         {above.map((a) => (
           <p key={a} className="mt-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
             ⚠ Above bracket {target}: {a}
@@ -241,20 +255,20 @@ function SuggestionCard({
         ))}
         <div className="mt-1 flex flex-wrap gap-1">
           {row.fills.map((k) => (
-            <span key={k} className="rounded-full bg-green-700/15 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-300">
-              fills {roleNames[k] ?? k}
+            <span key={k} className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-300">
+              Fills {roleNames[k] ?? k}
             </span>
           ))}
-          {row.shared.slice(0, 4).map((t) => (
-            <span key={t.key} className="rounded-full border border-foreground/20 px-2 py-0.5 text-[11px]" title="A theme tag this deck already has">
-              {t.label}
+          {row.shared.slice(0, 3).map((t) => (
+            <span key={t.key} className="rounded-full border border-foreground/20 px-2 py-0.5 text-xs" title="A theme this deck already has">
+              {prettyTag(t.label)}
             </span>
           ))}
           {!row.fills.length && !row.shared.length && <span className="text-[11px] opacity-60">matches the tag, no shared themes</span>}
         </div>
       </div>
       <div className="mt-auto grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => onAdd(card, "main")} className="min-h-11 whitespace-nowrap rounded-lg bg-foreground px-1 text-sm font-medium text-background">
+        <button type="button" onClick={() => onAdd(card, "main")} className="btn btn-gold min-h-11 whitespace-nowrap px-1">
           + Main
         </button>
         <button type="button" onClick={() => onAdd(card, "maybe")} className="min-h-11 whitespace-nowrap rounded-lg border border-foreground/20 px-1 text-sm">
@@ -264,7 +278,7 @@ function SuggestionCard({
           type="button"
           onClick={() => onDismiss(card)}
           title="Don't suggest this card for this deck again"
-          className="col-span-2 min-h-11 rounded-lg px-2 text-xs opacity-60 hover:bg-foreground/10 hover:opacity-100"
+          className="col-span-2 min-h-10 rounded-lg px-2 text-[13px] opacity-75 hover:bg-foreground/10 hover:opacity-100"
         >
           Not for this deck
         </button>
@@ -297,7 +311,7 @@ function StyleControls({ settings, onChange }: { settings: SuggestSettings; onCh
             title={STYLE_HELP[st]}
             onClick={() => onChange({ ...settings, style: st })}
             className={`min-h-11 rounded-lg border px-3 ${
-              settings.style === st ? "border-foreground bg-foreground font-medium text-background" : "border-foreground/20 hover:bg-foreground/10"
+              settings.style === st ? "border-gold bg-gold font-medium text-gold-ink" : "border-foreground/20 hover:bg-foreground/10"
             }`}
           >
             {STYLE_LABELS[st]}
@@ -315,7 +329,7 @@ function StyleControls({ settings, onChange }: { settings: SuggestSettings; onCh
             value={capIndex}
             onChange={(e) => onChange({ ...settings, priceCap: PRICE_STEPS[Number(e.target.value)] })}
             aria-label="Price cap"
-            className="h-8 min-w-0 flex-1 accent-foreground"
+            className="h-8 min-w-0 flex-1 accent-gold"
           />
           <span className="w-14 shrink-0 tabular-nums">${settings.priceCap < 1 ? settings.priceCap.toFixed(2) : settings.priceCap}</span>
         </label>
@@ -343,7 +357,7 @@ function Slider(props: { label: string; left: string; right: string; min: number
         value={props.value}
         onChange={(e) => props.onChange(Number(e.target.value))}
         aria-label={`${props.label} weight`}
-        className="h-8 accent-foreground"
+        className="h-8 accent-gold"
       />
       <span />
       <span className="-mt-1 flex justify-between text-[11px] opacity-60">

@@ -6,7 +6,7 @@ import { useBlockStrayDrops } from "./use-deck-drop";
 export function DropHint() {
   useBlockStrayDrops();
   return (
-    <p className="mt-2 text-xs opacity-60">
+    <p className="hidden text-[13px] opacity-70 md:block">
       Tip: drag a card image from a Scryfall tab onto a deck below to add it to that deck&apos;s mainboard.
     </p>
   );
