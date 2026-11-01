@@ -113,7 +113,7 @@ export function SuggestPanel(props: Props) {
     (issues.get(id) ?? []).map((f) => cardFlag(f, id, (x) => pool?.find((c) => c.oracle_id === x)?.name ?? props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ?? "a card in your deck"));
 
   return (
-    <Panel title={`Suggestions: ${source.label}`} onClose={onClose}>
+    <Panel title={`Suggestions: ${prettyTag(source.label)}`} onClose={onClose}>
       <StyleControls settings={score.settings} onChange={props.onSettings} />
       {props.saveError && <p className="mt-1 text-sm text-red-400">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
@@ -146,9 +146,10 @@ export function SuggestPanel(props: Props) {
       )}
       {rows.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
-          {rows.map((r) => (
+          {rows.map((r, i) => (
             <SuggestionCard
               key={r.card.oracle_id}
+              best={i === 0}
               row={r}
               roleNames={roleNames}
               above={flagsOf(r.card.oracle_id)}
@@ -207,6 +208,7 @@ function DismissedList({ ids, pool, onRestore }: { ids: string[]; pool: PoolCard
 }
 
 function SuggestionCard({
+  best,
   row,
   roleNames,
   onAdd,
@@ -215,6 +217,7 @@ function SuggestionCard({
   above,
   target,
 }: {
+  best: boolean;
   row: Scored;
   above: string[];
   target: BracketNumber;
@@ -225,8 +228,9 @@ function SuggestionCard({
 }) {
   const { card } = row;
   return (
-    <li className="flex flex-col gap-2" onMouseEnter={() => onPreview(card)}>
-      <button type="button" onClick={() => onPreview(card)} onFocus={() => onPreview(card)} title={`Show ${card.name} in the card panel`} className="block">
+    <li className="relative flex flex-col gap-2" onMouseEnter={() => onPreview(card)}>
+      {best && <span className="absolute -left-1 top-3 z-10 rounded-r-md bg-gold px-2 py-0.5 text-xs font-bold text-gold-ink shadow-lg">Best match</span>}
+      <button type="button" onClick={() => onPreview(card)} onFocus={() => onPreview(card)} title={`Show ${card.name} in the card panel`} className="card-lift block rounded-[4.75%/3.5%]">
         {card.image_normal ? (
           <img src={card.image_normal} alt={card.name} loading="lazy" draggable={false} width={244} height={340} className="w-full rounded-[4.75%/3.5%] shadow" />
         ) : (
@@ -241,13 +245,11 @@ function SuggestionCard({
           {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "no price"} ·{" "}
           {card.edhrec_rank ? `EDHREC #${card.edhrec_rank.toLocaleString()}` : "unranked"}
         </p>
-        <div className="mt-1 flex items-center gap-2 text-[13px]" title={`Fit ${Math.round(row.fit * 100)} of 100. Played ${Math.round(row.pop * 100)} of 100.`}>
-          <span className="opacity-80">Fit</span>
-          <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
-            <span className="block h-full rounded-full bg-gold" style={{ width: `${Math.round(row.fit * 100)}%` }} />
-          </span>
-          <span className="tabular-nums">{Math.round(row.fit * 100)}</span>
-        </div>
+        {row.shared.length > 0 && (
+          <p className="mt-1 text-[13px] font-medium text-gold" title={`Fit ${Math.round(row.fit * 100)} of 100. Played ${Math.round(row.pop * 100)} of 100.`}>
+            Shares {row.shared.length} of your themes
+          </p>
+        )}
         {above.map((a) => (
           <p key={a} className="mt-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
             ⚠ Above bracket {target}: {a}

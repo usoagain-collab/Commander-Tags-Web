@@ -42,10 +42,21 @@ export function RoleProfile(props: Props) {
   const { roles, counts, readOnly } = props;
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Sliders stay out of the way until asked for; where the panel is opened as "Targets" they show at once.
+  const [adjust, setAdjust] = useState(!!props.hideTitle);
 
   return (
     <div className="space-y-3">
-      {!props.hideTitle && <h2 className="display text-lg">What this deck needs</h2>}
+      {!props.hideTitle && (
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="display text-lg">What this deck needs</h2>
+          {!readOnly && (
+            <button type="button" onClick={() => setAdjust(!adjust)} aria-expanded={adjust} className="min-h-8 shrink-0 text-[13px] underline opacity-80 hover:opacity-100">
+              {adjust ? "Done" : "Adjust targets"}
+            </button>
+          )}
+        </div>
+      )}
       {roles.length === 0 && <p className="text-sm opacity-60">Loading roles…</p>}
       <ul className="space-y-3">
         {roles.map((r) => {
@@ -76,7 +87,7 @@ export function RoleProfile(props: Props) {
                       onClick={() => props.onSuggest!(r.key)}
                       aria-label={`Suggest cards for ${r.name}`}
                       title={`Suggest cards for ${r.name}`}
-                      className="flex min-h-8 items-center rounded px-1.5 text-[13px] font-medium text-gold hover:bg-foreground/10"
+                      className="flex min-h-8 items-center rounded px-1.5 text-[13px] opacity-85 hover:bg-foreground/10 hover:text-gold hover:opacity-100"
                     >
                       ✦ Suggest
                     </button>
@@ -92,7 +103,7 @@ export function RoleProfile(props: Props) {
                 </span>
                 <span className={TEXT[status]}>{status === "over" ? `${count - r.target} over` : status === "met" ? "✓ on target" : statusText(count, r.target)}</span>
               </p>
-              {!readOnly && (
+              {!readOnly && adjust && (
                 <div className="mt-1 flex items-center gap-2">
                   <input
                     type="range"
@@ -126,7 +137,7 @@ export function RoleProfile(props: Props) {
 
       {props.saveError && <p className="text-xs text-red-400">{props.saveError}</p>}
 
-      {!readOnly && (
+      {!readOnly && adjust && (
         <div className="space-y-2 border-t border-foreground/10 pt-3">
           {adding ? (
             <AddRole

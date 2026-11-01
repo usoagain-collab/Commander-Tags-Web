@@ -164,6 +164,110 @@ input[type="radio"] {
   animation: complete 900ms ease-out;
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+/* Search and Suggest slide over the left of the page on wide screens: the deck and the card panel stay in view. */
+@media (min-width: 1024px) {
+  .drawer {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(820px, 62vw);
+    overflow-y: auto;
+    border-right: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+    background: var(--background);
+    padding: 0 1rem 1rem;
+    box-shadow: 24px 0 60px -20px #000;
+    animation: drawer-in 180ms ease-out;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+}
+
+/* The card just added: a gold ring that fades. */
+@keyframes fresh {
+  from {
+    box-shadow: 0 0 0 4px var(--gold);
+    background-color: color-mix(in srgb, var(--gold) 25%, transparent);
+  }
+}
+
+.fresh {
+  animation: fresh 1500ms ease-out;
+}
+
+/* The deck just became complete: a band of gold light crosses the banner. */
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer {
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--gold) 55%, transparent), transparent 70%);
+  animation: shimmer 1400ms ease-in-out;
+}
+
+/* Playtester: cards arrive with a little weight. Scale and translate leave a tapped card's rotation alone. */
+@keyframes enter {
+  from {
+    opacity: 0;
+    scale: 0.82;
+  }
+}
+
+.enter {
+  animation: enter 180ms ease-out;
+}
+
+@keyframes deal {
+  from {
+    opacity: 0;
+    translate: 0 40px;
+  }
+}
+
+.hand > * {
+  position: relative;
+  animation: deal 240ms ease-out backwards;
+  transition:
+    translate 120ms,
+    scale 120ms;
+}
+.hand > *:hover {
+  z-index: 10;
+  translate: 0 -14px;
+  scale: 1.08;
+}
+.hand > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.hand > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.hand > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.hand > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.hand > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.hand > *:nth-child(7) {
+  animation-delay: 240ms;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -179,5 +283,11 @@ input[type="radio"] {
   * {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .btn {
+    padding: 0 0.6rem;
   }
 }

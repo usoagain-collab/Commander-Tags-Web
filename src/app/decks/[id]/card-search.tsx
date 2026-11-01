@@ -220,10 +220,10 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           onKeyUp={(e) => ["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key) && updateToken()}
           onClick={updateToken}
           onBlur={() => setTimeout(() => setToken(null), 150)}
-          placeholder="Scryfall search, e.g. otag:ramp t:creature mv<=3"
+          placeholder="Card name, or try otag:ramp t:creature"
           aria-label="Scryfall search"
           spellCheck={false}
-          className="min-w-0 flex-1 rounded-md border border-foreground/20 bg-transparent px-3 py-2 font-mono text-sm"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-foreground/20 bg-transparent px-3"
         />
         <button
           onClick={search}
@@ -269,7 +269,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         {identity && (
           <label className="flex items-center gap-1.5">
             <input type="checkbox" checked={inIdentity} onChange={(e) => setInIdentity(e.target.checked)} />
-            Only {commanderName ? `${commanderName}'s` : "commander"} colors
+            Only {commanderName ? `${commanderName}${commanderName.endsWith("s") ? "'" : "'s"}` : "commander"} colors
           </label>
         )}
         <label className="flex items-center gap-1.5">
@@ -301,7 +301,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         </p>
       ))}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-      {total === 0 && !error && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
+      {total === 0 && !error && !loading && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
       {hideInDeck && hiddenCount > 0 && (
         <p className="mt-2 text-xs opacity-60">
           {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} already in your deck hidden

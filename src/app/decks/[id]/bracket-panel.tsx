@@ -34,7 +34,7 @@ export function BracketBadge({
       }`}
     >
       Bracket {target}
-      <span className="opacity-80"> · {!estimate ? "…" : over ? `cards fit ${estimateLabel(estimate.floor)}` : "on target"}</span>
+      <span className="opacity-80">{!estimate ? "" : " · "}{!estimate ? "" : over ? `cards fit ${estimateLabel(estimate.floor)}` : "on target"}</span>
       {over && <span aria-label="above target"> ⚠</span>}
     </button>
   );

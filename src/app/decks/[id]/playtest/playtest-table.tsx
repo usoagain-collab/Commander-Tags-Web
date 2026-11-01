@@ -164,7 +164,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
         <TopBar game={game} deck={deck} update={update} onNewGame={restart} onTool={setTool} onHelp={() => setHelp(true)} />
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Side zones: scrolls on short screens rather than spilling into the hand. */}
-          <aside className="flex w-[13.5rem] shrink-0 flex-col gap-2 overflow-y-auto">
+          <aside className="flex w-[15rem] shrink-0 flex-col gap-2 overflow-y-auto">
             <div className="grid grid-cols-2 gap-2">
               <CommandZone game={game} onDrop={(iid) => drop(iid, "command")} onPreview={setPreview} />
               <LibraryZone game={game} onDraw={() => update((g) => draw(g))} onDrop={(iid, where) => drop(iid, "library", { library: where })} />
@@ -180,7 +180,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
             onPreview={setPreview}
             onMenu={(iid, x, y) => setMenu({ iid, x, y })}
           />
-          <PreviewPane card={preview} game={game} />
+          <PreviewPane card={preview ?? game.cards[game.zones.command[0]] ?? null} game={game} />
         </div>
         <Hand game={game} onDrop={(iid) => drop(iid, "hand")} onPreview={setPreview} onBottom={(iid) => update((g) => putOnBottom(g, iid))} onPlay={(iid) => drop(iid, "battlefield")} />
       </main>
@@ -531,6 +531,8 @@ function Battlefield({
   onMenu: (iid: string, x: number, y: number) => void;
 }) {
   const area = useRef<HTMLDivElement>(null);
+  // The commander's art lies faintly across the table for the whole game, wherever the commander goes.
+  const art = useRef(game.cards[game.zones.command[0]]?.image?.replace("/normal/", "/art_crop/") ?? null);
   const ids = game.zones.battlefield;
   const lands = ids.filter((iid) => game.cards[iid].land);
   const tokenIds = ids.filter((iid) => game.cards[iid].token);
@@ -557,7 +559,7 @@ function Battlefield({
       {groups.map((g) => (
         <div key={g.name} className="relative flex shrink-0" title={`${g.ids.length} × ${g.name}`}>
           {g.ids.map((iid, i) => (
-            <div key={iid} className="relative" style={{ marginLeft: i === 0 ? 0 : -58 }}>
+            <div key={iid} className="enter relative" style={{ marginLeft: i === 0 ? 0 : -58 }}>
               <CardView
                 inst={game.cards[iid]}
                 size={72}
@@ -590,11 +592,12 @@ function Battlefield({
     >
       {/* Free area: cards stay exactly where they're dropped. */}
       <div ref={area} className="relative min-h-0 flex-1">
+        {art.current && <img aria-hidden src={art.current} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full rounded-t-xl object-cover opacity-[0.16]" />}
         {others.length === 0 && <p className="absolute inset-0 flex items-center justify-center text-sm opacity-70">Drag cards here to play them, or double-click a card in your hand</p>}
         {others.map((iid) => {
           const p = game.battlefield[iid];
           return (
-            <div key={iid} className="absolute" style={{ left: `${p.x}%`, top: `${p.y}%` }}>
+            <div key={iid} className="enter absolute" style={{ left: `${p.x}%`, top: `${p.y}%` }}>
               <CardView
                 inst={game.cards[iid]}
                 size={100}
@@ -661,7 +664,7 @@ function Hand({
         count={ids.length}
       />
       {/* A big hand overlaps rather than running off the screen; hovering a card brings it forward. */}
-      <div className={`mt-1 flex min-h-[150px] items-end gap-1 ${ids.length > 9 ? "[&>*:not(:first-child)]:-ml-[calc(var(--overlap))] [&>*:hover]:z-10" : ""} ${choosing ? "rounded ring-2 ring-amber-500" : ""}`} style={{ ["--overlap" as string]: `${Math.min(90, Math.max(0, 105 - 900 / ids.length))}px` }}>
+      <div className={`hand mt-1 flex min-h-[150px] items-end gap-1 ${ids.length > 9 ? "[&>*:not(:first-child)]:-ml-[calc(var(--overlap))] [&>*:hover]:z-10" : ""} ${choosing ? "rounded ring-2 ring-amber-500" : ""}`} style={{ ["--overlap" as string]: `${Math.min(90, Math.max(0, 105 - 900 / ids.length))}px` }}>
         {ids.map((iid) => (
           <CardView
             key={iid}

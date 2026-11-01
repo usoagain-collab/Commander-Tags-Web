@@ -17,7 +17,7 @@ type Props = {
 
 /** One card in Text view. The name opens the card sheet; quick −/+/✕ sit at the end on wider screens. */
 export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: Props) {
-  const { line, warnings, untagged, highlighted, roleNames, myTags, manual, selected, flags } = item;
+  const { line, warnings, untagged, highlighted, roleNames, myTags, manual, selected, flags, fresh } = item;
   const selecting = selected !== undefined;
   const { card, board, quantity } = line;
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
@@ -26,7 +26,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
     <li
       {...drag}
       onMouseEnter={onHover}
-      className={`group flex items-center gap-2 rounded px-1.5 text-[15px] ${
+      className={`group flex items-center gap-2 rounded px-1.5 text-[15px] ${fresh ? "fresh" : ""} ${
         selected ? "bg-blue-500/15 ring-1 ring-blue-500/60" : highlighted ? "bg-amber-400/20 ring-1 ring-amber-500/60" : "hover:bg-foreground/5"
       }`}
     >
@@ -50,7 +50,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
         title={`Open ${card.name}`}
       >
         {/* The name keeps at least ~45% of the row; badges shorten instead (full text in their tooltips). */}
-        <span className={warnings.length > 0 ? "min-w-[45%] truncate" : "truncate"}>{card.name}</span>
+        <span className="min-w-[45%] truncate">{card.name}</span>
         {warnings.length > 0 && (
           <span
             title={warnings.join(" · ")}
@@ -70,11 +70,11 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
           </span>
         )}
         {roleNames.length > 0 && (
-          <span title={`Fills ${roleNames.join(", ")}`} className="hidden min-w-0 items-center gap-2 text-[13px] opacity-85 md:flex">
+          <span title={`Fills ${roleNames.join(", ")}`} className="flex min-w-0 items-center gap-2 overflow-hidden text-[13px] opacity-85">
             {roleNames.slice(0, 2).map((r) => (
-              <span key={r} className="flex min-w-0 items-center gap-1 whitespace-nowrap">
+              <span key={r} className="flex items-center gap-1 whitespace-nowrap">
                 <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: roleColor(r) }} />
-                {r}
+                <span className="hidden lg:inline">{r}</span>
               </span>
             ))}
           </span>
