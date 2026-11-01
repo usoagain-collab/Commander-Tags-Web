@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { safeNext } from "@/lib/safe-next";
+import { devLoginEnabled } from "@/lib/dev-login";
 import { SignInButtons } from "./sign-in-buttons";
 
 export default async function LoginPage({
@@ -24,6 +25,14 @@ export default async function LoginPage({
         </p>
       )}
       <SignInButtons next={target} />
+      {devLoginEnabled() && (
+        <a
+          href={`/auth/dev-login?next=${encodeURIComponent(target)}`}
+          className="mt-3 block rounded-md border border-dashed border-foreground/30 px-4 py-2.5 text-center font-medium hover:bg-foreground/5"
+        >
+          Test account (local only)
+        </a>
+      )}
     </main>
   );
 }
