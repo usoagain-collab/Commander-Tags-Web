@@ -114,6 +114,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
   }, [game, deck.id, key]);
 
   const update = useCallback((fn: (g: GameState) => GameState) => setGame((g) => (g ? fn(g) : g)), []);
+  const clearPreview = useCallback(() => setPreview(null), []);
   const restart = () => setGame((g) => newGame(cards, Date.now() >>> 0, g?.freeMulligan ?? true));
 
   // Keys for the common actions (6d adds the rest and a help sheet).
@@ -183,18 +184,17 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
       {compact ? (
         <PhoneTable game={game} deck={deck} update={update} onMove={drop} onNewGame={restart} onTool={setTool} onView={setViewing} onInspect={setInspect} freeSpotRef={freeSpot} scale={tablet ? 1.5 : 1} landscape={sideways} />
       ) : (
-      <main className="flex h-[calc(100vh-7rem)] min-h-[640px] flex-col gap-2 px-3 pb-2">
+      <main className="fixed inset-0 z-[45] flex flex-col gap-2 bg-background p-2">
         <TopBar game={game} deck={deck} update={update} onNewGame={restart} onTool={setTool} onHelp={() => setHelp(true)} />
         <div className="flex min-h-0 flex-1 gap-2">
           {/* Side zones: scrolls on short screens rather than spilling into the hand. */}
-          <aside className="flex w-[15rem] shrink-0 flex-col gap-2 overflow-y-auto">
+          <aside className="w-[11.5rem] shrink-0 overflow-y-auto">
             <div className="grid grid-cols-2 gap-2">
               <CommandZone game={game} onDrop={(iid) => drop(iid, "command")} onPreview={setPreview} />
               <LibraryZone game={game} onDraw={() => update((g) => draw(g))} onDrop={(iid, where) => drop(iid, "library", { library: where })} />
-              <PileZone title="Graveyard" zone="graveyard" game={game} onDrop={(iid) => drop(iid, "graveyard")} onOpen={() => setViewing("graveyard")} onPreview={setPreview} />
+              <PileZone title="Yard" zone="graveyard" game={game} onDrop={(iid) => drop(iid, "graveyard")} onOpen={() => setViewing("graveyard")} onPreview={setPreview} />
               <PileZone title="Exile" zone="exile" game={game} onDrop={(iid) => drop(iid, "exile")} onOpen={() => setViewing("exile")} onPreview={setPreview} />
             </div>
-            <CommanderTax game={game} />
           </aside>
           <Battlefield
             game={game}
@@ -203,12 +203,12 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
             onPreview={setPreview}
             onMenu={(iid, x, y) => setMenu({ iid, x, y })}
           />
-          <PreviewPane card={preview ?? game.cards[game.zones.command[0]] ?? null} game={game} />
         </div>
         <Hand game={game} onDrop={(iid) => drop(iid, "hand")} onPreview={setPreview} onBottom={(iid) => update((g) => putOnBottom(g, iid))} onPlay={(iid) => drop(iid, "battlefield")} />
       </main>
       )}
 
+      {!compact && <HoverPreview card={preview} onLeave={clearPreview} />}
       {game.stage === "mulligan" && <MulliganDialog game={game} update={update} card={card} onInspect={onInspect} />}
       {viewing && <ZoneViewer zone={viewing} game={game} onClose={() => setViewing(null)} onMove={drop} onPreview={setPreview} onInspect={onInspect} />}
       {inspect && compact && <CardSheet game={game} iid={inspect} update={update} onMove={drop} onFlag={flag} canFlag={canFlag} onClose={() => setInspect(null)} />}
@@ -248,53 +248,101 @@ function TopBar({
 }) {
   const playing = game.stage === "playing";
   return (
-    <div className="flex flex-wrap items-center gap-2 pt-2 text-sm">
-      <Link href={`/decks/${deck.id}`} className="mr-1 opacity-70 hover:underline">
-        ← {deck.name}
+    <div className="flex shrink-0 items-center gap-2 text-sm">
+      <Link href={`/decks/${deck.id}`} aria-label={`Back to ${deck.name}`} className="btn font-bold">
+        <span aria-hidden>←</span> Deck
       </Link>
       <span className="rounded-md bg-foreground/10 px-3 py-1.5 font-semibold tabular-nums">Turn {game.turn}</span>
       <BarButton primary disabled={!playing} onClick={() => update(nextTurn)} hint="N">
         Next turn
       </BarButton>
-      <BarButton disabled={!playing} onClick={() => update(untapAll)} hint="U">
-        Untap all
-      </BarButton>
-      <BarButton disabled={!playing} onClick={() => update((g) => draw(g))} hint="D">
-        Draw
-      </BarButton>
-      <BarButton onClick={() => update(shuffleLibrary)} hint="S">
-        Shuffle
-      </BarButton>
-      <span className="mx-1 h-6 border-l border-foreground/15" aria-hidden />
-      <BarButton disabled={!playing} onClick={() => onTool("search")} hint="L">
-        Search library
-      </BarButton>
-      <BarButton disabled={!playing} onClick={() => onTool("scry")} hint="Y">
-        Scry / surveil
-      </BarButton>
-      <BarButton disabled={!playing} onClick={() => onTool("mill")} hint="M">
-        Mill
-      </BarButton>
-      <BarButton disabled={!playing} onClick={() => onTool("tokens")} hint="K">
-        Tokens
-      </BarButton>
-      <label className="flex min-h-9 items-center gap-1.5 rounded-md border border-foreground/20 px-3" title="Keep the library's top card face up">
-        <input type="checkbox" checked={!!game.topRevealed} onChange={(e) => update((g) => setTopRevealed(g, e.target.checked))} />
-        Top face up
-      </label>
+      <TableMenu game={game} update={update} onNewGame={onNewGame} onTool={onTool} onHelp={onHelp} />
       <span className="ml-auto flex items-center gap-1" aria-label="Life total">
         <BarButton onClick={() => update((g) => setLife(g, g.life - 1))} label="Lose 1 life">
           −
         </BarButton>
-        <span className="display min-w-14 text-center text-3xl tabular-nums text-gold">{game.life}</span>
+        <span className="display min-w-14 text-center text-3xl leading-none tabular-nums text-gold">{game.life}</span>
         <BarButton onClick={() => update((g) => setLife(g, g.life + 1))} label="Gain 1 life">
           +
         </BarButton>
       </span>
-      <BarButton onClick={onHelp} label="Keyboard shortcuts" hint="?">
-        Keys
-      </BarButton>
-      <BarButton onClick={onNewGame}>New game</BarButton>
+      {/* The table covers the site footer, so the credit sits here. */}
+      <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer" className="hidden text-xs opacity-60 hover:underline lg:inline">
+        Card data and images: Scryfall
+      </a>
+    </div>
+  );
+}
+
+/** Everything but Next turn, one click away. Closes on picking, clicking elsewhere, or Esc. */
+function TableMenu({
+  game,
+  update,
+  onNewGame,
+  onTool,
+  onHelp,
+}: {
+  game: GameState;
+  update: (fn: (g: GameState) => GameState) => void;
+  onNewGame: () => void;
+  onTool: (t: "search" | "scry" | "mill" | "tokens") => void;
+  onHelp: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const playing = game.stage === "playing";
+  const item = (label: string, hint: string | null, disabled: boolean, onPick: () => void) => (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={() => {
+        setOpen(false);
+        onPick();
+      }}
+      className="flex min-h-9 w-full items-center justify-between gap-4 px-3 text-left text-sm hover:bg-foreground/10 disabled:opacity-40"
+    >
+      {label}
+      {hint && <kbd className="rounded border border-current/30 px-1 text-[11px] font-normal opacity-75">{hint}</kbd>}
+    </button>
+  );
+  return (
+    <div ref={box} className="relative">
+      <button type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        Actions <span aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div role="menu" className="panel absolute left-0 z-50 mt-1 w-56 overflow-hidden bg-panel-raised py-1 shadow-2xl">
+          {item("Untap all", "U", !playing, () => update(untapAll))}
+          {item("Draw", "D", !playing, () => update((g) => draw(g)))}
+          {item("Shuffle library", "S", false, () => update(shuffleLibrary))}
+          <div className="my-1 border-t border-foreground/15" />
+          {item("Search library", "L", !playing, () => onTool("search"))}
+          {item("Scry / surveil", "Y", !playing, () => onTool("scry"))}
+          {item("Mill", "M", !playing, () => onTool("mill"))}
+          {item("Tokens", "K", !playing, () => onTool("tokens"))}
+          <label className="flex min-h-9 items-center gap-2 px-3 text-sm hover:bg-foreground/10" title="Keep the library's top card face up">
+            <input type="checkbox" checked={!!game.topRevealed} onChange={(e) => update((g) => setTopRevealed(g, e.target.checked))} />
+            Top card face up
+          </label>
+          <div className="my-1 border-t border-foreground/15" />
+          {item("Keyboard shortcuts", "?", false, onHelp)}
+          {item("New game", null, false, onNewGame)}
+        </div>
+      )}
     </div>
   );
 }
@@ -330,6 +378,9 @@ function BarButton({
 }
 
 // ---------- cards and drop targets ----------
+
+/** Width of the cards in the side zones. */
+const ZONE_CARD = 72;
 
 /** A card the player can drag. `size` is the width in px. */
 function CardView({
@@ -429,7 +480,7 @@ function DropTarget({
 
 function ZoneLabel({ title, count, extra }: { title: string; count: number; extra?: React.ReactNode }) {
   return (
-    <p className="flex items-baseline justify-between text-xs font-semibold uppercase tracking-wide opacity-70">
+    <p className="flex items-baseline justify-between gap-1 text-xs font-semibold uppercase tracking-wide opacity-70">
       <span>{title}</span>
       <span className="tabular-nums">
         {extra}
@@ -441,30 +492,22 @@ function ZoneLabel({ title, count, extra }: { title: string; count: number; extr
 
 // ---------- side zones ----------
 
-/** Commander tax for every commander, wherever it is now. */
-function CommanderTax({ game }: { game: GameState }) {
-  const commanders = Object.values(game.cards).filter((c) => c.commander);
-  if (!commanders.length) return null;
-  return (
-    <div className="rounded-lg border border-foreground/15 px-2 py-1.5 text-xs" title="Commander tax: 2 more for each time it was cast from the command zone">
-      {commanders.map((c) => (
-        <p key={c.iid} className="tabular-nums">
-          {c.name.split(",")[0]}: tax <strong>+{commanderTax(game, c.iid)}</strong>
-        </p>
-      ))}
-    </div>
-  );
-}
-
 function CommandZone({ game, onDrop, onPreview }: { game: GameState; onDrop: (iid: string) => void; onPreview: (c: Instance | null) => void }) {
   const ids = game.zones.command;
+  // Every commander's tax, wherever it is now. Partners need their names to tell the two apart.
+  const commanders = Object.values(game.cards).filter((c) => c.commander);
   return (
     <DropTarget label="Command zone" onDrop={onDrop} className="rounded-lg border border-foreground/15 p-1.5">
       <ZoneLabel title="Command" count={ids.length} />
+      {commanders.map((c) => (
+        <p key={c.iid} className="truncate text-xs tabular-nums" title="Commander tax: 2 more for each time it was cast from the command zone">
+          {commanders.length > 1 ? c.name.split(",")[0] : "Tax"}: <strong>{commanderTax(game, c.iid)}</strong>
+        </p>
+      ))}
       <div className="mt-1 flex flex-col gap-1">
         {ids.map((iid) => (
           <div key={iid}>
-            <CardView inst={game.cards[iid]} size={88} onPreview={onPreview} title={`${game.cards[iid].name}: drag to the battlefield to cast`} />
+            <CardView inst={game.cards[iid]} size={ZONE_CARD} onPreview={onPreview} title={`${game.cards[iid].name}: drag to the battlefield to cast`} />
           </div>
         ))}
       </div>
@@ -487,14 +530,14 @@ function LibraryZone({ game, onDraw, onDrop }: { game: GameState; onDraw: () => 
             onClick={onDraw}
             disabled={!n || game.stage !== "playing"}
             title="Click to draw (D)"
-            className="flex aspect-[63/88] w-[88px] items-center justify-center rounded-[4.75%/3.5%] border border-foreground/30 bg-gradient-to-br from-amber-900 to-stone-800 text-sm font-semibold text-amber-100 shadow disabled:opacity-50"
+            className="flex aspect-[63/88] w-[72px] items-center justify-center rounded-[4.75%/3.5%] border border-foreground/30 bg-gradient-to-br from-amber-900 to-stone-800 text-sm font-semibold text-amber-100 shadow disabled:opacity-50"
           >
             {n ? "Draw" : "Empty"}
           </button>
         )}
         {/* While dragging, the library splits into a top and a bottom drop target. */}
         {dragging && (
-          <div className="absolute inset-0 flex w-[88px] flex-col overflow-hidden rounded-[4.75%/3.5%] text-xs font-semibold text-white">
+          <div className="absolute inset-0 flex w-[72px] flex-col overflow-hidden rounded-[4.75%/3.5%] text-xs font-semibold text-white">
             <DropTarget label="Library top" onDrop={(iid) => onDrop(iid, "top")} className="flex flex-1 items-center justify-center bg-black/50">
               Top
             </DropTarget>
@@ -531,9 +574,9 @@ function PileZone({
       <ZoneLabel title={title} count={ids.length} />
       <div className="mt-1">
         {top ? (
-          <CardView inst={game.cards[top]} size={88} onPreview={onPreview} onClick={onOpen} title={`${game.cards[top].name}: click to see all ${ids.length}`} />
+          <CardView inst={game.cards[top]} size={ZONE_CARD} onPreview={onPreview} onClick={onOpen} title={`${game.cards[top].name}: click to see all ${ids.length}`} />
         ) : (
-          <div className="flex aspect-[63/88] w-[88px] items-center justify-center rounded-lg border border-dashed border-foreground/20 text-xs opacity-50">Empty</div>
+          <div className="flex aspect-[63/88] w-[72px] items-center justify-center rounded-lg border border-dashed border-foreground/20 text-xs opacity-50">Empty</div>
         )}
       </div>
     </DropTarget>
@@ -644,24 +687,27 @@ function Battlefield({
   );
 }
 
-function PreviewPane({ card, game }: { card: Instance | null; game: GameState }) {
+/** The hovered card, big, on the side away from the mouse. It's only there while hovering and takes no clicks, so the field keeps the room. */
+function HoverPreview({ card, onLeave }: { card: Instance | null; onLeave: () => void }) {
+  const [side, setSide] = useState<"left" | "right">("right");
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      setSide(e.clientX < window.innerWidth / 2 ? "right" : "left");
+      // A card that left its spot under a still mouse never gets its mouse-leave.
+      if (!(e.target as Element).closest?.("[draggable=true]")) onLeave();
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [onLeave]);
+  if (!card) return null;
   return (
-    <aside className="hidden w-60 shrink-0 lg:block">
-      {card ? (
-        <div className="space-y-1">
-          {card.image ? (
-            <img src={card.image} alt={card.name} className="w-full rounded-[4.75%/3.5%] shadow-lg" />
-          ) : (
-            <div className="flex aspect-[63/88] items-center justify-center rounded-xl border p-4 text-center">{card.name}</div>
-          )}
-          {card.commander && <p className="text-xs opacity-70">Commander tax: +{commanderTax(game, card.iid)}</p>}
-        </div>
+    <div aria-hidden className={`pointer-events-none fixed top-14 z-[60] w-[270px] ${side === "left" ? "left-3" : "right-3"}`}>
+      {card.image ? (
+        <img src={card.image} alt="" className="w-full rounded-[4.75%/3.5%] shadow-2xl" />
       ) : (
-        <div className="flex aspect-[63/88] items-center justify-center rounded-xl border border-dashed border-foreground/20 p-4 text-center text-xs opacity-50">
-          Hover a card to see it here
-        </div>
+        <div className="flex aspect-[63/88] items-center justify-center rounded-xl border bg-background p-4 text-center">{card.name}</div>
       )}
-    </aside>
+    </div>
   );
 }
 
@@ -683,18 +729,18 @@ function Hand({
   const ids = game.zones.hand;
   const choosing = game.stage === "bottom";
   return (
-    <DropTarget label="Hand" onDrop={onDrop} className="shrink-0 rounded-lg border border-foreground/15 px-2 py-1.5">
+    <DropTarget label="Hand" onDrop={onDrop} className="shrink-0 rounded-lg border border-foreground/15 px-2 py-1">
       <ZoneLabel
         title={choosing ? `Hand: click ${game.toBottom} more to put on the bottom` : "Hand"}
         count={ids.length}
       />
       {/* A big hand overlaps rather than running off the screen; hovering a card brings it forward. */}
-      <div className={`hand mt-1 flex min-h-[150px] items-end gap-1 ${ids.length > 9 ? "[&>*:not(:first-child)]:-ml-[calc(var(--overlap))] [&>*:hover]:z-10" : ""} ${choosing ? "rounded ring-2 ring-amber-500" : ""}`} style={{ ["--overlap" as string]: `${Math.min(90, Math.max(0, 105 - 900 / ids.length))}px` }}>
+      <div className={`hand mt-0.5 flex min-h-[126px] items-end gap-1 ${ids.length > 9 ? "[&>*:not(:first-child)]:-ml-[calc(var(--overlap))] [&>*:hover]:z-10" : ""} ${choosing ? "rounded ring-2 ring-amber-500" : ""}`} style={{ ["--overlap" as string]: `${Math.min(75, Math.max(0, 90 - 800 / ids.length))}px` }}>
         {ids.map((iid) => (
           <CardView
             key={iid}
             inst={game.cards[iid]}
-            size={105}
+            size={90}
             onPreview={onPreview}
             onClick={choosing ? () => onBottom(iid) : undefined}
             onDoubleClick={choosing ? undefined : () => onPlay(iid)}
@@ -884,14 +930,16 @@ function useDragging() {
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
     const start = (e: DragEvent) => e.dataTransfer?.types.includes(DRAG_TYPE) && setDragging(true);
-    const stop = () => setDragging(false);
+    // Capture, because a drop target stops the drop from bubbling and a card that changed zones takes its dragend with it.
+    // A beat later, so the Library's Top / Bottom targets are still there to receive the drop.
+    const stop = () => setTimeout(() => setDragging(false), 0);
     window.addEventListener("dragstart", start);
-    window.addEventListener("dragend", stop);
-    window.addEventListener("drop", stop);
+    window.addEventListener("dragend", stop, true);
+    window.addEventListener("drop", stop, true);
     return () => {
       window.removeEventListener("dragstart", start);
-      window.removeEventListener("dragend", stop);
-      window.removeEventListener("drop", stop);
+      window.removeEventListener("dragend", stop, true);
+      window.removeEventListener("drop", stop, true);
     };
   }, []);
   return dragging;
@@ -902,7 +950,7 @@ function useDragging() {
 /** The library's top card shown face up ("Top face up"); still click to draw it. */
 function TopCard({ inst, disabled, onDraw }: { inst: Instance; disabled: boolean; onDraw: () => void }) {
   return (
-    <button type="button" onClick={onDraw} disabled={disabled} title={`Top card: ${inst.name} (click to draw)`} className="block w-[88px]">
+    <button type="button" onClick={onDraw} disabled={disabled} title={`Top card: ${inst.name} (click to draw)`} className="block w-[72px]">
       {inst.image ? (
         <img src={inst.image} alt={inst.name} draggable={false} className="w-full rounded-[4.75%/3.5%] shadow ring-2 ring-amber-400" />
       ) : (

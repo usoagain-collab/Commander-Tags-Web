@@ -18,6 +18,19 @@ export type HandStats = {
   rampCards: number;
 };
 
+/**
+ * One example opening hand: any 7 cards, or (given a land count) that many lands and the rest spells, each picked
+ * at random from its own pile. Null when the deck can't make such a hand.
+ */
+export function sampleHand<T extends Pick<HandCard, "land" | "quantity">>(library: T[], lands: number | null, seed: number): T[] | null {
+  const [cards, next] = shuffled(library.flatMap((c) => Array.from({ length: c.quantity }, () => c)), seed);
+  if (lands === null) return cards.length < 7 ? null : cards.slice(0, 7);
+  const landPile = cards.filter((c) => c.land);
+  const spellPile = cards.filter((c) => !c.land);
+  if (landPile.length < lands || spellPile.length < 7 - lands) return null;
+  return shuffled([...landPile.slice(0, lands), ...spellPile.slice(0, 7 - lands)], next)[0];
+}
+
 export function handStats(library: HandCard[], hands = 1000, seed = 20261024): HandStats {
   const cards: HandCard[] = library.flatMap((c) => Array.from({ length: c.quantity }, () => c));
   const spread = new Array(8).fill(0);

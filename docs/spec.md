@@ -88,7 +88,7 @@ The builder picks a target bracket (1–5) when creating the deck. The app keeps
   - Mass land denial.
   - Extra-turn cards.
 - **Rules as config:** the limits for each bracket are stored as data, not hard-coded, so a WotC update means editing one file rather than shipping new code.
-- **Alerts:** a banner names what crossed the line ("Adds a 2-card combo: Card A + Card B") and the card gets a badge. Nothing is blocked; the builder decides.
+- **Alerts:** the header badge turns amber and opens the Bracket screen, which names what crossed the line ("Adds a 2-card combo: Card A + Card B"); the card gets a badge. No separate banner (David, Nov 1, 2026). Nothing is blocked; the builder decides.
 - **Estimated bracket:** a badge on the deck always shows the bracket the list currently plays at, next to the target.
 - **Suggestions:** cards that would break the target are filtered out by default, with a toggle to show them.
 
@@ -171,7 +171,6 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |
 | Change mana cost | Override a card's displayed mana cost for stats (e.g. X spells) | Oct 18, 2026 |
 | Multiplayer playtesting | Playtest against other players (v1's playtester is solo goldfish, phase 6) | Oct 18, 2026 |
-| Stats drill-down | Click a bar in the Stats panel (a mana value on the curve, a color, a card type) to see the cards that make it up, like Moxfield's clickable mana curve. Likely reuses the editor's highlight (as clicking a role or tag does) | Oct 19, 2026 |
 | Close the mulligan dialog | Friend test: the opening-hand dialog can't be dismissed by clicking outside it. Add a close / cancel button (and click outside or Esc) | Oct 24, 2026 |
 | Gamer look and feel | Friend test: the site feels too professional. Give it an aesthetic for Magic players (theme, colors, card-game feel); exact direction decided in v2 | Oct 24, 2026 |
 | Link sign-in methods | A "Link Google / Discord to this account" button, so one account works with both. Supabase merges sign-ins automatically only when both report the same verified email; otherwise each method makes its own account. Needs manual identity linking turned on in Supabase | Oct 24, 2026 |
