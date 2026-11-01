@@ -14,8 +14,11 @@ import {
   type Change,
   type DeckLine,
   type Entries,
+  type PrintingChange,
+  type Printings,
   type RowChange,
 } from "./model";
+import { foilMarker, type ChosenPrinting } from "./printing";
 
 // ---------- parsing ----------
 
@@ -29,6 +32,10 @@ export type ParsedLine = {
   /** In a list with no headers, the last blank-line-separated group of 1–2 single cards: MTGO and plain
    *  exports put the commander there. Becomes the commander if every card in it can be one. */
   commanderCandidate: boolean;
+  /** A printing named on the line: "(C21) 263", foil from *F* or *E*. */
+  set?: string;
+  number?: string;
+  foil?: boolean;
 };
 
 export type IgnoredLine = { lineNo: number; raw: string; reason: string };
@@ -80,6 +87,7 @@ export function parseDeckText(text: string): ParseResult {
     if (tags.some((t) => t.startsWith("commander")) || /\*CMDR\*/i.test(line)) board = "commander";
     else if (tags.some((t) => t.startsWith("companion"))) board = "companion";
     else if (tags.some((t) => t.startsWith("maybeboard") || t.startsWith("sideboard"))) board = "maybe";
+    const foil = /\*[FE]\*/i.test(line);
     line = line
       .replace(/\[[^\]]*\]/g, "")
       .replace(/\^[^^]*\^/g, "")
@@ -88,6 +96,7 @@ export function parseDeckText(text: string): ParseResult {
 
     const m = line.match(/^(\d+)\s*x?\s+(.+)$/i);
     const quantity = m ? parseInt(m[1], 10) : 1;
+    const printing = (m ? m[2] : line).match(/\s+\(([A-Za-z0-9]{2,8})\)\s+(\S+)\s*$/);
     let name = (m ? m[2] : line)
       .replace(/\s+\([A-Za-z0-9]{2,8}\)(\s+\S+)?\s*$/, "") // " (C21) 263", " (PLST) C21-263"
       // Face separators: "Fire///Ice", "Fire//Ice", and Moxfield's plain export "Walk-In Closet/Forgotten Cellar"
@@ -100,7 +109,15 @@ export function parseDeckText(text: string): ParseResult {
       ignored.push({ lineNo, raw: rawLine, reason: "Couldn't read a card name" });
       return;
     }
-    lines.push({ lineNo, raw: rawLine, name, quantity, board, commanderCandidate: false });
+    lines.push({
+      lineNo,
+      raw: rawLine,
+      name,
+      quantity,
+      board,
+      commanderCandidate: false,
+      ...(printing ? { set: printing[1], number: printing[2], foil } : {}),
+    });
     groupOf.push(group);
   });
 
@@ -134,6 +151,8 @@ export function planImport(
   parsed: ParsedLine[],
   found: Record<string, CardSummary>, // keyed by lowercased parsed name
   mode: "add" | "replace",
+  /** Printings the list named, and the ones the deck has now. */
+  chosen: { printingOf?: (line: ParsedLine, card: CardSummary) => ChosenPrinting | null; current?: Printings } = {},
 ): { change: Change; report: ImportReport } {
   const target: Entries = mode === "replace" ? {} : { ...current };
   const report: ImportReport = {
@@ -148,6 +167,7 @@ export function planImport(
     candidates.length > 0 && candidates.every((l) => found[l.name.toLowerCase()]?.can_be_commander);
   report.commanderFromLayout = candidatesAreCommanders;
 
+  const named = new Map<string, ChosenPrinting>();
   const deckCopies = (id: string) => qty(target, "commander", id) + qty(target, "main", id) + qty(target, "companion", id);
 
   for (const line of parsed) {
@@ -167,7 +187,11 @@ export function planImport(
     const wanted = have + line.quantity;
     const kept = Math.max(have, Math.min(wanted, cap));
     if (kept < wanted) report.trimmed.push({ name: card.name, wanted: line.quantity, kept: kept - have, board });
-    if (kept > 0) target[entryKey(board, card.oracle_id)] = kept;
+    if (kept > 0) {
+      target[entryKey(board, card.oracle_id)] = kept;
+      const printing = chosen.printingOf?.(line, card);
+      if (printing) named.set(entryKey(board, card.oracle_id), printing);
+    }
   }
 
   const rows: RowChange[] = [];
@@ -179,7 +203,11 @@ export function planImport(
   for (const [k, n] of Object.entries(target)) report.counts[parseKey(k).board] += n;
 
   const total = Object.values(report.counts).reduce((a, b) => a + b, 0);
-  return { change: { label: `${mode === "replace" ? "Replace deck with" : "Import"} ${total} cards`, rows }, report };
+  const printings: PrintingChange[] = [...named]
+    .map(([k, to]) => ({ ...parseKey(k), from: chosen.current?.[k] ?? null, to }))
+    .filter((p) => p.from?.id !== p.to.id || !!p.from?.foil !== p.to.foil);
+  const label = `${mode === "replace" ? "Replace deck with" : "Import"} ${total} cards`;
+  return { change: { label, rows, ...(printings.length ? { printings } : {}) }, report };
 }
 
 // ---------- exporting ----------
@@ -202,10 +230,13 @@ export const EXPORT_NOTES: Record<ExportFormat, string> = {
 };
 
 const line = (l: DeckLine) => `${l.quantity} ${l.card.name}`;
+/** " (C21) 263 *F*" for a card with a chosen printing. Arena and MTGO lists stay names only. */
+const printed = (l: DeckLine) => (l.printing ? ` (${l.printing.set.toUpperCase()}) ${l.printing.number}${foilMarker(l.printing)}` : "");
+const lineWithPrinting = (l: DeckLine) => line(l) + printed(l);
 
-export function exportDeck(entries: Entries, cards: Record<string, CardSummary>, format: ExportFormat): string {
+export function exportDeck(entries: Entries, cards: Record<string, CardSummary>, format: ExportFormat, printings: Printings = {}): string {
   const by = (b: Board) => {
-    const lines = linesFor(entries, cards, b);
+    const lines = linesFor(entries, cards, b, printings);
     // Mainboard in the editor's type order; other boards alphabetical.
     return b === "main" ? groupByType(lines).flatMap((g) => g.lines) : lines.sort((x, y) => x.card.name.localeCompare(y.card.name));
   };
@@ -221,11 +252,16 @@ export function exportDeck(entries: Entries, cards: Record<string, CardSummary>,
     case "arena":
       return join(block("Commander", commander), block("Companion", companion), block("Deck", main));
     case "moxfield":
-      return join(block("Commander", commander), block("Companion", companion), block("Deck", main), block("Maybeboard", maybe));
+      return join(
+        block("Commander", commander, lineWithPrinting),
+        block("Companion", companion, lineWithPrinting),
+        block("Deck", main, lineWithPrinting),
+        block("Maybeboard", maybe, lineWithPrinting),
+      );
     case "mtgo":
       return join(block(null, main), block(null, [...commander, ...companion]));
     case "archidekt": {
-      const tagged = (tag: string) => (l: DeckLine) => `${l.quantity}x ${l.card.name}${tag}`;
+      const tagged = (tag: string) => (l: DeckLine) => `${l.quantity}x ${l.card.name}${printed(l)}${tag}`;
       return join(
         [
           block(null, commander, tagged(" [Commander{top}]")),
@@ -239,7 +275,7 @@ export function exportDeck(entries: Entries, cards: Record<string, CardSummary>,
     }
     case "plain":
       return join(
-        ...BOARDS.map((b) => block(`// ${b === "main" ? "Mainboard" : b[0].toUpperCase() + b.slice(1)}`, by(b))),
+        ...BOARDS.map((b) => block(`// ${b === "main" ? "Mainboard" : b[0].toUpperCase() + b.slice(1)}`, by(b), lineWithPrinting)),
       );
   }
 }

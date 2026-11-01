@@ -5,11 +5,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CardSummary } from "@/lib/deck/model";
 import type { DropRef } from "./scryfall-drop";
+import type { ChosenPrinting } from "@/lib/deck/printing";
+import { oracleIdOf, toPrinting, type ScryfallPrint } from "@/lib/scryfall/printings";
 import { importCard } from "@/lib/scryfall/import-card";
 
-type Result = { ok: true; card: CardSummary } | { ok: false; reason: string };
+/** `printing`: the exact printing that was dragged, when the drop says which. */
+type Result = { ok: true; card: CardSummary; printing?: ChosenPrinting } | { ok: false; reason: string };
 
-async function oracleIdFromScryfall(ref: DropRef): Promise<string | null> {
+async function printFromScryfall(ref: DropRef): Promise<ScryfallPrint | null> {
   const path = ref.scryfallId
     ? `cards/${ref.scryfallId}`
     : ref.set && ref.number
@@ -19,18 +22,18 @@ async function oracleIdFromScryfall(ref: DropRef): Promise<string | null> {
   try {
     const res = await fetch(`https://api.scryfall.com/${path}`, { headers: { Accept: "application/json" } });
     if (!res.ok) return null;
-    const card = (await res.json()) as { oracle_id?: string; card_faces?: { oracle_id?: string }[] };
-    return card.oracle_id ?? card.card_faces?.[0]?.oracle_id ?? null;
+    return (await res.json()) as ScryfallPrint;
   } catch {
     return null;
   }
 }
 
 export async function resolveDrop(ref: DropRef, supabase: SupabaseClient): Promise<Result> {
-  const oracleId = await oracleIdFromScryfall(ref);
+  const print = await printFromScryfall(ref);
+  const oracleId = print && oracleIdOf(print);
   if (oracleId) {
     const { data } = await supabase.from("card_summaries").select("*").eq("oracle_id", oracleId).maybeSingle();
-    if (data) return { ok: true, card: data as CardSummary };
+    if (data) return { ok: true, card: data as CardSummary, printing: toPrinting(print!, false) };
     // Not in our nightly data yet (a new spoiler): fetch it live when we know its printing (Phase 7b).
     if (ref.scryfallId) {
       const fetched = await importCard(ref.scryfallId);

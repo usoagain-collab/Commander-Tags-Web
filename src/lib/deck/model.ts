@@ -4,6 +4,8 @@
 // Applying a change forward sets the new counts; applying it backward restores the old ones. That makes
 // undo/redo exact, and the same row list is what autosave sends to the database.
 
+import { printingImage, printingPrice, type ChosenPrinting } from "./printing";
+
 export type Board = "commander" | "main" | "maybe" | "companion";
 export const BOARDS: Board[] = ["commander", "main", "companion", "maybe"];
 export const BOARD_LABELS: Record<Board, string> = {
@@ -44,12 +46,15 @@ export type RowChange = { oracle_id: string; board: Board; from: number; to: num
 export type CategoryChange = { oracle_id: string; board: Board; from: string | null; to: string | null };
 /** A My tag put on (true) or taken off (false) a card (step 3f). */
 export type TagCardChange = { tag_id: string; oracle_id: string; from: boolean; to: boolean };
-/** One edit, and one undo step. Card counts, plus any category or My tag changes made with it. */
+/** A row's chosen printing and foil state changing; null = the default printing. */
+export type PrintingChange = { oracle_id: string; board: Board; from: ChosenPrinting | null; to: ChosenPrinting | null };
+/** One edit, and one undo step. Card counts, plus any category, My tag or printing changes made with it. */
 export type Change = {
   label: string;
   rows: RowChange[];
   categories?: CategoryChange[];
   tagCards?: TagCardChange[];
+  printings?: PrintingChange[];
   /** Restoring a version (step 3h): save the current deck as a version with this name before applying. */
   snapshot?: string;
 };
@@ -57,6 +62,8 @@ export type Change = {
 export type Categories = Record<string, string>;
 /** My tags on each card: oracle_id -> tag ids. */
 export type TagCards = Record<string, string[]>;
+/** Chosen printings, keyed like entries (`board|oracle_id`). Missing = default printing. */
+export type Printings = Record<string, ChosenPrinting>;
 export type Plan = { ok: true; change: Change } | { ok: false; reason: string };
 
 export const entryKey = (board: Board, oracleId: string) => `${board}|${oracleId}`;
@@ -115,11 +122,24 @@ export function applyTagCards(tagCards: TagCards, change: Change, direction: "fo
   return next;
 }
 
-/** Everything one save call sends (apply_deck_changes): card counts, categories, My tags. */
+export function applyPrintings(printings: Printings, change: Change, direction: "forward" | "back" = "forward"): Printings {
+  if (!change.printings?.length) return printings;
+  const next = { ...printings };
+  for (const p of change.printings) {
+    const v = direction === "forward" ? p.to : p.from;
+    const k = entryKey(p.board, p.oracle_id);
+    if (v) next[k] = v;
+    else delete next[k];
+  }
+  return next;
+}
+
+/** Everything one save call sends (apply_deck_changes): card counts, categories, My tags, printings. */
 export type SavePayload = {
   rows: { oracle_id: string; board: Board; quantity: number }[];
   categories: { oracle_id: string; board: Board; category: string | null }[];
   tag_cards: { tag_id: string; oracle_id: string; on: boolean }[];
+  printings: { oracle_id: string; board: Board; printing: ChosenPrinting | null }[];
   snapshot_name?: string;
 };
 export function toSavePayload(change: Change, direction: "forward" | "back" = "forward"): SavePayload {
@@ -128,6 +148,7 @@ export function toSavePayload(change: Change, direction: "forward" | "back" = "f
     rows: toSaveRows(change, direction),
     categories: (change.categories ?? []).map((c) => ({ oracle_id: c.oracle_id, board: c.board, category: fwd ? c.to : c.from })),
     tag_cards: (change.tagCards ?? []).map((t) => ({ tag_id: t.tag_id, oracle_id: t.oracle_id, on: fwd ? t.to : t.from })),
+    printings: (change.printings ?? []).map((p) => ({ oracle_id: p.oracle_id, board: p.board, printing: fwd ? p.to : p.from })),
     ...(fwd && change.snapshot ? { snapshot_name: change.snapshot } : {}),
   };
 }
@@ -149,6 +170,34 @@ export function keepCategories(change: Change, categories: Categories): Change {
     }
   }
   return extra.length ? { ...change, categories: [...(change.categories ?? []), ...extra] } : change;
+}
+
+/** Same for printings: a removed row takes its printing with it (undo brings it back), a moved card keeps it. */
+export function keepPrintings(change: Change, printings: Printings): Change {
+  const extra: PrintingChange[] = [];
+  const touched = new Set((change.printings ?? []).map((p) => entryKey(p.board, p.oracle_id)));
+  for (const r of change.rows) {
+    const chosen = printings[entryKey(r.board, r.oracle_id)];
+    if (!chosen || r.from === 0 || r.to > 0 || touched.has(entryKey(r.board, r.oracle_id))) continue;
+    extra.push({ oracle_id: r.oracle_id, board: r.board, from: chosen, to: null });
+    const dest = change.rows.find((d) => d.oracle_id === r.oracle_id && d.board !== r.board && d.from === 0 && d.to > 0);
+    if (dest && !printings[entryKey(dest.board, dest.oracle_id)] && !touched.has(entryKey(dest.board, dest.oracle_id))) {
+      extra.push({ oracle_id: dest.oracle_id, board: dest.board, from: null, to: chosen });
+    }
+  }
+  return extra.length ? { ...change, printings: [...(change.printings ?? []), ...extra] } : change;
+}
+
+/** Sets a row's printing and foil state, or (null) goes back to the default printing. */
+export function planPrinting(printings: Printings, card: CardSummary, board: Board, to: ChosenPrinting | null): Plan {
+  const from = printings[entryKey(board, card.oracle_id)] ?? null;
+  if (from?.id === to?.id && !!from?.foil === !!to?.foil) return { ok: false, reason: "No change." };
+  const label = !to
+    ? `Set ${card.name} back to its default printing`
+    : from?.id === to.id
+      ? `Mark ${card.name} ${to.foil ? "foil" : "not foil"}`
+      : `Use the ${to.set_name} printing of ${card.name}${to.foil ? " (foil)" : ""}`;
+  return { ok: true, change: { label, rows: [], printings: [{ oracle_id: card.oracle_id, board, from, to }] } };
 }
 
 /** Sets or clears a card's manual category. `name` is what the label shows ("Ramp", "automatic"). */
@@ -182,7 +231,7 @@ export function planTagCards(tagCards: TagCards, tagId: string, tagName: string,
 export function dropTagFromChanges(changes: Change[], tagId: string): Change[] {
   return changes
     .map((c) => (c.tagCards?.some((t) => t.tag_id === tagId) ? { ...c, tagCards: c.tagCards.filter((t) => t.tag_id !== tagId) } : c))
-    .filter((c) => c.rows.length || c.categories?.length || c.tagCards?.length);
+    .filter((c) => c.rows.length || c.categories?.length || c.tagCards?.length || c.printings?.length);
 }
 
 // ---------- planning edits (checks the rules, returns a Change or a reason it isn't allowed) ----------
@@ -312,13 +361,31 @@ const row = (card: CardSummary, board: Board, from: number, to: number): RowChan
 
 // ---------- reading the deck ----------
 
-export type DeckLine = { board: Board; quantity: number; card: CardSummary };
+/** `card` already shows the row's chosen printing: its image, art and price. */
+export type DeckLine = { board: Board; quantity: number; card: CardSummary; printing?: ChosenPrinting };
 
-export function linesFor(entries: Entries, cards: Record<string, CardSummary>, board: Board): DeckLine[] {
+/**
+ * A card as its chosen printing shows it. A printing with no price for this finish falls back to the card's
+ * cheapest price (the card sheet marks that as an estimate).
+ */
+export function withPrinting(card: CardSummary, printing: ChosenPrinting | undefined): CardSummary {
+  if (!printing) return card;
+  return {
+    ...card,
+    image_normal: printingImage(printing.id),
+    image_art_crop: printingImage(printing.id, "art_crop"),
+    price_usd: printingPrice(printing) ?? card.price_usd,
+  };
+}
+
+export function linesFor(entries: Entries, cards: Record<string, CardSummary>, board: Board, printings: Printings = {}): DeckLine[] {
   return Object.entries(entries)
     .map(([k, quantity]) => ({ ...parseKey(k), quantity }))
     .filter((e) => e.board === board && cards[e.oracle_id])
-    .map((e) => ({ board: e.board, quantity: e.quantity, card: cards[e.oracle_id] }));
+    .map((e) => {
+      const printing = printings[entryKey(e.board, e.oracle_id)];
+      return { board: e.board, quantity: e.quantity, card: withPrinting(cards[e.oracle_id], printing), ...(printing ? { printing } : {}) };
+    });
 }
 
 /**
@@ -380,10 +447,16 @@ export function outsideIdentity(card: CardSummary, identity: Set<string> | null)
   return identity !== null && card.color_identity.some((c) => !identity.has(c));
 }
 
-export function totalPrice(entries: Entries, cards: Record<string, CardSummary>, boards: Board[] = ["commander", "main", "companion"]) {
+export function totalPrice(
+  entries: Entries,
+  cards: Record<string, CardSummary>,
+  boards: Board[] = ["commander", "main", "companion"],
+  printings: Printings = {},
+) {
   return Object.entries(entries).reduce((sum, [k, q]) => {
     const { board, oracle_id } = parseKey(k);
-    const p = cards[oracle_id]?.price_usd;
+    const card = cards[oracle_id];
+    const p = card && withPrinting(card, printings[k]).price_usd;
     return boards.includes(board) && p ? sum + Number(p) * q : sum;
   }, 0);
 }

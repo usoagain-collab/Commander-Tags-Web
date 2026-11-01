@@ -11,7 +11,7 @@ describe("readSnapshot", () => {
         ["x", "sideboard", 1, null],
         "junk",
       ]),
-    ).toEqual({ entries: { "main|sol": 1, "main|forest": 30 }, categories: { "main|sol": "draw" } });
+    ).toEqual({ entries: { "main|sol": 1, "main|forest": 30 }, categories: { "main|sol": "draw" }, printings: {} });
   });
 });
 

@@ -199,6 +199,17 @@ input[type="radio"] {
   }
 }
 
+/* A foil card: a soft rainbow sheen over the image. Decoration only, clicks pass through to the card. */
+.foil-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4.75% / 3.5%;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background: linear-gradient(115deg, #ff5f6d55, #ffd86f66 22%, #7dffb266 42%, #6fc7ff77 62%, #c58bff66 82%, #ff5f6d55);
+}
+
 .fresh {
   animation: fresh 1500ms ease-out;
 }

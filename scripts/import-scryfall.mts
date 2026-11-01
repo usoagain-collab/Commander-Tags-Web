@@ -52,13 +52,16 @@ async function downloadRecords<T>(entry: BulkEntry): Promise<T[]> {
   return text.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line) as T);
 }
 
+type PrintingPrices = { usd: number | null; usd_foil: number | null; usd_etched: number | null };
+
 /**
  * The cheapest USD price per card across every printing. oracle_cards carries one printing, which is often a promo
  * with no regular price (Sol Ring, Command Tower). Read line by line, because default_cards is several hundred MB
  * (JSONL, usually gzipped). Foil prices count only when a card has no regular price at all. If this fails, the
- * import still runs on oracle_cards prices, and says so in its log.
+ * import still runs on oracle_cards prices, and says so in its log. The same read collects today's prices of the
+ * printings decks have chosen (migration 0025).
  */
-async function cheapestPrices(entry: BulkEntry) {
+async function cheapestPrices(entry: BulkEntry, inDecks: Set<string>, printingPrices: Map<string, PrintingPrices>) {
   const url = entry.jsonl_download_uri ?? entry.download_uri;
   if (!url?.includes(".jsonl")) throw new Error("default_cards has no JSONL download link");
   const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
@@ -75,6 +78,10 @@ async function cheapestPrices(entry: BulkEntry) {
   for await (const line of createInterface({ input: zipped ? raw.pipe(createGunzip()) : raw })) {
     if (!line.trim()) continue;
     const card = JSON.parse(line) as ScryfallCard;
+    if (card.id && inDecks.has(card.id)) {
+      const n = (p: string | null | undefined) => (p ? Number(p) : null);
+      printingPrices.set(card.id, { usd: n(card.prices?.usd), usd_foil: n(card.prices?.usd_foil), usd_etched: n(card.prices?.usd_etched) });
+    }
     if (!card.oracle_id) continue;
     keepLowest(regular, card.oracle_id, card.prices?.usd);
     keepLowest(foil, card.oracle_id, card.prices?.usd_foil);
@@ -179,7 +186,9 @@ async function main() {
     const cards = (await downloadRecords<ScryfallCard>(entry("oracle_cards"))).filter((c) => c.oracle_id);
     log(`  ${cards.length} cards`);
     log("Downloading default_cards for prices ...");
-    const cheapest = await cheapestPrices(entry("default_cards")).catch((e) => {
+    const inDecks = await client.query<{ printing_id: string }>("select distinct printing_id from public.deck_cards where printing_id is not null");
+    const printingPrices = new Map<string, PrintingPrices>();
+    const cheapest = await cheapestPrices(entry("default_cards"), new Set(inDecks.rows.map((r) => r.printing_id)), printingPrices).catch((e) => {
       log(`  Couldn't read default_cards, using oracle_cards prices: ${e}`);
       return new Map<string, number>();
     });
@@ -277,6 +286,30 @@ async function main() {
     log(`  card_tokens loaded`);
 
     await client.query("commit");
+
+    // Prices of chosen printings, in their own short transaction. The touch trigger stays off so a price update
+    // doesn't mark every deck as just edited; disabling it locks deck_cards until commit, so this can't share the
+    // long transaction above. A failure here only leaves yesterday's prices.
+    if (printingPrices.size) {
+      try {
+        await client.query("begin");
+        await client.query("alter table public.deck_cards disable trigger deck_cards_touch");
+        const updated = await client.query(
+          `update public.deck_cards c
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric)
+           where c.printing_id = p.id
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)`,
+          [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
+        );
+        await client.query("alter table public.deck_cards enable trigger deck_cards_touch");
+        await client.query("commit");
+        log(`  ${updated.rowCount} chosen printings repriced`);
+      } catch (e) {
+        await client.query("rollback").catch(() => {});
+        log(`  Couldn't refresh chosen printing prices: ${e}`);
+      }
+    }
 
     const counts = {
       cards: cards.length,

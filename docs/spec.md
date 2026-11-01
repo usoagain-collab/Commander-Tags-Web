@@ -107,8 +107,9 @@ The editor matches what people like about Moxfield and fixes its known complaint
 | Group / sort | By role, type, mana value, color or custom category | Standard |
 | Maybeboard | Holding area for cards under consideration; suggestions can go straight here | Standard |
 | Stats | Mana curve, color pips against land sources, type breakdown | Standard |
-| Pricing | Today's price per card and the deck total (USD), from Scryfall's daily data | Asked for; no history needed |
-| ~~Printing picker~~ | **Moved to v2** (Oct 18, 2026). v1 uses each card's default printing and its art tags | Standard |
+| Pricing | Today's price per card and the deck total (USD), from Scryfall's daily data. A card with a chosen printing uses that printing's price, its foil price when foil; other cards use their cheapest printing | Asked for; no history needed |
+| Printing picker | Pick any paper printing of a card in the deck from its card sheet; the deck shows that image and its art tags follow. Built Oct 31, 2026 (moved back from v2) | Standard |
+| Foil | Mark a card in a deck as foil; a sheen on its image and a label on text rows. Built Oct 31, 2026 (moved back from v2) | Friend test |
 | Card sheet | Tap or click any card (name in text view, image in visual views) to open it straight away: big image, large action buttons, its roles and tags. A bottom sheet on phones, a window with Prev / Next on desktop. No tiny icons on top of card images | Moxfield's ⋯ on the image is hard to hit on mobile |
 | Card details | Rules text, P/T or loyalty, both faces, legality in every format, and rulings, fetched live from Scryfall. The card's tags take the place of buy links | Asked for; tags are this app's point |
 | My tags | Your own labels on cards ("Combo", "Win con"…), several per card, added from the card sheet. Each is **this deck only** or **account-wide**: an account-wide tag and where it's applied follow the card into every deck (tag Sol Ring "Staple" once, it's a Staple everywhere). A "Show my tags" switch, Group by My tags, click to highlight, rename / recolor / change scope / delete | Moxfield-style tags, asked for by David (Oct 19, 2026) |
@@ -164,10 +165,9 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 
 | Feature | What it means | Added |
 | --- | --- | --- |
-| Card printings | Printing picker and switching printings in a deck (stored in `deck_cards.printing_id`); art tags follow the chosen printing. **Friend test: important** | Oct 18, 2026 |
+| Mixed copies of one card | Different printings or foil for copies of the same card on one board, such as 10 Forests with different art. Today one row holds one printing | Oct 31, 2026 |
 | Preferred printing | Remember a favourite printing per card across all your decks (needs printings) | Oct 18, 2026 |
-| Pricing details | Foil vs. normal price, prices per store, price settings, price per printing (v1 keeps today's single price per card and the deck total) | Oct 18, 2026 |
-| Foil version | Mark a card in a deck as foil. **Friend test: important** | Oct 18, 2026 |
+| Pricing details | Prices per store and price settings (foil and per-printing prices are built) | Oct 18, 2026 |
 | Collection tracking | Ownership checkmarks, "add to collection", the "unowned" price total (also listed under Out of scope for v1) | Oct 18, 2026 |
 | Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |
 | Change mana cost | Override a card's displayed mana cost for stats (e.g. X spells) | Oct 18, 2026 |
@@ -219,7 +219,7 @@ Done Oct 18, 2026, from each site's own feedback board (vote counts) and a 2026 
 | Search waits about 1 s per keystroke | Moxfield instant-search request | Quick add uses our own indexed database (2b); keep it under about 150 ms |
 | Re-tagging the same card in every deck | Archidekt auto-categories, 43 points; users asked for Scryfall oracle tags | Core design (roles from tags), plus account-wide My tags (3e) |
 | No combo detection | Moxfield #6, 207 votes (Commander Spellbook) | Planned in phase 5, bracket targeting |
-| Deck price ignores cheaper printings | Moxfield, 161 votes | Not decided. Needs printings, which are on the v2 backlog |
+| Deck price ignores cheaper printings | Moxfield, 161 votes | Built: a card with no chosen printing counts at its cheapest printing; a chosen one at its real price |
 | Mobile: overlapping buttons, keyboard stays open, no drag, lost work | Archidekt forum, 2020 and 2022 | Built: card sheet with large buttons, whole card is the tap target, autosave. Check that the keyboard closes after Quick add on phones |
 | Ads cover cards in the playtester | Moxfield feedback board | Planned: the playtester never shows ads |
 | Playtester is clunky: cards shift, the battlefield clutters | 2026 review of Archidekt | Design rule for phase 6: cards stay where you put them; lands and tokens group automatically |

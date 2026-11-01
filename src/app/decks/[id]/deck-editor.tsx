@@ -5,11 +5,13 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import {
   applyCategories,
   applyChange,
+  applyPrintings,
   applyTagCards,
   BOARD_LABELS,
   dropTagFromChanges,
   entryKey,
   keepCategories,
+  keepPrintings,
   deckIdentity,
   deckSize,
   linesFor,
@@ -18,6 +20,7 @@ import {
   planBulk,
   planCategory,
   planMove,
+  planPrinting,
   planSetQuantity,
   planTagCards,
   toSavePayload,
@@ -29,6 +32,7 @@ import {
   type DeckLine,
   type Entries,
   type Plan,
+  type Printings,
   type TagCards,
 } from "@/lib/deck/model";
 import { groupLines, readViewSettings, sortLines, type ViewSettings } from "@/lib/deck/grouping";
@@ -38,6 +42,8 @@ import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
 import { useArtTree } from "@/lib/tags/use-art-tree";
+import { useChosenArtTags } from "@/lib/tags/use-chosen-art-tags";
+import type { ChosenPrinting } from "@/lib/deck/printing";
 import {
   aKey,
   deckKeyCounts,
@@ -85,6 +91,7 @@ import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 type State = {
   entries: Entries;
   categories: Categories; // manual category per row (step 3f)
+  printings: Printings; // chosen printing and foil per row
   tagCards: TagCards; // My tags per card (step 3f)
   cards: Record<string, CardSummary>;
   past: Change[]; // undo stack
@@ -106,6 +113,7 @@ function reducer(state: State, action: Action): State {
       return {
         entries: applyChange(state.entries, action.change),
         categories: applyCategories(state.categories, action.change),
+        printings: applyPrintings(state.printings, action.change),
         tagCards: applyTagCards(state.tagCards, action.change),
         cards: action.cards
           ? { ...state.cards, ...Object.fromEntries(action.cards.map((c) => [c.oracle_id, c])) }
@@ -120,6 +128,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         entries: applyChange(state.entries, change, "back"),
         categories: applyCategories(state.categories, change, "back"),
+        printings: applyPrintings(state.printings, change, "back"),
         tagCards: applyTagCards(state.tagCards, change, "back"),
         past: state.past.slice(0, -1),
         future: [...state.future, change],
@@ -132,6 +141,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         entries: applyChange(state.entries, change),
         categories: applyCategories(state.categories, change),
+        printings: applyPrintings(state.printings, change),
         tagCards: applyTagCards(state.tagCards, change),
         past: [...state.past, change],
         future: state.future.slice(0, -1),
@@ -158,6 +168,7 @@ type Props = {
   deck: { id: string; name: string; visibility: Visibility };
   initialEntries: Entries;
   initialCategories: Categories;
+  initialPrintings: Printings;
   initialCards: Record<string, CardSummary>;
   /** The deck's tags, loaded with the page (undefined if that failed: the editor then fetches them). */
   initialTags?: InitialTags;
@@ -180,6 +191,7 @@ export function DeckEditor({
   deck,
   initialEntries,
   initialCategories,
+  initialPrintings,
   initialCards,
   initialTags,
   initialCombos,
@@ -198,6 +210,7 @@ export function DeckEditor({
   const [state, dispatch] = useReducer(reducer, {
     entries: initialEntries,
     categories: initialCategories,
+    printings: initialPrintings,
     tagCards: {},
     cards: initialCards,
     past: [],
@@ -261,12 +274,12 @@ export function DeckEditor({
         if (plan.reason !== "No change.") say(plan.reason);
         return false;
       }
-      const change = keepCategories(plan.change, state.categories);
+      const change = keepPrintings(keepCategories(plan.change, state.categories), state.printings);
       dispatch({ type: "apply", change, cards: card ? [card] : undefined });
       save(toSavePayload(change));
       return true;
     },
-    [save, say, state.categories],
+    [save, say, state.categories, state.printings],
   );
 
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | null>(null);
@@ -275,13 +288,13 @@ export function DeckEditor({
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
     (plain: Change, newCards: CardSummary[]) => {
-      const change = keepCategories(plain, state.categories);
+      const change = keepPrintings(keepCategories(plain, state.categories), state.printings);
       dispatch({ type: "apply", change, cards: newCards });
       save(toSavePayload(change));
       setPanel(null);
       say(`${change.label}. Ctrl+Z undoes the whole import.`);
     },
-    [save, say, state.categories],
+    [save, say, state.categories, state.printings],
   );
 
   const undo = useCallback(() => {
@@ -330,7 +343,7 @@ export function DeckEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [readOnly, undo, redo, selecting, stopSelecting, panel, sheet]);
 
-  const { entries, cards, categories, tagCards } = state;
+  const { entries, cards, categories, tagCards, printings } = state;
 
   // ---------- bracket targeting (Phase 5b) ----------
   const bracket = useBracketTarget(deck.id, targetBracket, readOnly);
@@ -350,7 +363,7 @@ export function DeckEditor({
     () => [...new Set([...Object.keys(cards), ...(preview ? [preview.oracle_id] : [])])],
     [cards, preview],
   );
-  const tags = useTagData(tagIds, initialTags);
+  const tags = useChosenArtTags(useTagData(tagIds, initialTags), printings);
 
   // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
   const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
@@ -390,10 +403,10 @@ export function DeckEditor({
   // ---------- what's on screen ----------
   const identity = deckIdentity(entries, cards);
   const size = deckSize(entries);
-  const commanders = linesFor(entries, cards, "commander");
-  const companions = linesFor(entries, cards, "companion");
-  const mainLines = linesFor(entries, cards, "main");
-  const maybeLines = linesFor(entries, cards, "maybe");
+  const commanders = linesFor(entries, cards, "commander", printings);
+  const companions = linesFor(entries, cards, "companion", printings);
+  const mainLines = linesFor(entries, cards, "main", printings);
+  const maybeLines = linesFor(entries, cards, "maybe", printings);
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
   // The deck as the bracket check sees it (also used to screen suggestions, 5c).
@@ -741,8 +754,14 @@ export function DeckEditor({
   };
 
   /** Adds a card found outside the deck list (search results, drag from Scryfall) and confirms it. */
-  const addWithNotice = (card: CardSummary, board: Board) => {
-    if (run(planAdd(entries, card, board), card)) {
+  const addWithNotice = (card: CardSummary, board: Board, printing?: ChosenPrinting) => {
+    const plan = planAdd(entries, card, board);
+    // A dragged printing applies when this adds the row; extra copies of a card already here share its printing.
+    const pinned =
+      plan.ok && printing && !entries[entryKey(board, card.oracle_id)]
+        ? { ...plan, change: { ...plan.change, printings: [{ oracle_id: card.oracle_id, board, from: null, to: printing }] } }
+        : plan;
+    if (run(pinned, card)) {
       flash(card.oracle_id);
       say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
     }
@@ -756,7 +775,7 @@ export function DeckEditor({
         commanders={commanders.map((l) => l.card)}
         identity={identity}
         size={size}
-        price={totalPrice(entries, cards)}
+        price={totalPrice(entries, cards, undefined, printings)}
         backLink={!readOnly}
         complete={complete}
         celebrate={celebrate}
@@ -838,7 +857,7 @@ export function DeckEditor({
         />
         </div>
       )}
-      {panel === "import" && !readOnly && <ImportPanel entries={entries} onApply={applyImport} onClose={() => setPanel(null)} />}
+      {panel === "import" && !readOnly && <ImportPanel entries={entries} printings={printings} onApply={applyImport} onClose={() => setPanel(null)} />}
       {panel === "suggest" && suggestFor && !readOnly && (
         <div id="suggest-panel" className="drawer scroll-mt-4">
           <SuggestPanel
@@ -905,7 +924,7 @@ export function DeckEditor({
       {panel === "history" && !readOnly && (
         <HistoryPanel
           deckId={deck.id}
-          current={{ entries, categories }}
+          current={{ entries, categories, printings }}
           cards={cards}
           savedTick={status.state === "saved" ? state.past.length + state.future.length * 10000 : null}
           canSnapshot={status.state === "saved"}
@@ -918,7 +937,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} cards={cards} onClose={() => setPanel(null)} />}
+      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={printings} cards={cards} onClose={() => setPanel(null)} />}
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_300px]">
         {/* Wide screens: the role profile gets its own column on the left. */}
@@ -1109,7 +1128,7 @@ export function DeckEditor({
         </aside>
       </div>
 
-      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards)} />
+      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards, undefined, printings)} />
 
       {selecting && !readOnly && (
         <>
@@ -1182,6 +1201,10 @@ export function DeckEditor({
           }}
           onQuantity={(n) => {
             if (run(planSetQuantity(entries, sheetLine.card, sheetLine.board, n)) && n === 0) say(`Removed ${sheetLine.card.name}.`, true);
+          }}
+          onPrinting={(to) => {
+            const plan = planPrinting(printings, sheetLine.card, sheetLine.board, to);
+            if (run(plan) && plan.ok) say(`${plan.change.label}. Ctrl+Z undoes it.`);
           }}
           onPrev={() => step(-1)}
           onNext={() => step(1)}

@@ -149,7 +149,8 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
             <li className="text-sm opacity-60">No versions yet. One is saved automatically the next time you edit after a break.</li>
           ) : (
             versions.map((v) => {
-              const s = diffSummary(diffDecks(v.state, current));
+              const diff = diffDecks(v.state, current);
+              const s = diffSummary(diff);
               return (
                 <li key={v.id}>
                   <button
@@ -176,7 +177,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
                           <span className="text-red-400">−{s.minus}</span> since
                         </>
                       ) : (
-                        "same as now"
+                        diff.reprinted ? "printings differ" : "same as now"
                       )}
                     </span>
                   </button>
@@ -276,7 +277,7 @@ const label = (v: Version) => `${versionTitle(v)}, ${versionDate(v.created_at)}`
 
 function DiffView({ diff, cards }: { diff: DeckDiff; cards: Record<string, CardSummary> }) {
   const none = !diff.added.length && !diff.removed.length && !diff.changed.length;
-  if (none && !diff.categorized) return <p className="opacity-60">No differences.</p>;
+  if (none && !diff.categorized && !diff.reprinted) return <p className="opacity-60">No differences.</p>;
   const name = (l: DiffLine) => cards[l.oracle_id]?.name ?? "Unknown card";
   const where = (l: DiffLine) => (l.board === "main" ? "" : ` (${BOARD_LABELS[l.board].toLowerCase()})`);
   const byName = (a: DiffLine, b: DiffLine) => name(a).localeCompare(name(b));
@@ -311,6 +312,11 @@ function DiffView({ diff, cards }: { diff: DeckDiff; cards: Record<string, CardS
             </li>
           ))}
         </DiffList>
+      )}
+      {diff.reprinted > 0 && (
+        <p className="opacity-70">
+          {diff.reprinted} {diff.reprinted === 1 ? "card's" : "cards'"} printing or foil changed.
+        </p>
       )}
       {diff.categorized > 0 && (
         <p className="opacity-70">

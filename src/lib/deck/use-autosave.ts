@@ -29,6 +29,7 @@ export function useAutosave(deckId: string) {
         p_categories: next.categories,
         p_tag_cards: next.tag_cards,
         p_snapshot_name: next.snapshot_name ?? null,
+        p_printings: next.printings,
       });
       if (error) {
         running.current = false;
