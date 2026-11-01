@@ -194,11 +194,20 @@ function copiesInDeck(entries: Entries, oracleId: string) {
   return DECK_BOARDS.reduce((n, b) => n + qty(entries, b, oracleId), 0);
 }
 
+/** A deck has at most two commanders (partners), and only cards that can lead a deck qualify. */
+function commanderRefusal(entries: Entries, card: CardSummary) {
+  if (!card.can_be_commander) return `${card.name} can't be a commander.`;
+  const commanders = Object.keys(entries).filter((k) => k.startsWith("commander|") && entries[k] > 0).length;
+  return commanders >= 2 ? "A deck can have at most two commanders. Move one out first." : null;
+}
+
 export function planAdd(entries: Entries, card: CardSummary, board: Board): Plan {
   const current = qty(entries, board, card.oracle_id);
 
   if (board === "commander" || board === "companion") {
     if (current > 0) return { ok: false, reason: `${card.name} is already your ${board}.` };
+    const refused = board === "commander" && commanderRefusal(entries, card);
+    if (refused) return { ok: false, reason: refused };
     return { ok: true, change: { label: `Set ${card.name} as ${board}`, rows: [row(card, board, 0, 1)] } };
   }
 
@@ -240,6 +249,8 @@ export function planMove(entries: Entries, card: CardSummary, from: Board, to: B
   let moving = to === "commander" || to === "companion" ? 1 : have;
   if (to === "commander" || to === "companion") {
     if (there > 0) return { ok: false, reason: `${card.name} is already your ${to}.` };
+    const refused = to === "commander" && commanderRefusal(entries, card);
+    if (refused) return { ok: false, reason: refused };
   } else {
     const cap = card.max_copies;
     // Moving within the deck (e.g. commander -> main) doesn't change the deck count; into it from maybe does.

@@ -91,13 +91,13 @@ function Select({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+    <label className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
       <span className="sr-only opacity-75 lg:not-sr-only">{label}</span>
       <select
         value={value}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-10 w-full min-w-0 rounded-lg border border-foreground/20 bg-background px-1.5 sm:px-2"
+        className="min-h-10 w-full min-w-0 rounded-lg border border-foreground/20 bg-background px-1.5 sm:w-auto sm:px-2"
       >
         {Object.entries(options).map(([k, v]) => (
           <option key={k} value={k}>

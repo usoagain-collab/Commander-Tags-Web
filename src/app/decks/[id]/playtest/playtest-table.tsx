@@ -196,7 +196,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
       {tool === "tokens" && <TokenPicker tokens={tokens} update={update} onClose={() => setTool(null)} />}
       {help && <ShortcutSheet onClose={() => setHelp(false)} />}
       {toast && (
-        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-foreground px-4 py-2 text-sm text-background shadow-lg">
+        <div role="status" className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-gold px-4 py-2 text-sm text-gold-ink shadow-lg">
           {toast}
         </div>
       )}
@@ -228,7 +228,7 @@ function TopBar({
         ← {deck.name}
       </Link>
       <span className="rounded-md bg-foreground/10 px-3 py-1.5 font-semibold tabular-nums">Turn {game.turn}</span>
-      <BarButton disabled={!playing} onClick={() => update(nextTurn)} hint="N">
+      <BarButton primary disabled={!playing} onClick={() => update(nextTurn)} hint="N">
         Next turn
       </BarButton>
       <BarButton disabled={!playing} onClick={() => update(untapAll)} hint="U">
@@ -261,7 +261,7 @@ function TopBar({
         <BarButton onClick={() => update((g) => setLife(g, g.life - 1))} label="Lose 1 life">
           −
         </BarButton>
-        <span className="min-w-14 text-center text-xl font-semibold tabular-nums">{game.life}</span>
+        <span className="display min-w-14 text-center text-3xl tabular-nums text-gold">{game.life}</span>
         <BarButton onClick={() => update((g) => setLife(g, g.life + 1))} label="Gain 1 life">
           +
         </BarButton>
@@ -279,12 +279,14 @@ function BarButton({
   disabled,
   hint,
   label,
+  primary,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   hint?: string;
   label?: string;
+  primary?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -294,10 +296,10 @@ function BarButton({
       disabled={disabled}
       aria-label={label}
       title={hint ? `${label ?? ""} (${hint})`.trim() : label}
-      className="min-h-9 rounded-md border border-foreground/20 px-3 hover:bg-foreground/10 disabled:opacity-40"
+      className={`btn ${primary ? "btn-gold" : ""}`}
     >
       {children}
-      {hint && <kbd className="ml-1.5 rounded border border-foreground/20 px-1 text-[10px] opacity-60">{hint}</kbd>}
+      {hint && <kbd className="rounded border border-current/30 px-1 text-[11px] font-normal opacity-75">{hint}</kbd>}
     </button>
   );
 }
@@ -579,7 +581,7 @@ function Battlefield({
   return (
     <DropTarget
       label="Battlefield"
-      className="flex min-w-0 flex-1 flex-col rounded-lg border border-foreground/15 bg-foreground/[0.03]"
+      className="felt flex min-w-0 flex-1 flex-col rounded-xl border border-foreground/15"
       onDrop={(iid, e) => {
         const r = area.current!.getBoundingClientRect();
         const [gx, gy] = (e.dataTransfer.getData("application/x-ctw-grab") || "0,0").split(",").map(Number);
@@ -588,7 +590,7 @@ function Battlefield({
     >
       {/* Free area: cards stay exactly where they're dropped. */}
       <div ref={area} className="relative min-h-0 flex-1">
-        {others.length === 0 && <p className="absolute inset-0 flex items-center justify-center text-sm opacity-40">Drag cards here to play them</p>}
+        {others.length === 0 && <p className="absolute inset-0 flex items-center justify-center text-sm opacity-70">Drag cards here to play them, or double-click a card in your hand</p>}
         {others.map((iid) => {
           const p = game.battlefield[iid];
           return (
@@ -658,7 +660,8 @@ function Hand({
         title={choosing ? `Hand: click ${game.toBottom} more to put on the bottom` : "Hand"}
         count={ids.length}
       />
-      <div className={`mt-1 flex min-h-[150px] items-end gap-1 overflow-x-auto ${choosing ? "rounded ring-2 ring-amber-500" : ""}`}>
+      {/* A big hand overlaps rather than running off the screen; hovering a card brings it forward. */}
+      <div className={`mt-1 flex min-h-[150px] items-end gap-1 ${ids.length > 9 ? "[&>*:not(:first-child)]:-ml-[calc(var(--overlap))] [&>*:hover]:z-10" : ""} ${choosing ? "rounded ring-2 ring-amber-500" : ""}`} style={{ ["--overlap" as string]: `${Math.min(90, Math.max(0, 105 - 900 / ids.length))}px` }}>
         {ids.map((iid) => (
           <CardView
             key={iid}
@@ -751,7 +754,7 @@ function MulliganDialog({
           >
             Mulligan{cost > 0 ? ` (then ${cost} to the bottom)` : " (free)"}
           </button>
-          <button type="button" onClick={() => update(keep)} className="min-h-11 rounded-lg bg-foreground px-5 font-medium text-background">
+          <button type="button" onClick={() => update(keep)} className="min-h-11 rounded-lg bg-gold px-5 font-medium text-gold-ink">
             Keep
           </button>
         </div>
@@ -1030,7 +1033,7 @@ function LibrarySearch({
             update(shuffleLibrary);
             onClose();
           }}
-          className="min-h-9 rounded-md bg-foreground px-3 text-sm font-medium text-background"
+          className="min-h-9 rounded-md bg-gold px-3 text-sm font-medium text-gold-ink"
         >
           Shuffle and close
         </button>
@@ -1097,7 +1100,7 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
               />
               cards
             </label>
-            <button type="submit" className="min-h-10 rounded-lg bg-foreground px-4 font-medium text-background">
+            <button type="submit" className="min-h-10 rounded-lg bg-gold px-4 font-medium text-gold-ink">
               Look
             </button>
             <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">
@@ -1143,7 +1146,7 @@ function ScryDialog({ game, update, onClose }: { game: GameState; update: (fn: (
                   update((g) => resolveScry(g, order, choice));
                   onClose();
                 }}
-                className="min-h-10 rounded-lg bg-foreground px-5 font-medium text-background"
+                className="min-h-10 rounded-lg bg-gold px-5 font-medium text-gold-ink"
               >
                 Done
               </button>
@@ -1181,7 +1184,7 @@ function MillDialog({ game, update, onClose }: { game: GameState; update: (fn: (
           />
           cards into the graveyard
         </label>
-        <button type="submit" className="min-h-10 rounded-lg bg-foreground px-4 font-medium text-background">
+        <button type="submit" className="min-h-10 rounded-lg bg-gold px-4 font-medium text-gold-ink">
           Mill
         </button>
         <button type="button" onClick={onClose} className="min-h-10 rounded-lg border border-foreground/20 px-4">

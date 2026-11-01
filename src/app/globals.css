@@ -134,6 +134,36 @@ input[type="radio"] {
   }
 }
 
+.felt {
+  background: radial-gradient(120% 90% at 50% 0%, #17352c, #0e1d1b 70%);
+}
+
+@keyframes pop {
+  40% {
+    transform: scale(1.12);
+    color: var(--gold);
+  }
+}
+
+.pop {
+  animation: pop 320ms ease-out;
+}
+
+@keyframes complete {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+    box-shadow: 0 0 0 0 var(--gold);
+  }
+  60% {
+    box-shadow: 0 0 26px 6px var(--gold);
+  }
+}
+
+.complete {
+  animation: complete 900ms ease-out;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

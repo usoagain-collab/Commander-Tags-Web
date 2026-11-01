@@ -134,7 +134,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
           type="submit"
           disabled={busy || !canSnapshot}
           title={canSnapshot ? undefined : "Waiting for your last edits to save"}
-          className="min-h-11 rounded-lg bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-gold px-4 text-sm font-medium text-gold-ink disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save version"}
         </button>
@@ -224,7 +224,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
                       <button
                         type="button"
                         onClick={() => restore(selected)}
-                        className="min-h-11 flex-1 rounded-lg bg-foreground px-3 font-medium text-background"
+                        className="min-h-11 flex-1 rounded-lg bg-gold px-3 font-medium text-gold-ink"
                       >
                         Restore
                       </button>
@@ -254,7 +254,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
                     <button
                       type="button"
                       onClick={() => setConfirm("restore")}
-                      className="min-h-11 rounded-lg bg-foreground px-4 font-medium text-background"
+                      className="min-h-11 rounded-lg bg-gold px-4 font-medium text-gold-ink"
                     >
                       Restore this version…
                     </button>

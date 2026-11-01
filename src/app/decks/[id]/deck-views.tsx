@@ -13,8 +13,8 @@ export type DeckItem = {
   warnings: string[];
   untagged: boolean;
   highlighted: boolean;
-  /** Roles beyond the first (the card is grouped under its first role). */
-  extraRoles: number;
+  /** Roles to name on the row (the group heading already names one in Group by Role). */
+  roleNames: string[];
   /** My tags to show on the card (empty when "Show on cards" is off). */
   myTags: MyTag[];
   /** The category was set by hand (step 3f). */
@@ -153,7 +153,7 @@ export function DeckView(props: Props) {
             <DropZone key={b.section.key} sectionKey={b.section.key} onCardDrop={props.onCardDrop} className={b.section.parent ? "pl-3" : ""}>
               <Heading section={b.section} {...props} sub={!!b.section.parent} />
               {!props.collapsed.has(b.section.key) && (
-                <ul className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
                   {b.section.items.map((it) => (
                     <li key={it.line.card.oracle_id}>
                       <Tile
@@ -230,7 +230,7 @@ function ParentHeading({
       <span aria-hidden className={`inline-block transition-transform ${isOpen ? "rotate-90" : ""}`}>
         ›
       </span>
-      {parent.title} <span className="font-normal opacity-60">({parent.count})</span>
+      <span className="display text-lg">{parent.title}</span> <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-xs font-medium tabular-nums">{parent.count}</span>
     </button>
   );
 }
@@ -254,15 +254,16 @@ function Heading({
       type="button"
       onClick={() => onToggle(section.key)}
       aria-expanded={isOpen}
-      className={`mb-1 flex min-h-8 w-full items-center gap-1.5 px-1.5 text-left text-xs font-semibold tracking-wide opacity-70 hover:opacity-100 ${
-        sub ? "" : "uppercase"
+      className={`mb-2 flex min-h-10 w-full items-center gap-2 border-b border-foreground/15 px-1.5 text-left text-sm font-semibold hover:text-gold ${
+        sub ? "opacity-90" : "eyebrow !text-[13px] !text-foreground"
       }`}
     >
       <span aria-hidden className={`inline-block transition-transform ${isOpen ? "rotate-90" : ""}`}>
         ›
       </span>
       {prefix && <span className="font-normal">{prefix} ›</span>}
-      {section.title} ({section.count})
+      {section.title}
+      <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-xs font-medium tabular-nums tracking-normal">{section.count}</span>
     </button>
   );
 }
@@ -289,8 +290,8 @@ function Tile({
       onFocus={onHover}
       title={`Open ${card.name}`}
       aria-pressed={item.selected}
-      className={`relative block w-full rounded-[5%/3.6%] text-left ${
-        item.selected ? "ring-4 ring-blue-500" : item.highlighted ? "ring-4 ring-amber-400" : "hover:ring-2 hover:ring-foreground/30"
+      className={`card-lift relative block w-full rounded-[5%/3.6%] text-left ${
+        item.selected ? "ring-4 ring-blue-500" : item.highlighted ? "ring-4 ring-gold" : ""
       }`}
     >
       <CardImage name={card.name} src={card.image_normal} />

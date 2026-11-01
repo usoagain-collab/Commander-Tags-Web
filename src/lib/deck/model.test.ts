@@ -114,10 +114,21 @@ describe("moving between boards", () => {
   });
 
   it("moves only one copy into the commander zone", () => {
-    let e = run({}, planSetQuantity({}, forest, "main", 5));
-    e = run(e, planMove(e, forest, "main", "commander"));
-    expect(qty(e, "main", forest.oracle_id)).toBe(4);
-    expect(qty(e, "commander", forest.oracle_id)).toBe(1);
+    const leader = { ...forest, can_be_commander: true };
+    let e = run({}, planSetQuantity({}, leader, "main", 5));
+    e = run(e, planMove(e, leader, "main", "commander"));
+    expect(qty(e, "main", leader.oracle_id)).toBe(4);
+    expect(qty(e, "commander", leader.oracle_id)).toBe(1);
+  });
+
+  it("refuses a commander that can't lead a deck, and a third commander", () => {
+    expect(planAdd({}, forest, "commander").ok).toBe(false);
+    const a = { ...forest, oracle_id: "a", can_be_commander: true };
+    const b = { ...forest, oracle_id: "b", can_be_commander: true };
+    const c = { ...forest, oracle_id: "c", can_be_commander: true };
+    let e = run({}, planAdd({}, a, "commander"));
+    e = run(e, planAdd(e, b, "commander"));
+    expect(planAdd(e, c, "commander").ok).toBe(false);
   });
 
   it("won't move a maybeboard card into the deck past its limit", () => {

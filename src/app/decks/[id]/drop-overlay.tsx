@@ -89,7 +89,7 @@ export function DropOverlay({ onCard, onMessage }: Props) {
 
   if (busy) {
     return (
-      <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-md bg-foreground px-4 py-2 text-sm text-background shadow-lg">
+      <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-md bg-gold px-4 py-2 text-sm text-gold-ink shadow-lg">
         Adding card…
       </div>
     );
@@ -116,7 +116,7 @@ export function DropOverlay({ onCard, onMessage }: Props) {
               void handle(e.dataTransfer, board);
             }}
             className={`flex h-40 flex-col items-center justify-center rounded-xl border-2 border-dashed p-4 text-center transition-colors ${
-              over === board ? "border-foreground bg-foreground/10" : "border-foreground/30"
+              over === board ? "border-gold bg-foreground/10" : "border-foreground/30"
             }`}
           >
             <span className="text-lg font-semibold">Add to {BOARD_LABELS[board].toLowerCase()}</span>

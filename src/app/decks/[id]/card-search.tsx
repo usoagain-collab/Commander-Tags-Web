@@ -81,7 +81,9 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       if (res.status === 404) {
         // Scryfall answers "no results" with a 404; that's an empty list, not an error.
         if (!append) {
-          setWarnings(body.warnings ?? []);
+          // An odd number of quotes is the usual reason a query finds nothing, and Scryfall doesn't say so.
+          const quotes = (decodeURIComponent(url).match(/"/g) ?? []).length;
+          setWarnings([...(body.warnings ?? []), ...(quotes % 2 ? ["Your search has an unmatched quote mark."] : [])]);
           setResults([]);
           setTotal(0);
           setNextPage(null);
@@ -226,7 +228,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         <button
           onClick={search}
           disabled={loading || !text.trim()}
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+          className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink disabled:opacity-50"
         >
           Search
         </button>

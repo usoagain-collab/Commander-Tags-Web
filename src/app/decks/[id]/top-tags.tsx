@@ -1,5 +1,6 @@
 "use client";
 
+import { prettyTag } from "@/lib/tags/pretty";
 import { useRef, useState } from "react";
 import { AnchoredPopover, useAnchoredPopover } from "@/components/anchored-popover";
 import type { ThemeSettings, ThemeTag, TreeCard } from "@/lib/tags/themes";
@@ -150,7 +151,7 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
             ★
           </span>
         )}
-        <span className="truncate">{tag.label}</span>
+        <span className="truncate">{prettyTag(tag.label)}</span>
         {tag.kind === "a" && <span className="shrink-0 rounded border border-dashed border-foreground/30 px-1 text-[10px] opacity-70">art</span>}
         <span className="ml-auto shrink-0 text-xs tabular-nums opacity-60">{tag.count}</span>
       </button>
@@ -252,7 +253,7 @@ function Switch({
             role="radio"
             aria-checked={value === v}
             onClick={() => onChange(v)}
-            className={`min-h-8 flex-1 px-2 ${value === v ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}
+            className={`min-h-8 flex-1 px-2 ${value === v ? "bg-gold text-gold-ink" : "hover:bg-foreground/5"}`}
           >
             {text}
           </button>
