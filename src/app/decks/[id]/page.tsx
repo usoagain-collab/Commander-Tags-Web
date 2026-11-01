@@ -55,7 +55,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   return (
     <DeckEditor
-      deck={{ id: deck.id, name: deck.name, visibility: deck.visibility }}
+      deck={{ id: deck.id, name: deck.name, visibility: deck.visibility, cover_oracle_id: deck.cover_oracle_id }}
       initialEntries={entries}
       initialCategories={categories}
       initialPrintings={printings}

@@ -16,14 +16,14 @@ export default async function DecksPage() {
   // RLS allows public decks plus the user's own; this page shows only their own.
   const { data: decks, error } = await supabase
     .from("decks")
-    .select("id, name, updated_at, deck_cards(quantity, board, oracle_id, printing_id)")
+    .select("id, name, updated_at, cover_oracle_id, deck_cards(quantity, board, oracle_id, printing_id)")
     .eq("owner_id", user!.id)
     .order("updated_at", { ascending: false });
 
   type Row = { quantity: number; board: string; oracle_id: string; printing_id: string | null };
   const rowsOf = (d: { deck_cards?: unknown }) => (d.deck_cards ?? []) as Row[];
   // Batches of 100: too many ids in one request make its URL too long.
-  const commanderIds = [...new Set((decks ?? []).flatMap((d) => rowsOf(d).filter((r) => r.board === "commander").map((r) => r.oracle_id)))];
+  const commanderIds = [...new Set((decks ?? []).flatMap((d) => rowsOf(d).filter((r) => r.board === "commander" || r.oracle_id === d.cover_oracle_id).map((r) => r.oracle_id)))];
   const commanders = new Map<string, Summary>();
   for (let i = 0; i < commanderIds.length; i += 100) {
     const { data } = await supabase
@@ -36,13 +36,15 @@ export default async function DecksPage() {
   const rows: DeckTile[] = (decks ?? []).map((d) => {
     const cards = rowsOf(d);
     const own = cards.filter((r) => r.board === "commander").flatMap((r) => commanders.get(r.oracle_id) ?? []);
-    const chosenArt = cards.find((r) => r.board === "commander" && r.printing_id)?.printing_id;
+    const cover = cards.find((r) => r.oracle_id === d.cover_oracle_id);
+    const chosenArt = cover ? cover.printing_id : cards.find((r) => r.board === "commander" && r.printing_id)?.printing_id;
+    const defaultArt = cover ? commanders.get(cover.oracle_id)?.image_art_crop : own[0]?.image_art_crop;
     return {
       id: d.id as string,
       name: d.name as string,
       updated_at: d.updated_at as string,
       card_count: cards.filter((r) => r.board === "commander" || r.board === "main").reduce((n, c) => n + c.quantity, 0),
-      art: chosenArt ? printingImage(chosenArt, "art_crop") : (own[0]?.image_art_crop ?? null),
+      art: chosenArt ? printingImage(chosenArt, "art_crop") : (defaultArt ?? null),
       commander: own.map((c) => c.name).join(" & ") || null,
       identity: [...new Set(own.flatMap((c) => c.color_identity))],
     };

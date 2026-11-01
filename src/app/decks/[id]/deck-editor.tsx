@@ -167,7 +167,7 @@ function reducer(state: State, action: Action): State {
 export type Visibility = "private" | "unlisted" | "public";
 
 type Props = {
-  deck: { id: string; name: string; visibility: Visibility };
+  deck: { id: string; name: string; visibility: Visibility; cover_oracle_id?: string | null };
   initialEntries: Entries;
   initialCategories: Categories;
   initialPrintings: Printings;
@@ -233,6 +233,16 @@ export function DeckEditor({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Underperformer flags from the playtester (6d); cleared from the card sheet.
   const [flags, setFlags] = useState<Record<string, number>>(playtestFlags);
+  const [coverId, setCoverId] = useState(deck.cover_oracle_id ?? null);
+  const chooseCover = async (oracleId: string | null) => {
+    const before = coverId;
+    setCoverId(oracleId);
+    const { error } = await createClient().from("decks").update({ cover_oracle_id: oracleId }).eq("id", deck.id);
+    if (error) {
+      setCoverId(before);
+      setNotice(`Couldn't change the deck image: ${error.message}`);
+    }
+  };
   const clearFlags = async (oracleId: string) => {
     setFlags((f) => {
       const next = { ...f };
@@ -712,6 +722,10 @@ export function DeckEditor({
 
   // The card sheet steps through cards in screen order.
   const order = sections.flatMap((s) => s.items.map((i) => i.line));
+  // The deck image: a card's art, following its chosen printing. A card no longer in the deck falls back to the commander.
+  const coverArt = coverId
+    ? (["commander", "companion", "main", "maybe"] as Board[]).flatMap((b) => linesFor(entries, cards, b, printings)).find((l) => l.card.oracle_id === coverId)?.card.image_art_crop
+    : null;
   const sheetIndex = sheet ? order.findIndex((l) => l.card.oracle_id === sheet.oracle_id && l.board === sheet.board) : -1;
   const sheetLine = sheetIndex >= 0 ? order[sheetIndex] : null;
   useEffect(() => {
@@ -720,6 +734,7 @@ export function DeckEditor({
   // The card panel rests on the commander until a card is hovered.
   const shown = preview ?? commanders[0]?.card ?? null;
   const shownLine = shown ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === shown.oracle_id) : undefined;
+  const closeBracket = useCallback(() => setPanel(null), []);
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
   /**
    * A click on a card. While selecting (or with Ctrl/Cmd) it toggles the card; Shift selects everything between
@@ -834,6 +849,7 @@ export function DeckEditor({
     <main>
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <DeckHero
+        coverArt={coverArt}
         wide={previewMode !== "docked"}
         name={deck.name}
         commanders={commanders.map((l) => l.card)}
@@ -970,11 +986,14 @@ export function DeckEditor({
         <BracketPanel
           target={bracket.target}
           estimate={estimate}
+          lines={[...commanders, ...companions, ...mainLines]}
           readOnly={readOnly}
           saveError={bracket.saveError}
           comboError={combos.error}
+          paused={!!sheet}
           onTarget={bracket.setTarget}
-          onClose={() => setPanel(null)}
+          onOpenCard={openLine}
+          onClose={closeBracket}
         />
       )}
       {panel === "stats" && (
@@ -1258,6 +1277,8 @@ export function DeckEditor({
           warnings={warningsFor(sheetLine)}
           roleKeys={lineRoleKeys(sheetLine)}
           flags={flags[sheetLine.card.oracle_id] ?? 0}
+          isCover={coverId === sheetLine.card.oracle_id}
+          onCover={(on) => chooseCover(on ? sheetLine.card.oracle_id : null)}
           onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (

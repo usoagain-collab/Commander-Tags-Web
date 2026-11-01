@@ -22,6 +22,7 @@ export type DeckRow = {
   suggest_settings?: unknown;
   dismissed_suggestions?: string[] | null;
   target_bracket: number | null;
+  cover_oracle_id?: string | null;
   playtest_flags?: Record<string, number> | null;
 };
 export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null };

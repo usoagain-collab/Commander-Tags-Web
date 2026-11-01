@@ -35,6 +35,9 @@ type Props = {
   onClearFlags?: () => void;
   /** Category picker and My tags (step 3f), shown above the card's roles and tags. */
   extra?: React.ReactNode;
+  /** This card's art heads the deck page. */
+  isCover: boolean;
+  onCover: (on: boolean) => void;
 };
 
 /**
@@ -169,6 +172,11 @@ export function CardSheet(props: Props) {
                 </p>
               )}
               <CommanderLegality details={details} />
+              {!readOnly && card.image_art_crop && (
+                <button type="button" onClick={() => props.onCover(!props.isCover)} className="mt-1 block min-h-9 text-[13px] underline opacity-80 hover:opacity-100">
+                  {props.isCover ? "✓ Deck image · Back to the commander's art" : "Use as deck image"}
+                </button>
+              )}
               {!!props.flags && (
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
                   ⚑ Flagged as an underperformer {props.flags}× in playtests
