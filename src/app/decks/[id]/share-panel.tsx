@@ -83,7 +83,7 @@ export function SharePanel({
             <p className="eyebrow mb-1.5">How your link looks in chat</p>
             <div className="max-w-sm overflow-hidden rounded-lg border-l-4 border-gold bg-panel-raised">
               <div className="p-3">
-                <p className="font-semibold">{preview.name} · Commander Tags</p>
+                <p className="font-semibold">{preview.name} · Deck Genome</p>
                 <p className="mt-0.5 opacity-80">{preview.line}</p>
               </div>
               {preview.art && <img src={preview.art} alt="" className="aspect-[16/9] w-full object-cover" />}

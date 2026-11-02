@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Commander Tags",
+  title: "Deck Genome",
   description: "Build Commander decks by what cards do. Role targets, tag-driven suggestions and a goldfish table.",
 };
 

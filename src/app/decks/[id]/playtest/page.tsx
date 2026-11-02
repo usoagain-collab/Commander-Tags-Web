@@ -7,9 +7,9 @@ import { PlaytestTable } from "./playtest-table";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!UUID.test(id)) return { title: "Playtest · Commander Tags" };
+  if (!UUID.test(id)) return { title: "Playtest · Deck Genome" };
   const { deck } = await loadDeck(id, "playtest");
-  return { title: deck ? `Playtest: ${deck.name} · Commander Tags` : "Playtest · Commander Tags" };
+  return { title: deck ? `Playtest: ${deck.name} · Deck Genome` : "Playtest · Deck Genome" };
 }
 
 /** The playtester (Phase 6): the commander(s) and mainboard; the maybeboard and companion stay out of the game. */

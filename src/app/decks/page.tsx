@@ -6,7 +6,7 @@ import { DropHint } from "./drop-hint";
 import { BRACKETS } from "@/lib/brackets/rules";
 import { printingImage } from "@/lib/deck/printing";
 
-export const metadata = { title: "My decks · Commander Tags" };
+export const metadata = { title: "My decks · Deck Genome" };
 
 type Summary = { oracle_id: string; name: string; image_art_crop: string | null; color_identity: string[] };
 

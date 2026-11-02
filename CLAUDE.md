@@ -1,7 +1,8 @@
-# Commander Tags Web
+# Deck Genome (repo: Commander Tags Web)
 
 A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: auto-categories, a role profile with target sliders, and card suggestions ranked by how well a card's tags fit the deck. The bet: suggesting cards by *function* (what a card does) beats EDHREC-style suggestions by *popularity*.
 
+- **Name (David, Nov 2, 2026): the site is called "Deck Genome"** (deckgenome.com). Use that name in anything users see. The repo, the Vercel project `commandertagsweb`, the npm package name and the test account email keep the old name on purpose.
 - Full feature spec: `docs/spec.md`, the source of truth for what to build.
 - Working prototype: `prototype/tag-deck-builder.html`, a single HTML file with the tag logic already proven. Port its logic; don't re-invent it.
 

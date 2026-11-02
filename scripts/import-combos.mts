@@ -19,7 +19,7 @@ const { pick } = require("stream-json/filters/Pick") as typeof import("stream-js
 const { streamArray } = require("stream-json/streamers/StreamArray") as typeof import("stream-json/streamers/StreamArray");
 
 const SOURCE = "https://json.commanderspellbook.com/variants.json";
-const USER_AGENT = "CommanderTagsWeb/0.1 (daily combo import; github.com/usoagain-collab/Commander-Tags-Web)";
+const USER_AGENT = "DeckGenome/0.1 (daily combo import; https://deckgenome.com)";
 
 type Use = { card?: { oracleId?: string | null; name?: string }; quantity?: number };
 type Variant = {
