@@ -14,7 +14,7 @@ import { Readable } from "node:stream";
 import pg from "pg";
 import { from as copyFrom } from "pg-copy-streams";
 
-const USER_AGENT = "CommanderTagsWeb/0.1 (daily bulk import; github.com/usoagain-collab/Commander-Tags-Web)";
+const USER_AGENT = "DeckGenome/0.1 (daily bulk import; https://deckgenome.com)";
 
 type BulkEntry = { type: string; download_uri?: string; jsonl_download_uri?: string; updated_at: string };
 type Face = { image_uris?: Record<string, string>; illustration_id?: string; type_line?: string; oracle_text?: string; mana_cost?: string };

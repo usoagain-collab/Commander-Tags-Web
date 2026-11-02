@@ -14,7 +14,7 @@ export async function SiteHeader() {
           <svg aria-hidden viewBox="0 0 24 24" width="20" height="20" className="text-gold">
             <path fill="currentColor" d="M12 1.5 14.6 9.4 22.5 12 14.6 14.6 12 22.5 9.4 14.6 1.5 12 9.4 9.4Z" />
           </svg>
-          <span className="sr-only sm:not-sr-only">Commander Tags</span>
+          <span className="sr-only sm:not-sr-only">Deck Genome</span>
         </Link>
         <nav className="flex items-center gap-1 text-sm sm:gap-2">
           {user ? (

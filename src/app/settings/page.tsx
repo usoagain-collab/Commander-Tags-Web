@@ -7,7 +7,7 @@ import { AvatarSetting } from "./avatar-setting";
 import { PreviewSetting } from "./preview-setting";
 import { ThemeSetting } from "./theme-setting";
 
-export const metadata = { title: "Settings · Commander Tags" };
+export const metadata = { title: "Settings · Deck Genome" };
 
 export default async function SettingsPage() {
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);

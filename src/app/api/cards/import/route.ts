@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const USER_AGENT = "CommanderTagsWeb/0.1 (spoiler fallback; github.com/usoagain-collab/Commander-Tags-Web)";
+const USER_AGENT = "DeckGenome/0.1 (spoiler fallback; https://deckgenome.com)";
 
 type Face = { image_uris?: Record<string, string>; illustration_id?: string; type_line?: string; oracle_text?: string; mana_cost?: string; oracle_id?: string };
 type ScryfallCard = {
