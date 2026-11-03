@@ -43,12 +43,14 @@ type Props = {
   /** "Hide cards in deck" (remembered with the other view settings). */
   hideInDeck: boolean;
   onHideInDeck: (hide: boolean) => void;
+  /** Text handed over from quick add's "See all results": filled in and searched on opening. */
+  initialText?: string;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, initialText }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText ?? "");
   const [inIdentity, setInIdentity] = useState(true);
   const [legalOnly, setLegalOnly] = useState(true);
   const [results, setResults] = useState<ScryfallCard[]>([]);
@@ -67,7 +69,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const [activeTag, setActiveTag] = useState(0);
   const tagRequest = useRef(0);
 
-  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    inputRef.current?.focus();
+    if (initialText?.trim()) search();
+    // Only on opening: later searches start from the Search button or Enter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------- Scryfall search ----------
 

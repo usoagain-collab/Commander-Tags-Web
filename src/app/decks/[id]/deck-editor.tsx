@@ -350,6 +350,8 @@ export function DeckEditor({
     [save, say, state.categories, state.printings],
   );
 
+  // Text from quick add's "See all results", for the Search panel to open with.
+  const [searchSeed, setSearchSeed] = useState<string | undefined>(undefined);
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
 
@@ -902,7 +904,13 @@ export function DeckEditor({
               </button>
             )}
             {!readOnly && (
-              <HeaderButton active={panel === "search"} onClick={() => setPanel(panel === "search" ? null : "search")}>
+              <HeaderButton
+                active={panel === "search"}
+                onClick={() => {
+                  setSearchSeed(undefined);
+                  setPanel(panel === "search" ? null : "search");
+                }}
+              >
                 Search
               </HeaderButton>
             )}
@@ -934,6 +942,8 @@ export function DeckEditor({
       {panel === "search" && !readOnly && (
         <div className="drawer">
         <CardSearch
+          // A new "See all results" while Search is already open starts it over with that text.
+          key={searchSeed ?? ""}
           entries={entries}
           identity={identity}
           commanderName={commanders.length === 1 ? commanders[0].card.name : commanders.length ? "your commanders" : null}
@@ -942,6 +952,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
           hideInDeck={prefs.searchHideInDeck === true}
           onHideInDeck={(hide) => updatePrefs({ searchHideInDeck: hide })}
+          initialText={searchSeed}
         />
         </div>
       )}
@@ -1144,6 +1155,11 @@ export function DeckEditor({
                 }
               }}
               onPreview={setPreview}
+              identity={identity}
+              onSeeAll={(text) => {
+                setSearchSeed(text);
+                setPanel("search");
+              }}
             />
           )}
           <Toast message={notice} onUndo={noticeUndo && state.past.length > 0 ? undo : undefined} />
