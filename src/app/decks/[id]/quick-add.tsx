@@ -12,10 +12,14 @@ type Props = {
   onPreview: (card: CardSummary | null) => void;
   /** Picking a commander: only cards that can lead a deck are offered, shown with their art. */
   commanderOnly?: boolean;
+  /** The commander's colors: only cards inside them are offered. Null = any colors. */
+  identity?: Set<string> | null;
+  /** "See all results": hands the typed text to the full Search panel. */
+  onSeeAll?: (text: string) => void;
 };
 
 /** Type a card name, pick with arrow keys. Enter = mainboard, Shift+Enter = maybeboard, Ctrl+Enter = commander. */
-export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ onAdd, onPreview, commanderOnly }, ref) {
+export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ onAdd, onPreview, commanderOnly, identity, onSeeAll }, ref) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
@@ -29,6 +33,9 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }));
 
+  // A string, so a new Set with the same colors on each render doesn't re-run the search.
+  const colors = commanderOnly || !identity ? null : [...identity].sort().join("");
+
   // Search as you type, after a short pause; ignore answers to older queries that arrive late.
   useEffect(() => {
     const q = text.trim();
@@ -38,10 +45,14 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     }
     const id = ++latest.current;
     const timer = setTimeout(async () => {
-      const { data } = await supabase.rpc("search_cards", { q, lim: commanderOnly ? 30 : 8 });
+      const { data } = await supabase.rpc("search_cards", {
+        q,
+        lim: commanderOnly ? 25 : 15,
+        p_identity: colors === null ? null : colors.split(""),
+      });
       if (id !== latest.current) return;
       const found = (data ?? []) as CardSummary[];
-      const usable = commanderOnly ? found.filter((c) => c.can_be_commander).slice(0, 8) : found;
+      const usable = commanderOnly ? found.filter((c) => c.can_be_commander).slice(0, 15) : found;
       answered.current = q;
       const waiting = pendingBoard.current;
       pendingBoard.current = null;
@@ -53,11 +64,22 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     return () => clearTimeout(timer);
     // choose only touches this box and calls onAdd; re-running the search for a new onAdd would be wrong.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, supabase, commanderOnly]);
+  }, [text, supabase, commanderOnly, colors]);
 
   useEffect(() => {
     onPreview(open ? (results[active] ?? null) : null);
   }, [open, results, active, onPreview]);
+
+  // The "See all results" row sits after the cards, so the arrow keys can reach it too.
+  const seeAllAt = onSeeAll ? results.length : -1;
+
+  function seeAll() {
+    if (!onSeeAll) return;
+    onSeeAll(text.trim());
+    setText("");
+    setResults([]);
+    setOpen(false);
+  }
 
   function choose(card: CardSummary | undefined, board: Board) {
     if (!card) return;
@@ -72,14 +94,17 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActive((i) => Math.min(i + 1, results.length - 1));
+      setActive((i) => Math.min(i + 1, Math.max(results.length - 1, seeAllAt)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
       const board: Board = commanderOnly || e.ctrlKey || e.metaKey ? "commander" : e.shiftKey ? "maybe" : "main";
-      if (answered.current === text.trim()) choose(results[active], board);
+      if (answered.current === text.trim()) {
+        if (active === seeAllAt) seeAll();
+        else choose(results[active], board);
+      }
       else if (text.trim().length >= 2) pendingBoard.current = board;
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -107,7 +132,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
           Enter: main · Shift+Enter: maybe · Ctrl+Enter: commander
         </p>
       )}
-      {open && results.length > 0 && (
+      {open && (results.length > 0 || (onSeeAll && answered.current === text.trim() && text.trim().length >= 2)) && (
         <ul
           id="quick-add-results"
           role="listbox"
@@ -135,11 +160,32 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
               <ManaCost cost={card.mana_cost} />
             </li>
           ))}
+          {onSeeAll && results.length === 0 && (
+            <li role="presentation" className="px-3 py-2 text-sm opacity-80">
+              No card named like that{colors !== null ? " in your commander's colors" : ""}.
+            </li>
+          )}
+          {onSeeAll && (
+            <li
+              role="option"
+              aria-selected={active === seeAllAt}
+              onMouseEnter={() => setActive(seeAllAt)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                seeAll();
+              }}
+              className={`flex min-h-11 cursor-pointer items-center border-t border-foreground/10 px-3 py-1.5 text-sm text-gold ${
+                active === seeAllAt ? "bg-foreground/10" : ""
+              }`}
+            >
+              See all results for “{text.trim()}” →
+            </li>
+          )}
         </ul>
       )}
-      {open && text.trim().length >= 2 && results.length === 0 && (
+      {open && text.trim().length >= 2 && results.length === 0 && !onSeeAll && (
         <p className="absolute z-30 mt-1 w-full rounded-lg border border-foreground/15 bg-panel-raised px-3 py-2 text-sm shadow-2xl">
-          No Commander-legal card matches “{text.trim()}”.
+          No Commander-legal card matches “{text.trim()}”{colors !== null ? " in your commander's colors" : ""}.
         </p>
       )}
     </div>
