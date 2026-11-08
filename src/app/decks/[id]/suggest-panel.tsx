@@ -8,6 +8,7 @@ import { fetchSummaries } from "@/lib/deck/fetch-summaries";
 import { prettyTag } from "@/lib/tags/pretty";
 import type { Board, CardSummary } from "@/lib/deck/model";
 import {
+  pickStaples,
   scorePool,
   STYLE_LABELS,
   type PoolCard,
@@ -29,6 +30,8 @@ export type SuggestSource = {
   lands?: boolean;
   /** Set for a role: only cards that really fill it are kept (Targeted removal leaves out board wipes). */
   roleKey?: string;
+  /** Overall Suggest: tag slugs of the roles to find staples for (most-played cards, themes or not). */
+  staples?: string[];
 };
 
 type Props = {
@@ -61,32 +64,44 @@ export function SuggestPanel(props: Props) {
   const { source, identity, deckIds, isInDeck, score, roleNames, hasCommander, onAdd, onPreview, onClose } = props;
   const supabase = useMemo(() => createClient(), []);
   const [pool, setPool] = useState<PoolCard[] | null>(null);
+  // Overall Suggest only: most-played cards for the roles the deck is short on.
+  const [staplePool, setStaplePool] = useState<PoolCard[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [combos, setCombos] = useState<ComboRow[] | null>(null);
   const [showAbove, setShowAbove] = useState(false);
-  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${identity.join("")}`;
+  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${identity.join("")}`;
 
   useEffect(() => {
     let live = true;
     setPool(null);
+    setStaplePool([]);
     setCombos(null);
     setError(null);
     (async () => {
-      const ask = () =>
-        supabase.rpc("suggestion_pool", { p_slugs: source.slugs, p_identity: identity, p_exclude: deckIds, p_lands: !!source.lands });
-      let { data, error } = await ask();
-      // The first call after a quiet spell can hit the database's time limit while it loads the tag tables
-      // into memory; the second try runs warm.
-      if (error && /timeout/i.test(error.message) && live) ({ data, error } = await ask());
+      const ask = async (slugs: string[], lands: boolean, tail: number) => {
+        const call = () => supabase.rpc("suggestion_pool", { p_slugs: slugs, p_identity: identity, p_exclude: deckIds, p_lands: lands, p_tail: tail });
+        let res = await call();
+        // The first call after a quiet spell can hit the database's time limit while it loads the tag tables
+        // into memory; the second try runs warm.
+        if (res.error && /timeout/i.test(res.error.message) && live) res = await call();
+        return res;
+      };
+      // Staples need only the most-played end, so no least-played tail.
+      const [main, staples] = await Promise.all([
+        ask(source.slugs, !!source.lands, 60),
+        source.staples?.length ? ask(source.staples, false, 0) : Promise.resolve({ data: [], error: null }),
+      ]);
       if (!live) return;
-      if (error) return setError(`Couldn't load suggestions: ${error.message}`);
-      const found = (data ?? []) as PoolCard[];
+      if (main.error) return setError(`Couldn't load suggestions: ${main.error.message}`);
+      const found = (main.data ?? []) as PoolCard[];
+      const foundStaples = staples.error ? [] : ((staples.data ?? []) as PoolCard[]);
       // Combos between the deck and the candidates, so a card that completes one can be held back (5c).
-      const ids = [...new Set([...props.bracket.deckIds, ...found.map((c) => c.oracle_id)])];
+      const ids = [...new Set([...props.bracket.deckIds, ...found.map((c) => c.oracle_id), ...foundStaples.map((c) => c.oracle_id)])];
       const c = ids.length ? await supabase.rpc("combos_within", { p_ids: ids }) : { data: [], error: null };
       if (!live) return;
       setCombos(c.error ? [] : ((c.data ?? []) as ComboRow[]));
       if (c.error) setError(`Couldn't check combos, so suggestions may include some: ${c.error.message}`);
+      setStaplePool(foundStaples);
       setPool(found);
     })();
     return () => {
@@ -98,19 +113,52 @@ export function SuggestPanel(props: Props) {
 
   const target = props.bracket.target;
   const eligible = pool && combos ? pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))) : [];
+  const eligibleStaples = pool && combos ? staplePool.filter((c) => !isInDeck(c.oracle_id)) : [];
   const deckInput: EvaluateInput = { ...props.bracket.deck, combos: combos ?? [] };
   const issues = new Map<string, Finding[]>();
-  for (const c of eligible) {
+  for (const c of [...eligible, ...eligibleStaples]) {
+    if (issues.has(c.oracle_id)) continue;
     const found = candidateIssues(deckInput, { line: { board: "main", quantity: 1, card: c }, tags: c.tags }, target);
     if (found.length) issues.set(c.oracle_id, found);
   }
-  const hiddenAbove = eligible.filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id)).length;
+  const allowed = (c: PoolCard) => showAbove || !issues.has(c.oracle_id);
+  // Hidden gems is about less-played cards, so no staples there; Budget keeps them under the price cap.
+  const { style, priceCap } = score.settings;
+  const staples: Scored[] =
+    style === "gems"
+      ? []
+      : pickStaples(
+          eligibleStaples.filter((c) => allowed(c) && (style !== "budget" || (c.price_usd != null && Number(c.price_usd) <= priceCap))),
+          { ...score, dismissed: props.dismissed },
+        );
+  const stapleIds = new Set(staples.map((r) => r.card.oracle_id));
+  // A staple shows once, in the Staples row.
+  const hiddenAbove = new Set(
+    [...eligible, ...eligibleStaples].filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id)).map((c) => c.oracle_id),
+  ).size;
   const rows: Scored[] = scorePool(
-    eligible.filter((c) => showAbove || !issues.has(c.oracle_id)),
-    { ...score, dismissed: props.dismissed },
+    eligible.filter((c) => allowed(c) && !stapleIds.has(c.oracle_id)),
+    { ...score, dismissed: props.dismissed, role: !!source.roleKey },
   );
-  const flagsOf = (id: string) =>
-    (issues.get(id) ?? []).map((f) => cardFlag(f, id, (x) => pool?.find((c) => c.oracle_id === x)?.name ?? props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ?? "a card in your deck"));
+  const nameOf = (x: string) =>
+    pool?.find((c) => c.oracle_id === x)?.name ??
+    staplePool.find((c) => c.oracle_id === x)?.name ??
+    props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ??
+    "a card in your deck";
+  const flagsOf = (id: string) => (issues.get(id) ?? []).map((f) => cardFlag(f, id, nameOf));
+  const cardFor = (r: Scored, best: boolean) => (
+    <SuggestionCard
+      key={r.card.oracle_id}
+      best={best}
+      row={r}
+      roleNames={roleNames}
+      above={flagsOf(r.card.oracle_id)}
+      target={target}
+      onAdd={onAdd}
+      onPreview={onPreview}
+      onDismiss={props.onDismiss}
+    />
+  );
 
   return (
     <Panel title={`Suggestions: ${prettyTag(source.label)}`} onClose={onClose}>
@@ -135,7 +183,17 @@ export function SuggestPanel(props: Props) {
           <span className="opacity-60">({hiddenAbove} {showAbove ? "marked" : "hidden"})</span>
         </label>
       )}
-      {pool !== null && combos !== null && rows.length === 0 && (
+      {staples.length > 0 && (
+        <section aria-label="Staples" className="mt-3">
+          <h3 className="eyebrow">Staples for roles you&apos;re short on</h3>
+          <p className="text-[13px] opacity-70">The most-played cards in your colors that fill them, themes or not.</p>
+          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+            {staples.map((r) => cardFor(r, false))}
+          </ul>
+          {rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
+        </section>
+      )}
+      {pool !== null && combos !== null && rows.length === 0 && !staples.length && (
         <p className="mt-3 text-sm opacity-60">
           {pool.length && score.settings.style === "budget"
             ? "Nothing under this price cap. Try raising it."
@@ -146,19 +204,7 @@ export function SuggestPanel(props: Props) {
       )}
       {rows.length > 0 && (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
-          {rows.map((r, i) => (
-            <SuggestionCard
-              key={r.card.oracle_id}
-              best={i === 0}
-              row={r}
-              roleNames={roleNames}
-              above={flagsOf(r.card.oracle_id)}
-              target={target}
-              onAdd={onAdd}
-              onPreview={onPreview}
-              onDismiss={props.onDismiss}
-            />
-          ))}
+          {rows.map((r, i) => cardFor(r, i === 0))}
         </ul>
       )}
       {props.dismissed.size > 0 && <DismissedList ids={[...props.dismissed]} pool={pool ?? []} onRestore={props.onRestore} />}
