@@ -184,6 +184,49 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Default roles in the profile | Edit your default roles (standard and custom, their tags, hidden ones) and target numbers on the Settings page, without opening a deck. Today defaults can only be saved from a deck's role profile ("Save as my defaults"). **Built Nov 8, 2026**: Settings → Default roles (sliders, Hide / Show, custom roles from a tag, Save defaults, Use the app's defaults; Tutors follows each deck's bracket) | Nov 7, 2026 |
 | Lands in overall Suggest | Overall Suggest never shows lands today (the Staples row covers only non-land roles, and the main list leaves lands out). When the deck is under its Lands target, include lands in the suggestions, ranked like other picks, so a short land count gets filled from the same screen. Once the target is met, lands stay out as now. **Built Nov 8, 2026**: a **Lands: you're N short** row (up to 8, scored like a role's picks: themes, cheapness, popularity; bracket filter, dismissals and Budget's price cap apply) above Staples; a hidden Lands role asks for none | Nov 8, 2026 |
 
+## v2 proposals waiting on David (Nov 8, 2026)
+
+Everything else on the v2 backlog is built. These need a schema OK or a direction first. Each has a recommendation (★).
+
+### Schema changes (clear items)
+
+**Change mana cost.** Override a card's mana value for stats, per deck (X spells, cost reducers, cards you always cast for less).
+- ★ **A. A column on the deck row:** `deck_cards.mana_value_override smallint null` (0-20; null = the card's own). Set from the card sheet ("Mana value for stats: Auto / number"), undoable like a category, kept by moves, versions and copies. Used by the curve, average mana value, Group and Sort by mana value, opening-hand stats and the Smart Cutter's curve. A small "≈N" mark shows on the card.
+- B. Per user across all decks (a table like `preferred_printings`). Less work per deck, but an X spell's real cost differs by deck.
+
+**Wish list.** Cards you want to buy, separate from any deck.
+- ★ **A. One private list per user:** table `wishlist (owner_id, oracle_id, printing_id null, foil, quantity 1-99, note ≤200, added_at)`, owner-only. A **Wish list** page in the site header (grid and text views, total price, sort by price or date, export as a plain list or Moxfield), **Add to wish list** in the card sheet, Search and Suggest, and "on your wish list" marks in decks.
+- B. Several named lists (adds a `wishlists` table). More flexible, more clicks; easy to add later on top of A.
+
+### Decisions
+
+**Gamer look and feel.**
+- A. Tabletop: felt and wood textures, card-frame borders on panels.
+- B. Arcane: deep purple, glowing runes, parchment panels.
+- ★ **C. Your colors:** keep the dark base (readable, card art stands out) but take the accent from the commander's colors (hero glow, buttons, bars), frame-like borders on panels, a display font closer to card titles, playful copy and small celebrations (dice roll on Spin, mana-symbol confetti on Complete). Least risk to readability, most personal.
+
+**Refined bracket estimate.**
+- ★ **A. A transparent points model:** keep v1's floor (rules can't be undercut), then a 0-100 "power" score from fast mana, tutors, cheap interaction, combos, Game Changers, average mana value and **theme cohesion** (share of nonland cards sharing one of the top 5 themes). The score maps to "plays like N" between the floor and 4, with every point explained. Tuned on Omo and the QA decks.
+- B. Calibrate against decks with known brackets (needs a labeled set we don't have).
+
+**Collection tracking.**
+- ★ **A. Per card:** table `collection (owner_id, oracle_id, quantity, foil_quantity)`. Checkmarks on deck cards you own, an "unowned" price total in the summary bar and Stats, "Hide cards I don't own" in Search, and CSV import from Moxfield / Archidekt / ManaBox collection exports.
+- B. Per printing (exact set and number). Accurate for collectors but heavier, and every printing would need storing (about 110k rows; the free database can't hold them all).
+
+**Mixed copies of one card.**
+- ★ **A. A split on the existing row:** `deck_cards.printing_split jsonb` = list of {printing, foil, quantity} adding up to the row's quantity. Display, price and export use it; editing, undo and autosave stay as they are, since a row is still one card on one board.
+- B. One row per printing (change the table's key). The truest model, but it touches every editing path (entries, undo, autosave, versions, change log).
+
+**Multiplayer playtesting.**
+- ★ **A. Shared table, each player runs their own deck:** a room code for up to 4 players over Supabase Realtime (nothing stored), each player's board, life, commander damage and hand size visible to the others, plus a shared turn order. No cross-player actions (stealing, targeting) in the first version.
+- B. Full interaction (move cards between players, targeting, a stack). Much bigger; worth it only after A gets used.
+
+### Blocked on David personally
+
+- **EDHREC suggestions:** EDHREC's permission (their terms bar automated queries and republishing).
+- **Link sign-in methods:** turn on manual identity linking in Supabase (Authentication → Providers settings).
+- **Pricing details (per store):** an API key from a price source (TCGplayer's API is closed to new developers; JustTCG or Scryfall's own USD/EUR/TIX are options).
+
 ## Not intended
 
 Considered and deliberately left out of this project.
