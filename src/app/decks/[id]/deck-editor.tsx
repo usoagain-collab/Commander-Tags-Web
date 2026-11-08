@@ -51,6 +51,9 @@ import {
   type CustomRole,
 } from "@/lib/tags/role-settings";
 import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
+import { BASIC_NAMES, isBasicLand, landBaseChange, type LandBasePlan } from "@/lib/deck/land-base";
+import { COLORS, pipsOf, type Color } from "@/lib/deck/stats";
+import { LandBasePanel, landBaseAbout } from "./land-base-panel";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
 import { useArtTree } from "@/lib/tags/use-art-tree";
@@ -379,7 +382,7 @@ export function DeckEditor({
 
   // Text from quick add's "See all results", for the Search panel to open with.
   const [searchSeed, setSearchSeed] = useState<string | undefined>(undefined);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
   const [editingTargets, setEditingTargets] = useState(false);
@@ -394,6 +397,19 @@ export function DeckEditor({
       say(`${change.label}. Ctrl+Z undoes the whole import.`);
     },
     [save, say, state.categories, state.printings],
+  );
+
+  /** Auto build land base (v2): one Change, so one Ctrl+Z takes every added land back. */
+  const applyLandBase = useCallback(
+    (plan: LandBasePlan, basicCards: Record<string, CardSummary>, newCards: CardSummary[]) => {
+      const change = keepPrintings(keepCategories(landBaseChange(state.entries, plan, basicCards), state.categories), state.printings);
+      if (change.rows.length === 0) return;
+      dispatch({ type: "apply", change, cards: newCards });
+      save(toSavePayload(change));
+      setPanel(null);
+      say(`${change.label}. Ctrl+Z takes them all back.`, true);
+    },
+    [save, say, state.entries, state.categories, state.printings],
   );
 
   const undo = useCallback(() => {
@@ -781,6 +797,26 @@ export function DeckEditor({
     />
   );
 
+  const landRole = allRoles.find((r) => r.land);
+  const landRoleKey = landRole?.key ?? "lands";
+  const landTarget = landRole?.target ?? 37;
+  /** What Auto build land base needs from the deck: nonbasic lands, basics by color, and spell pips. */
+  const landStats = () => {
+    const basicCounts: Partial<Record<Color | "C", number>> = {};
+    const pips: Partial<Record<Color, number>> = {};
+    let nonbasicCount = 0;
+    for (const l of [...commanders, ...mainLines]) {
+      if (isLand(l.card.type_line)) {
+        const color = (Object.keys(BASIC_NAMES) as (Color | "C")[]).find((c) => BASIC_NAMES[c] === l.card.name);
+        if (isBasicLand(l.card) && color) basicCounts[color] = (basicCounts[color] ?? 0) + l.quantity;
+        else if (!isBasicLand(l.card)) nonbasicCount += l.quantity;
+      } else {
+        for (const [c, n] of Object.entries(pipsOf(l.card.mana_cost)) as [Color, number][]) pips[c] = (pips[c] ?? 0) + n * l.quantity;
+      }
+    }
+    return { basicCounts, pips, nonbasicCount };
+  };
+
   const saveDefaults = async () => {
     if (!userId) return "Sign in to save defaults.";
     const supabase = createClient();
@@ -816,6 +852,8 @@ export function DeckEditor({
         if (highlight === `role:${key}`) setHighlight(null);
       }}
       onSaveDefaults={saveDefaults}
+      onBuildLands={readOnly ? undefined : () => setPanel("lands")}
+      buildLandsAbout={landBaseAbout(landTarget)}
       hiddenRoles={allRoles.filter((r) => hiddenRoles.has(r.key)).map((r) => ({ key: r.key, name: r.name }))}
       onHideRole={(key, hide) => {
         roleSettings.setTargets((t) => withRoleHidden(t, key, hide));
@@ -1091,6 +1129,7 @@ export function DeckEditor({
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
                 ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
+                ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
                 ...(readOnly ? [] : [{ key: "copy", label: copying ? "Copying…" : "Make a copy", active: false, onPick: copy }]),
               ]}
             />
@@ -1161,6 +1200,17 @@ export function DeckEditor({
             art: commanders.find((l) => l.card.image_art_crop)?.card.image_art_crop ?? null,
             line: `${commanders.map((l) => l.card.name).join(" & ") || "Commander deck"} · ${size} cards · Bracket ${bracket.target}`,
           }}
+        />
+      )}
+      {panel === "lands" && !readOnly && (
+        <LandBasePanel
+          identity={identity ? COLORS.filter((c) => identity.has(c)) : null}
+          target={landTarget}
+          landCount={counts[landRoleKey] ?? 0}
+          {...landStats()}
+          inDeck={(id) => Object.keys(entries).some((k) => k.endsWith(`|${id}`))}
+          onApply={applyLandBase}
+          onClose={() => setPanel(null)}
         />
       )}
       {panel === "bracket" && (
