@@ -4,6 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { createClient } from "@/lib/supabase/client";
 import { ManaCost } from "@/components/mana-cost";
 import type { Board, CardSummary } from "@/lib/deck/model";
+import { StatusBadge } from "./card-search";
 
 export type QuickAddHandle = { focus: () => void };
 
@@ -16,10 +17,14 @@ type Props = {
   identity?: Set<string> | null;
   /** "See all results": hands the typed text to the full Search panel. */
   onSeeAll?: (text: string) => void;
+  /** Also offer cards banned in Commander and cards not released yet. */
+  withBanned?: boolean;
+  /** Shows the "Include banned and preview cards" switch under the box (the commander picker). */
+  onWithBanned?: (on: boolean) => void;
 };
 
 /** Type a card name, pick with arrow keys. Enter = mainboard, Shift+Enter = maybeboard, Ctrl+Enter = commander. */
-export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ onAdd, onPreview, commanderOnly, identity, onSeeAll }, ref) {
+export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ onAdd, onPreview, commanderOnly, identity, onSeeAll, withBanned = false, onWithBanned }, ref) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
@@ -49,6 +54,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         q,
         lim: commanderOnly ? 25 : 15,
         p_identity: colors === null ? null : colors.split(""),
+        p_any_legality: withBanned,
       });
       if (id !== latest.current) return;
       const found = (data ?? []) as CardSummary[];
@@ -64,7 +70,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     return () => clearTimeout(timer);
     // choose only touches this box and calls onAdd; re-running the search for a new onAdd would be wrong.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, supabase, commanderOnly, colors]);
+  }, [text, supabase, commanderOnly, colors, withBanned]);
 
   useEffect(() => {
     onPreview(open ? (results[active] ?? null) : null);
@@ -127,6 +133,12 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         aria-controls="quick-add-results"
         className="min-h-12 w-full rounded-lg border border-foreground/25 bg-background/60 px-3 text-base"
       />
+      {onWithBanned && (
+        <label className="mt-2 flex min-h-9 items-center justify-center gap-2 text-sm opacity-85" title="Also show cards banned in Commander, and new cards that aren't released yet">
+          <input type="checkbox" checked={withBanned} onChange={(e) => onWithBanned(e.target.checked)} className="h-4 w-4" />
+          Include banned and preview cards
+        </label>
+      )}
       {!commanderOnly && (
         <p className="mt-1 hidden text-[13px] opacity-75 lg:block" title="Press / to come back to this box">
           Enter: main · Shift+Enter: maybe · Ctrl+Enter: commander
@@ -157,6 +169,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
                 {card.name}
                 <span className="ml-2 text-[13px] opacity-65">{card.type_line.split(" — ")[0]}</span>
               </span>
+              <StatusBadge card={card} className="shrink-0" />
               <ManaCost cost={card.mana_cost} />
             </li>
           ))}
@@ -185,7 +198,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       )}
       {open && text.trim().length >= 2 && results.length === 0 && !onSeeAll && (
         <p className="absolute z-30 mt-1 w-full rounded-lg border border-foreground/15 bg-panel-raised px-3 py-2 text-sm shadow-2xl">
-          No Commander-legal card matches “{text.trim()}”{colors !== null ? " in your commander's colors" : ""}.
+          No {withBanned ? "" : "Commander-legal "}card matches “{text.trim()}”{colors !== null ? " in your commander's colors" : ""}.
         </p>
       )}
     </div>

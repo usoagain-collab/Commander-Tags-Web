@@ -26,6 +26,13 @@ describe("buildQuery", () => {
     expect(buildQuery("sol ring", { identity: new Set(["B"]), inIdentity: false, legalOnly: false })).toBe("sol ring");
   });
 
+  it("adds banned and preview cards when asked, but still only paper", () => {
+    expect(buildQuery("otag:ramp", { ...bg, withBanned: true })).toBe(
+      "(otag:ramp) id<=bg (f:commander or banned:commander or (date>today -st:token -st:memorabilia)) game:paper",
+    );
+    expect(buildQuery("t:elf f:brawl", { ...bg, withBanned: true })).toBe("(t:elf f:brawl) id<=bg game:paper");
+  });
+
   it("builds an encoded Scryfall URL ordered by EDHREC popularity", () => {
     expect(scryfallSearchUrl("otag:ramp id<=bg")).toBe(
       "https://api.scryfall.com/cards/search?q=otag%3Aramp+id%3C%3Dbg&order=edhrec&unique=cards",

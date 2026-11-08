@@ -503,7 +503,14 @@ export function DeckEditor({
     const w: string[] = [];
     if (line.board !== "maybe")
       for (const flag of bracketFlags.get(line.card.oracle_id) ?? []) w.push(`Above bracket ${bracket.target}: ${flag}`);
-    if (!line.card.commander_legal) w.push("Not legal in Commander");
+    if (!line.card.commander_legal)
+      w.push(
+        line.card.commander_status === "banned"
+          ? "Banned in Commander"
+          : line.card.commander_status === "preview"
+            ? "Not released yet (legal from its release day)"
+            : "Not legal in Commander",
+      );
     if (outsideIdentity(line.card, identity)) w.push("Outside your commander's colors");
     if (line.board === "commander" && !line.card.can_be_commander) w.push("Can't normally be a commander");
     return w;
@@ -952,6 +959,8 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
           hideInDeck={prefs.searchHideInDeck === true}
           onHideInDeck={(hide) => updatePrefs({ searchHideInDeck: hide })}
+          withBanned={prefs.allowBanned === true}
+          onWithBanned={(on) => updatePrefs({ allowBanned: on })}
           initialText={searchSeed}
         />
         </div>
@@ -1085,6 +1094,8 @@ export function DeckEditor({
               <div className="mx-auto mt-4 max-w-md">
                 <QuickAdd
                   commanderOnly
+                  withBanned={prefs.allowBanned === true}
+                  onWithBanned={(on) => updatePrefs({ allowBanned: on })}
                   onAdd={(card) => {
                     if (run(planAdd(entries, card, "commander"), card)) say(`${card.name} leads this deck.`, true);
                   }}
@@ -1148,6 +1159,7 @@ export function DeckEditor({
           {!readOnly && commanders.length > 0 && (
             <QuickAdd
               ref={quickAdd}
+              withBanned={prefs.allowBanned === true}
               onAdd={(card, board) => {
                 if (run(planAdd(entries, card, board), card)) {
                   flash(card.oracle_id);

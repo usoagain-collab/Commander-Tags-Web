@@ -13,7 +13,7 @@ type ScryfallCard = {
   oracle_id?: string; name: string; layout: string; mana_cost?: string; cmc?: number; type_line?: string; oracle_text?: string;
   color_identity?: string[]; legalities?: Record<string, string>; games?: string[]; edhrec_rank?: number;
   prices?: { usd?: string | null }; image_uris?: Record<string, string>; illustration_id?: string; card_faces?: Face[];
-  game_changer?: boolean; produced_mana?: string[];
+  game_changer?: boolean; produced_mana?: string[]; released_at?: string;
 };
 
 const IMAGE_SIZES = ["small", "normal", "large", "art_crop", "png"];
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     default_illustration_id: c.illustration_id ?? front?.illustration_id ?? null,
     game_changer: c.game_changer ?? false,
     produced_mana: c.produced_mana ?? [],
+    released_at: c.released_at ?? null,
   };
 
   // The write needs the server-only key; without it (e.g. not set on this host yet) say so instead of crashing.

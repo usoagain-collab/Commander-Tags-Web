@@ -23,7 +23,7 @@ type ScryfallCard = {
   oracle_text?: string; color_identity?: string[]; legalities?: Record<string, string>; games?: string[];
   edhrec_rank?: number; prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null }; image_uris?: Record<string, string>;
   illustration_id?: string; card_faces?: Face[]; game_changer?: boolean; produced_mana?: string[];
-  id?: string; all_parts?: { id: string; component: string; name: string; type_line?: string }[];
+  released_at?: string; id?: string; all_parts?: { id: string; component: string; name: string; type_line?: string }[];
 };
 type Tagging = { oracle_id?: string; illustration_id?: string; weight?: string; annotation?: string | null };
 type ScryfallTag = {
@@ -150,13 +150,14 @@ function cardRow(c: ScryfallCard, cheapest: Map<string, number>): Cell[] {
     c.illustration_id ?? front?.illustration_id ?? null,
     c.game_changer ?? false,
     pgArray(c.produced_mana),
+    c.released_at ?? null,
   ];
 }
 
 const CARD_COLUMNS = [
   "oracle_id", "name", "layout", "mana_cost", "mana_value", "type_line", "oracle_text", "color_identity",
   "legalities", "games", "edhrec_rank", "price_usd", "image_uris", "default_illustration_id",
-  "game_changer", "produced_mana",
+  "game_changer", "produced_mana", "released_at",
 ];
 
 // ---------- main ----------
