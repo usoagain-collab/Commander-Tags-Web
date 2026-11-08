@@ -23,6 +23,9 @@ type Props = {
   onAddCustom: (role: CustomRole) => void;
   onRemoveCustom: (key: string) => void;
   onSaveDefaults: () => Promise<string>;
+  /** Auto build land base (v2): shown on the Lands row while it's under target. */
+  onBuildLands?: () => void;
+  buildLandsAbout?: string;
   onResetDefaults: () => void;
   /** Roles left out of the profile and the deck's groups; listed only while adjusting. */
   hiddenRoles: { key: string; name: string }[];
@@ -84,6 +87,16 @@ export function RoleProfile(props: Props) {
                   <InfoTip role={r} tree={props.tree} />
                 </span>
                 <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                  {r.land && props.onBuildLands && count < r.target && (
+                    <button
+                      type="button"
+                      onClick={props.onBuildLands}
+                      title={props.buildLandsAbout}
+                      className="flex min-h-8 items-center rounded px-1.5 text-[13px] opacity-85 hover:bg-foreground/10 hover:text-gold hover:opacity-100"
+                    >
+                      ⛰ Auto build
+                    </button>
+                  )}
                   {props.onSuggest && (
                     <button
                       type="button"
