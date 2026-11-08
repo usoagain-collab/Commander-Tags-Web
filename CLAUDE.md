@@ -179,6 +179,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - `copyDeck(id)` server action in `src/app/decks/actions.ts`: reads through `shared_deck` (so only decks you may open), inserts a private deck plus its `deck_cards` rows (printing, foil, category), deletes the new deck if the rows fail, then opens it. Shared viewers get a gold **Copy to my decks**; owners get **More → Make a copy** (named "… (copy)"), which waits until edits are saved.
 
+## Default roles in Settings (v2, built Nov 8, 2026)
+
+- `src/app/settings/roles-setting.tsx`: every standard role (slider, Hide / Show) plus custom roles (slider, Remove, + Add a role from a tag, reusing the exported `AddRole` from `role-profile.tsx`). Saves `profiles.default_role_targets` and `custom_roles` on **Save defaults**, the same values a deck's "Save as my defaults" writes; Tutors has no slider (follows each deck's bracket). Only new decks use them.
+
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
 
 - Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).
