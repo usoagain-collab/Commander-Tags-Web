@@ -45,6 +45,8 @@ export type CardSummary = {
   counts_as_land: boolean;
   /** Colors of mana it can make (W U B R G C), for land-source stats (step 3i). */
   produced_mana?: string[];
+  /** An instant, or has Flash (Smart Cutter speed; migration 0031). */
+  instant_speed?: boolean;
 };
 
 /** Copies of each card on each board, keyed by `board|oracle_id`. */

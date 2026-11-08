@@ -30,6 +30,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026); Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` set up and checked live. Left: the friend test itself |
 | Design pass | Done (merged Oct 31, 2026): three judge-panel rounds. Final scores UI 14, UX 15, Visual 15, Readability 14, Fun 15, Bugs 17 (baseline 13, 12, 8, 13, 9, 15) |
 | Printings + foil | Built Oct 31, 2026 (from the v2 backlog, at David's request). See "Printings and foil" below |
+| Smart Cutter (v2) | **In progress**: design agreed Nov 7, 2026; C1 engine + migration 0033 built. Next: C2 Cutter screen. See "Smart Cutter" below |
 | v2 | After v1 is fully working and friend-tested. Backlog lives in `docs/spec.md` → "v2 backlog" (pricing details, mixed copies of one card, collection, wish list, change mana cost, multiplayer playtesting) |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
@@ -167,6 +168,14 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - Why: Scryfall marks a new set `not_legal` in Commander until release day (Star Trek, Nov 13, 2026), so every legal-only search hid it even though the cards were loaded.
 - Migration 0031: `cards.released_at` (from the printing oracle_cards carries; the nightly import and `/api/cards/import` fill it), SQL `commander_status(cards)` (legal / banned / preview = released after today, paper, not a token or art card / not_legal), `card_summaries.commander_status`, `search_cards(..., p_any_legality)`. Scryfall side (`buildQuery` `withBanned`): `(f:commander or banned:commander or (date>today -st:token -st:memorabilia))`, still `game:paper`.
 - **Order matters on deploy:** apply 0031 before the code goes live, or quick add calls `search_cards` with a parameter it doesn't have yet. `released_at` stays empty, so nothing counts as preview, until the next nightly import after 0031.
+
+## Smart Cutter (v2, design agreed Nov 7, 2026)
+
+- Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).
+- **Built in C1 (engine, no UI):** `src/lib/cutter/`: `config.ts` (every weight and threshold), `archetypes.ts` (15 starter archetypes: signals, expected curve; a signal grows from `from` to `full` share), `archetype.ts` (`detectArchetypes`, `chooseArchetype` for the Yes / No flow, `cheatTargets`, `effectiveCurve`), `score.ts` (`keepScores`, `planCuts` picks one cut at a time and re-scores, `suggestCuts` over / exactly / under 100, `belowTargetWarning`), `state.ts` (`readCutterState`, `readCutterPrefs`). Tested in `cutter.test.ts`.
+- Migration **0033** (0031 and 0032 were taken by banned/preview and commander scroll): `decks.cutter`, `profiles.cutter_prefs` (jsonb), `card_summaries.instant_speed` (instant or Flash, front face text), `deck_bundle` returns both (the deck state only to its owner). The change-log note for cut reasons is C2.
+- `npm run cutter:check [deck ids]` (read-only, `scripts/cutter-check.mts` through `scripts/run-ts.mjs`, which runs TS with the `@/` alias via jiti) prints archetypes, cheat targets, protection counts and cuts with score parts for Omo and every "QA: …" deck. Engine: 2-16 ms per scoring pass on 100 cards.
+- **Gotchas found:** the `sneak` and `reanimate` tag trees include land and self-only mechanics (sneak-land, reanimate-self, unearth…), listed in `CHEAT_ENABLERS.not`; a single creature type can pass 30% by chance (Humans), so typal starts at 25%; mana rocks make most decks look like Artifacts, so that signal starts at 25% artifacts.
 
 ## Stack (decided)
 
