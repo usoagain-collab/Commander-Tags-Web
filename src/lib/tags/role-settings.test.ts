@@ -37,9 +37,17 @@ describe("saved role settings", () => {
 describe("hidden roles", () => {
   it("hides and shows a role without touching its target", () => {
     const hidden = withRoleHidden({ recursion: 4 }, "recursion", true);
-    expect(hiddenRoleKeys(readTargets(hidden))).toEqual(new Set(["recursion"]));
+    expect(hiddenRoleKeys(readTargets(hidden))).toEqual(new Set(["recursion", "tutors"]));
     expect(buildRoleDefs(hidden, []).find((r) => r.key === "recursion")!.target).toBe(4);
     expect(withRoleHidden(hidden, "recursion", false)).toEqual({ recursion: 4 });
+  });
+
+  it("hides Tutors until the user shows it, and remembers either choice", () => {
+    expect(hiddenRoleKeys({})).toEqual(new Set(["tutors"]));
+    const shown = withRoleHidden({}, "tutors", false);
+    expect(shown).toEqual({ "hide:tutors": 0 });
+    expect(hiddenRoleKeys(readTargets(shown)).has("tutors")).toBe(false);
+    expect(hiddenRoleKeys(withRoleHidden(shown, "tutors", true)).has("tutors")).toBe(true);
   });
 });
 

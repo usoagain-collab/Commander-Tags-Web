@@ -30,17 +30,30 @@ function keepAfterSwap(ctx: CutterContext, out: string[], entry: CutterCard): nu
   return s.keep;
 }
 
-/** Candidates in the order to try them: floor cards first, then the pool ranked with Best fit. */
-function ranked(ctx: CutterContext, out: string[], pool: PoolCard[], opts: SwapOptions, wanted: (roles: string[], c: CutterCard) => boolean) {
+/**
+ * Candidates in the order to try them: floor cards first, then the pool ranked with Best fit. A candidate may refill
+ * the roles in `own` (the ones the cut cards filled), but never adds to another role already at or over target
+ * (Omo was offered Migration Path, Ramp too, for a Card advantage cut while Ramp sat at 26 / 10; tuning, Nov 8, 2026).
+ */
+function ranked(
+  ctx: CutterContext,
+  out: string[],
+  pool: PoolCard[],
+  opts: SwapOptions,
+  own: string[],
+  wanted: (roles: string[], c: CutterCard) => boolean,
+) {
   const remaining = out.reduce((cards, id) => withoutOne(cards, id), ctx.cards);
   const counts = roleCountsOf(remaining);
   const under = new Set(ctx.roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key));
-  const fromFloor = (opts.floor ?? []).filter((c) => !out.includes(c.card.oracle_id) && wanted(c.roles, c));
+  const full = new Set(ctx.roles.filter((r) => !r.land && !own.includes(r.key) && (counts[r.key] ?? 0) >= r.target).map((r) => r.key));
+  const fits = (roles: string[], c: CutterCard) => !roles.some((k) => full.has(k)) && wanted(roles, c);
+  const fromFloor = (opts.floor ?? []).filter((c) => !out.includes(c.card.oracle_id) && fits(c.roles, c));
   const inDeck = new Set(ctx.cards.map((c) => c.card.oracle_id));
   const usable = pool.filter((c) => !inDeck.has(c.oracle_id) && !opts.skip(c));
   const entryOf = new Map(usable.map((c) => [c.oracle_id, asEntry(c, c.tags, opts.rolesFor(c, c.tags))]));
   const scored = scorePool(
-    usable.filter((c) => wanted(entryOf.get(c.oracle_id)!.roles, entryOf.get(c.oracle_id)!)),
+    usable.filter((c) => fits(entryOf.get(c.oracle_id)!.roles, entryOf.get(c.oracle_id)!)),
     {
       themes: ctx.themes,
       keysOf: (c) => ctx.keysOf(entryOf.get(c.oracle_id)!),
@@ -63,7 +76,7 @@ export function pickSwap(ctx: CutterContext, cut: CardScore, pool: PoolCard[], o
   const cutThemes = new Set(cut.facts.themes.map((t) => t.key));
   const wanted = (roles: string[], c: CutterCard) =>
     cutRoles.length ? roles.some((k) => cutRoles.includes(k)) : ctx.keysOf(c).some((k) => cutThemes.has(k));
-  for (const { entry, fromFloor } of ranked(ctx, [id], pool, opts, wanted)) {
+  for (const { entry, fromFloor } of ranked(ctx, [id], pool, opts, cutRoles, wanted)) {
     const keep = keepAfterSwap(ctx, [id], entry);
     if (keep > cut.keep) return { card: entry.card, tags: entry.tags, keep, fromFloor, replaces: [id] };
   }
@@ -97,7 +110,7 @@ export function twoForOnePairs(scores: CardScore[], limit = 3): Pair[] {
 export function pickTwoForOne(ctx: CutterContext, pair: Pair, pool: PoolCard[], opts: SwapOptions): SwapPick | null {
   const out = [pair.a.entry.card.oracle_id, pair.b.entry.card.oracle_id];
   const wanted = (roles: string[]) => pair.roles.every((k) => roles.includes(k));
-  for (const { entry, fromFloor } of ranked(ctx, out, pool, { ...opts, floor: [] }, wanted)) {
+  for (const { entry, fromFloor } of ranked(ctx, out, pool, { ...opts, floor: [] }, pair.roles, wanted)) {
     const keep = keepAfterSwap(ctx, out, entry);
     if (keep > Math.max(pair.a.keep, pair.b.keep)) return { card: entry.card, tags: entry.tags, keep, fromFloor, replaces: out };
   }

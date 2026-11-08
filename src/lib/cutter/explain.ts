@@ -2,12 +2,18 @@
 // Turns a CardScore into short sentences; the Cutter screen only lays them out.
 import { prettyTag } from "@/lib/tags/pretty";
 import { CURVE_LABELS } from "./archetype";
+import { CUTTER } from "./config";
 import type { Archetype } from "./archetypes";
 import type { CardScore, Part } from "./score";
 
 const ordinal = (n: number) => (n === 1 ? "" : `${n}${n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"} `);
 const pct = (n: number) => `${Math.round(n)}%`;
 const bucketName = (b: number) => (b === 0 ? "0-1 mana spells" : b === 6 ? "7+ mana spells" : `${CURVE_LABELS[b]}-drops`);
+
+const popularityText = (rank: number | null) =>
+  !rank
+    ? "No EDHREC rank, so it counts as rarely played"
+    : `EDHREC rank #${rank.toLocaleString("en-US")}: ${rank <= 300 ? "a staple, among the most played cards" : rank <= 3000 ? "widely played" : rank <= 10000 ? "played now and then" : "rarely played"}`;
 
 /** One line for the shortlist and the cutting-room floor, also saved as the cut's reason in History. */
 export function cutReason(s: CardScore): string {
@@ -54,7 +60,8 @@ export function explainCut(s: CardScore, archetype: Archetype, archetypeName = a
 
   const curve = s.flags.cheatTarget
     ? "Not counted on the curve: the deck can likely cheat it into play"
-    : `${bucketName(f.bucket)} are ${pct(f.bucketShare)} of your spells; ${archetypeName} expects ${pct(f.expectedShare)}`;
+    : `${bucketName(f.bucket)} are ${pct(f.bucketShare)} of your spells; ${archetypeName} expects ${pct(f.expectedShare)}` +
+      (f.bucket < CUTTER.curveFreeBuckets && f.bucketShare > f.expectedShare ? " (cheap cards never count against it)" : "");
 
   const flags = [
     ...s.flags.bracket.map((b) => `Above your bracket: ${b}`),
@@ -80,6 +87,7 @@ export function explainCut(s: CardScore, archetype: Archetype, archetypeName = a
     { part: "weakest" as Part, label: "Weakest in role", value: p.weakest, text: ranked.length ? ranked[0] : rank },
     { part: "theme" as Part, label: "Theme fit", value: p.theme, text: themeText },
     { part: "curve" as Part, label: "Curve fit", value: p.curve, text: s.flags.cheatTarget ? "Left off the curve" : curve },
+    { part: "popularity" as Part, label: "Popularity", value: p.popularity, text: popularityText(s.entry.card.edhrec_rank) },
   ];
   return { hits, rank, curve, flags, parts };
 }

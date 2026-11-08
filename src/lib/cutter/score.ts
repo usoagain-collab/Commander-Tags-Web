@@ -3,7 +3,7 @@
 import type { ComboRow, Finding } from "@/lib/brackets/evaluate";
 import type { DeckLine } from "@/lib/deck/model";
 import { colorBalance, pipsOf, type Color } from "@/lib/deck/stats";
-import { popularity } from "@/lib/suggest/score";
+import { logPopularity, popularity } from "@/lib/suggest/score";
 import { isLand, type ResolvedRole } from "@/lib/tags/roles";
 import type { TagKey, ThemeTag } from "@/lib/tags/themes";
 import type { TagTree } from "@/lib/tags/tree";
@@ -131,19 +131,25 @@ export function keepScores(ctx: CutterContext): CardScore[] {
     const points = FLEX_POINTS[role.key] ?? {};
     const inRole = c.tags.filter((t) => role.tagSet?.has(t));
     const base = inRole.reduce((n, t) => n + (points[t] ?? 1), 0);
-    return base + (c.tags.some((t) => t.startsWith(REPEATABLE_PREFIX)) ? 1 : 0);
+    const identity = ctx.identity;
+    const fixes =
+      role.key === "ramp" && identity && identity.size >= CUTTER.fixingMinColors && (c.card.produced_mana ?? []).filter((m) => identity.has(m)).length >= 2;
+    return base + (c.tags.some((t) => t.startsWith(REPEATABLE_PREFIX)) ? 1 : 0) + (fixes ? CUTTER.fixingPoints : 0);
   };
   const rankIn = new Map<string, Map<string, { standing: number; position: number; of: number }>>();
   for (const role of ctx.roles) {
     if (role.land) continue;
     const mates = main.filter((c) => !isLand(c.card.type_line) && c.roles.includes(role.key));
     if (mates.length < CUTTER.minRoleSize) continue;
-    const mvs = mates.map((c) => c.card.mana_value);
+    const mvs = mates.map((c) => (c.tags.some((t) => CUTTER.freeTags.includes(t)) ? 0 : c.card.mana_value));
     const flex = mates.map((c) => flexOf(c, role));
     const maxFlex = Math.max(...flex);
     const q = CUTTER.quality;
     const quality = mates.map(
-      (c, i) => q.manaValue * standing(mvs, i, false) + q.speed * speedOf(c) + q.flexibility * (maxFlex ? flex[i] / maxFlex : 1),
+      (c, i) =>
+        q.manaValue * standing(mvs, i, false) +
+        q.speed * speedOf(c) +
+        q.flexibility * (maxFlex ? flex[i] / maxFlex : 1),
     );
     const m = new Map<string, { standing: number; position: number; of: number }>();
     mates.forEach((c, i) => m.set(c.card.oracle_id, { standing: standing(quality, i, true), position: positionFromBottom(quality, i), of: mates.length }));
@@ -213,7 +219,7 @@ export function keepScores(ctx: CutterContext): CardScore[] {
     const bucketShare = curve.shares[bucket];
     const expectedShare = archetype.curve[bucket];
     const cheatTarget = cheat.targets.has(id);
-    const curveFit = cheatTarget || land ? 1 : 1 - Math.min(1, Math.max(0, bucketShare - expectedShare) / CUTTER.curveExcessFull);
+    const curveFit = cheatTarget || land || bucket < CUTTER.curveFreeBuckets ? 1 : 1 -Math.min(1, Math.max(0, bucketShare - expectedShare) / CUTTER.curveExcessFull);
 
     // Mana strain: the color with the most pips that's short on land sources.
     let strain: Color | null = null;
@@ -263,7 +269,7 @@ export function keepScores(ctx: CutterContext): CardScore[] {
   const maxHits = Math.max(0, ...scored.map((r) => r.hits));
   const maxFit = Math.max(0, ...scored.map((r) => r.fitRaw));
   const w = prefs.weights;
-  const wSum = w.coverage + w.saturation + w.weakest + w.theme + w.curve || 1;
+  const wSum = w.coverage + w.saturation + w.weakest + w.theme + w.curve + w.popularity || 1;
   const inFinding = (id: string) => ctx.bracketFindings.filter((f) => f.cards.includes(id)).map((f) => f.label);
 
   return rows.map((r): CardScore => {
@@ -273,8 +279,16 @@ export function keepScores(ctx: CutterContext): CardScore[] {
       weakest: r.weakest,
       theme: maxFit ? r.fitRaw / maxFit : CUTTER.neutral,
       curve: r.curveFit,
+      popularity: logPopularity(r.entry.card.edhrec_rank),
     };
-    const keep = (w.coverage * parts.coverage + w.saturation * parts.saturation + w.weakest * parts.weakest + w.theme * parts.theme + w.curve * parts.curve) / wSum;
+    const keep =
+      (w.coverage * parts.coverage +
+        w.saturation * parts.saturation +
+        w.weakest * parts.weakest +
+        w.theme * parts.theme +
+        w.curve * parts.curve +
+        w.popularity * parts.popularity) /
+      wSum;
     const id = r.entry.card.oracle_id;
     return {
       entry: r.entry,

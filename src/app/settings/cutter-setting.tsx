@@ -16,6 +16,7 @@ const WEIGHT_NAMES: { key: keyof CutterWeights; name: string; about: string }[] 
   { key: "weakest", name: "Weakest in role", about: "Mana value, speed and flexibility against the other cards in its roles" },
   { key: "theme", name: "Theme fit", about: "Overlap with your top themes and your commander's tags" },
   { key: "curve", name: "Curve fit", about: "How full its spot on the mana curve is for your archetype" },
+  { key: "popularity", name: "Popularity", about: "How widely the card is played (EDHREC rank): staples are harder to cut" },
 ];
 
 const GENERAL_CURVE = ARCHETYPES.find((a) => a.key === GENERAL_KEY)!.curve;

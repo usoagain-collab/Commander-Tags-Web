@@ -267,9 +267,51 @@ describe("keepScores and planCuts", () => {
   });
 
   it("uses the power user's weights", () => {
-    const onlyCurve = { ...DEFAULT_PREFS, weights: { ...DEFAULT_WEIGHTS, coverage: 0, saturation: 0, weakest: 0, theme: 0, curve: 1 } };
+    const onlyCurve = { ...DEFAULT_PREFS, weights: { ...DEFAULT_WEIGHTS, coverage: 0, saturation: 0, weakest: 0, theme: 0, curve: 1, popularity: 0 } };
     const s = keepScores(ctxFor(cards, roles, { prefs: onlyCurve })).find((x) => x.entry.card.name === "Ramp 5")!;
     expect(s.keep).toBeCloseTo(s.parts.curve);
+  });
+});
+
+describe("tuning (Nov 8, 2026)", () => {
+  const { roles, make } = deck({ ramp: 1, draw: 0, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+  const of = (scores: ReturnType<typeof keepScores>, name: string) => scores.find((s) => s.entry.card.name === name)!;
+
+  it("never penalizes cheap cards for the curve", () => {
+    // Every spell is a 1-drop, far over any expected share.
+    const cards = ["A", "B", "C", "D"].map((n) => make(card(`Cantrip ${n}`, 1, "Sorcery"), ["pure-draw"]));
+    const scores = keepScores(ctxFor(cards, roles));
+    expect(of(scores, "Cantrip A").parts.curve).toBe(1);
+    expect(explainCut(of(scores, "Cantrip A"), ARCHETYPES[0]).curve).toContain("cheap cards never count against it");
+  });
+
+  it("ranks a widely played card above a rarely played one with the same cost and job", () => {
+    const staple = make(card("Staple", 3, "Enchantment", { edhrec_rank: 5 }), ["pure-draw"]);
+    const obscure = make(card("Obscure", 3, "Enchantment", { edhrec_rank: 15000 }), ["pure-draw"]);
+    const third = make(card("Third", 3, "Enchantment", { edhrec_rank: 8000 }), ["pure-draw"]);
+    const r = deck({ ramp: 0, draw: 1, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+    const scores = keepScores(ctxFor([staple, obscure, third].map((c) => ({ ...c, roles: rolesOf(c.card, c.tags, r.roles) })), r.roles));
+    expect(of(scores, "Staple").keep).toBeGreaterThan(of(scores, "Obscure").keep);
+  });
+
+  it("ranks a card that refunds its whole cost as free within its role", () => {
+    const frantic = make(card("Frantic Search", 3, "Instant"), ["pure-draw", "full-refund"]);
+    const cards = [frantic, make(card("Draw 2", 2, "Instant"), ["pure-draw"]), make(card("Draw 2b", 2, "Instant"), ["pure-draw"])];
+    const r = deck({ ramp: 0, draw: 1, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+    const scores = keepScores(ctxFor(cards.map((c) => ({ ...c, roles: rolesOf(c.card, c.tags, r.roles) })), r.roles));
+    expect(of(scores, "Frantic Search").parts.weakest).toBeGreaterThan(of(scores, "Draw 2").parts.weakest);
+  });
+
+  it("counts color fixing as flexibility for Ramp in decks of 3+ colors", () => {
+    const fixer = make(card("Lantern", 3, "Artifact", { produced_mana: ["W", "U", "B", "R", "G"], edhrec_rank: 1000 }), ["mana-rock"]);
+    const plain = make(card("Plain rock", 3, "Artifact", { produced_mana: ["C"], edhrec_rank: 1000 }), ["mana-rock"]);
+    const other = make(card("Other rock", 3, "Artifact", { produced_mana: ["C"], edhrec_rank: 1000 }), ["mana-rock"]);
+    const cards = [fixer, plain, other];
+    const five = keepScores(ctxFor(cards, roles, { identity: new Set(["W", "U", "B", "R", "G"]) }));
+    expect(of(five, "Lantern").parts.weakest).toBeGreaterThan(of(five, "Plain rock").parts.weakest);
+    // In a two-color deck fixing doesn't count, so the three rocks tie.
+    const two = keepScores(ctxFor(cards, roles, { identity: new Set(["U", "G"]) }));
+    expect(of(two, "Lantern").parts.weakest).toBe(of(two, "Plain rock").parts.weakest);
   });
 });
 
@@ -366,7 +408,7 @@ describe("explain", () => {
     expect(e.hits[0]).toEqual({ label: "Ramp", text: "4 / 2: 2 over target" });
     expect(e.rank).toMatch(/^The weakest of 4 Ramp cards/);
     expect(e.curve).toMatch(/^5-drops are 25% of your spells; General \(midrange\) expects 12%/);
-    expect(e.parts.map((p) => p.part)).toEqual(["coverage", "saturation", "weakest", "theme", "curve"]);
+    expect(e.parts.map((p) => p.part)).toEqual(["coverage", "saturation", "weakest", "theme", "curve", "popularity"]);
     expect(e.parts[1].text).toBe("Every role it fills is over target");
   });
 
@@ -380,16 +422,17 @@ describe("explain", () => {
 describe("swaps", () => {
   const { roles, make } = deck({ ramp: 1, draw: 1, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
   const rolesFor = (c: CardSummary, tags: string[]) => rolesOf(c, tags, roles);
-  const pool = (name: string, mv: number, tags: string[], type = "Artifact"): PoolCard => ({ ...card(name, mv, type), tags });
-  const slowRamp = make(card("Slow ramp", 6, "Sorcery"), ["land-ramp"]);
-  const slowDraw = make(card("Slow draw", 6, "Sorcery"), ["pure-draw"]);
+  // Same EDHREC rank everywhere, so popularity (part of weakest in role) doesn't decide these tests.
+  const pool = (name: string, mv: number, tags: string[], type = "Artifact"): PoolCard => ({ ...card(name, mv, type, { edhrec_rank: 1000 }), tags });
+  const slowRamp = make(card("Slow ramp", 6, "Sorcery", { edhrec_rank: 1000 }), ["land-ramp"]);
+  const slowDraw = make(card("Slow draw", 6, "Sorcery", { edhrec_rank: 1000 }), ["pure-draw"]);
   // Three cards per role so they can be ranked against each other; the tiny deck's curve would swamp the rest.
   const cards = [
-    make(card("Rock", 2, "Artifact"), ["mana-rock"]),
-    make(card("Rock B", 2, "Artifact"), ["mana-rock"]),
+    make(card("Rock", 2, "Artifact", { edhrec_rank: 1000 }), ["mana-rock"]),
+    make(card("Rock B", 2, "Artifact", { edhrec_rank: 1000 }), ["mana-rock"]),
     slowRamp,
-    make(card("Draw", 2, "Instant"), ["pure-draw"]),
-    make(card("Draw B", 2, "Instant"), ["pure-draw"]),
+    make(card("Draw", 2, "Instant", { edhrec_rank: 1000 }), ["pure-draw"]),
+    make(card("Draw B", 2, "Instant", { edhrec_rank: 1000 }), ["pure-draw"]),
     slowDraw,
   ];
   const ctx = ctxFor(cards, roles, { prefs: { ...DEFAULT_PREFS, weights: { ...DEFAULT_WEIGHTS, curve: 0 } } });
@@ -401,6 +444,13 @@ describe("swaps", () => {
     const pick = pickSwap(ctx, of("Slow ramp"), [pool("Signet", 2, ["mana-rock"]), pool("Off-role", 1, ["pure-draw"])], opts);
     expect(pick?.card.name).toBe("Signet");
     expect(pick!.keep).toBeGreaterThan(of("Slow ramp").keep);
+  });
+
+  it("never swaps in a card that adds to another role already at target", () => {
+    // Draw has three cards for a target of 1, so a card that also draws would push it further over.
+    const both = pool("Ramp and draw", 1, ["land-ramp", "pure-draw"], "Instant");
+    expect(pickSwap(ctx, of("Slow ramp"), [both], opts)).toBeNull();
+    expect(pickSwap(ctx, of("Slow ramp"), [both, pool("Signet", 2, ["mana-rock"])], opts)?.card.name).toBe("Signet");
   });
 
   it("skips cards the caller rules out", () => {

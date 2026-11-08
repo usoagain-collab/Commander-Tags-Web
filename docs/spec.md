@@ -182,6 +182,7 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Reorder the left-column tags | Drag the roles and top tags in the left column into your own order, saved. The role profile's "Adjust targets" button becomes **"Edit targets"**, and dragging works only in that edit mode (so a stray drag never moves anything; on phones the whole row is the drag handle) | Nov 7, 2026 |
 | Auto build land base | An "Auto build land base" button that fills the deck's lands up to the Lands target with the best lands in the commander's colors (duals, fetches, shocks and so on, then basics in proportion to the deck's color pips). With no lands it builds the whole base; with some lands it adds only what's missing to reach the target. Utility lands are left for the user to add. Hovering the button (tap the ⓘ on phones) explains what it does and how it picks lands. One undoable `Change` | Nov 7, 2026 |
 | Default roles in the profile | Edit your default roles (standard and custom, their tags, hidden ones) and target numbers on the Settings page, without opening a deck. Today defaults can only be saved from a deck's role profile ("Save as my defaults") | Nov 7, 2026 |
+| Lands in overall Suggest | Overall Suggest never shows lands today (the Staples row covers only non-land roles, and the main list leaves lands out). When the deck is under its Lands target, include lands in the suggestions, ranked like other picks, so a short land count gets filled from the same screen. Once the target is met, lands stay out as now | Nov 8, 2026 |
 
 ## Not intended
 
@@ -259,16 +260,17 @@ Weights and every threshold sit in **one config file**, `src/lib/cutter/config.t
 
 | Component | Default weight | How it's computed |
 | --- | --- | --- |
-| Role coverage | 30% | Distinct selected items the card hits: each role counts once however many of its tags match (subtags included), each top theme once, and a theme that is an ancestor of another hit theme counts once with it. Score = hits ÷ the most hits any card in the deck has. Hidden roles, Lands and noise tags (`MECHANIC_NOISE`) don't count |
-| Saturation pressure | 25% | For each role the card fills (Lands excluded): overness = min(1, (count − target) ÷ 3) when over target, else 0. Pressure = average overness; halved unless **all** its roles are over. Score = 1 − pressure. No tolerance band: 8 of 7 is over. A card in no role scores neutral 0.5 |
+| Role coverage | 25% | Distinct selected items the card hits: each role counts once however many of its tags match (subtags included), each top theme once, and a theme that is an ancestor of another hit theme counts once with it. Score = hits ÷ the most hits any card in the deck has. Hidden roles, Lands and noise tags (`MECHANIC_NOISE`) don't count |
+| Saturation pressure | 20% | For each role the card fills (Lands excluded): overness = min(1, (count − target) ÷ 3) when over target, else 0. Pressure = average overness; halved unless **all** its roles are over. Score = 1 − pressure. No tolerance band: 8 of 7 is over. A card in no role scores neutral 0.5 |
 | Weakest in role | 20% | Within each role the card fills, rank it against the other cards in that role on quality = 50% mana value (cheaper is better), 25% speed (instant or flash = 1, otherwise 0.5; permanents that stay as engines aren't penalized), 25% flexibility. Flexibility is read from subtags: e.g. removal that hits more permanent types (`removal-nonland`, `multi-removal`, `removal-creature` + `removal-artifact` …) or repeats (`repeatable-removal`), one-sided wipes (`sweeper-one-sided`), repeatable vs one-time draw. Score = average percentile across its roles. A role with fewer than 3 cards gives neutral 0.5. A card in no role is compared within its strongest theme on mana value only |
 | Theme fit | 15% | Shared theme weight ÷ total theme weight (the same formula as `scorePool`), normalized to the best card, commander tags double. **Leave-one-out:** the card's own tags are taken out of the theme counts first, so a card can't hold up a theme it alone creates |
-| Curve fit | 10% | For the card's mana value bucket: excess = actual share − expected share (effective curve, detected archetype). Score = 1 − min(1, excess ÷ 10 points). Buckets at or under their expected share score 1; cheat targets score 1 |
+| Curve fit | 8% | For the card's mana value bucket: excess = actual share − expected share (effective curve, detected archetype). Score = 1 − min(1, excess ÷ 10 points). Buckets at or under their expected share score 1; cheat targets score 1 |
+| Popularity | 12% | EDHREC rank on a log scale (rank 1 = 1, rank 100 about 0.54, 20,000 or unranked = 0). Added Nov 8, 2026 (David: staples are staples for a reason) |
 
 **Flags** (not weighted, always shown on the card and in the "why"):
 - **Bracket conflict:** the card is in an over-target finding from `estimateBracket` (Game Changer over the limit, mass land denial, extra turns, combo).
 - **Mana strain:** 2+ pips of a color whose share of land sources is under 20% (from `colorBalance`).
-- **Popularity:** EDHREC rank, shown, and used only to break ties (keep scores within 0.01).
+- **Popularity:** besides its 12% weight, EDHREC rank still breaks ties (keep scores within 0.01).
 - **No tags yet:** a card with no oracle tags (new cards until the nightly import, about 200 legal cards overall). It isn't suggested, because its score would be meaningless.
 
 **Cuts are picked one at a time.** After each suggested cut the counts are re-run as if it were gone, then the next weakest is picked. Otherwise four over-target Ramp cards would all be suggested when cutting one fixes Ramp.
@@ -307,7 +309,7 @@ Tapping anywhere on a suggested card opens its "why" (the whole card is the tap 
 
 The C1 check suggested cutting Mystical Tutor and Enlightened Tutor: they fill no role and share no themes, so they score low. Tutors matter differently by power level, so they become a role whose **default target depends on the deck's target bracket**.
 
-- **Tutors role**, a new standard role: the `tutor` tag (1,235 cards) and its sub-tags, **minus land tutors and destination tags** (`tutor-land` and `tutor-to` subtrees). Scryfall tags what a tutor fetches (`tutor-card`, `tutor-creature`, `tutor-land-basic`) and separately where it goes (`tutor-to-hand`, `tutor-to-battlefield`); land fetchers like Kodama's Reach and Kura carry only a land kind plus a destination, so they count as Ramp. `RoleDef` gains `except` (slugs whose subtrees don't count). It shows in the role profile like the others and can be hidden.
+- **Tutors role**, a new standard role: the `tutor` tag (1,235 cards) and its sub-tags, **minus land tutors and destination tags** (`tutor-land` and `tutor-to` subtrees). Scryfall tags what a tutor fetches (`tutor-card`, `tutor-creature`, `tutor-land-basic`) and separately where it goes (`tutor-to-hand`, `tutor-to-battlefield`); land fetchers like Kodama's Reach and Kura carry only a land kind plus a destination, so they count as Ramp. `RoleDef` gains `except` (slugs whose subtrees don't count). **Hidden by default** since Nov 8, 2026 (David): turn it on under Hidden roles → Show.
 - **Default target by bracket** (in `src/lib/brackets/rules.ts` next to the other bracket data, so it's one edit to change): 1 Exhibition **0**, 2 Core **1**, 3 Upgraded **3**, 4 Optimized **6**, 5 cEDH **10**. These are Deck Genome's suggestions, not WotC rules: the Oct 2025 bracket update removed tutor limits. Starting guesses to tune.
 - **Follows the bracket until you move it:** with no `tutors` key in `decks.role_targets`, the target comes from the bracket and changes when the bracket does. Moving the slider saves the number, and it stays put after that; Reset brings back the bracket default. "Save as my defaults" doesn't store a tutors number, so every deck keeps following its own bracket.
 - **In the Cutter:** an ordinary role. Over target, tutors feel saturation pressure (a bracket 2 deck with 5 tutors gets told to cut some); at or under target, they are protected by the below-target rule. The "why" says "Tutors 5 / 1 for bracket 2".
@@ -348,12 +350,14 @@ Default mode first, power user after. Each step ends usable.
 6. **C5 Power user tools (built Nov 7, 2026):** walkthrough, head to head, 2-for-1 swaps, what-if preview.
 7. **C6 Tuning pass (first round Nov 7, 2026):** compare cuts against how David would cut Omo and two QA decks; tune curves and weights; phone check.
 
-**Quality check notes (Nov 8, 2026; nothing broken, tuning for David to weigh):**
-- Every QA deck sits far over the Ramp target (22-33 / 10), so the weakest 3 are almost always Ramp or Card advantage cards and theme fit is 0 for all of them.
-- Chromatic Lantern is among the weakest 3 in 5 of 10 decks (mana value 3 against mostly 2-mana ramp), even in 4- and 5-color decks where it fixes colors.
-- Preordain shows up in Niv-Mizzet and Talrand (spellslinger) only because 1-drops are over the expected curve share.
-- A swap can add to a role that is already far over target (Omo: Sea Gate Restoration, Card advantage, swapped for Migration Path while Ramp is 26 / 10).
-- The new Tutors role (target 3 at bracket 3) puts existing decks under target (Omo 0 / 3), so they no longer show every role met.
+**Quality check notes and tuning (Nov 8, 2026):**
+- **Ramp counts:** the QA decks really do run 22-33 ramp cards (mostly mana rocks), so the Cutter is right to aim at Ramp. Path to Exile and Erode stay in Ramp as well as Removal: they can target your own creature to ramp you (David, Nov 8, 2026).
+- **Fixed, cheap cards and the curve:** buckets 0-1 and 2 are never penalized (`curveFreeBuckets`), so Preordain is no longer suggested in spellslinger decks; the "why" says cheap cards never count against it.
+- **Fixed, color fixing:** in decks of 3+ colors, a ramp card that makes 2+ of the deck's colors gets 2 flexibility points (`fixingPoints`). Chromatic Lantern moved from about 3rd to 9th-10th weakest Ramp card in Atraxa and Kenrith.
+- **Fixed, free spells:** cards tagged `full-refund` (Frantic Search) rank as mana value 0 within their role.
+- **Fixed, swaps:** a swap never adds to a role already at or over target, other than the cut card's own roles (Omo's Card advantage cuts now swap for draw cards, not Migration Path or Solemn Simulacrum).
+- **Popularity gets a weight (David, Nov 8, 2026: "staples are staples for a reason"):** a sixth keep-score part, 12% by default (EDHREC rank on a log scale); the others became coverage 25, saturation 20, weakest 20, theme 15, curve 8. It shows in the "why" ("EDHREC rank #46: a staple") and as a power-user slider. In a deck made only of staples (the QA decks: every Kenrith nonland card is in the top 122) one of them still has to be suggested; in real decks with pet cards it protects staples.
+- **Tutors hidden by default (David, Nov 8, 2026):** the role stays, but every deck starts with it hidden (`HIDDEN_BY_DEFAULT` in `role-settings.ts`); "Show" under Hidden roles stores `"hide:tutors": 0` and the bracket-based target applies from then on.
 
 ### Open questions and risks
 

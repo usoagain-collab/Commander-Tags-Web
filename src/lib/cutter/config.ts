@@ -2,8 +2,12 @@
 // uses lives here, so tuning means editing one file. Archetypes are in archetypes.ts.
 
 /** Keep score components. Default weights add up to 1; power users can change them (normalized on use). */
-export type CutterWeights = { coverage: number; saturation: number; weakest: number; theme: number; curve: number };
-export const DEFAULT_WEIGHTS: CutterWeights = { coverage: 0.3, saturation: 0.25, weakest: 0.2, theme: 0.15, curve: 0.1 };
+export type CutterWeights = { coverage: number; saturation: number; weakest: number; theme: number; curve: number; popularity: number };
+/**
+ * Popularity (EDHREC rank, log scale) has its own weight because staples are staples for a reason (David, Nov 8, 2026:
+ * Rhystic Study and Chromatic Lantern made shortlists just for costing 3). Function still carries most of the score.
+ */
+export const DEFAULT_WEIGHTS: CutterWeights = { coverage: 0.25, saturation: 0.2, weakest: 0.2, theme: 0.15, curve: 0.08, popularity: 0.12 };
 
 export const CUTTER = {
   /** How many top gameplay themes count as "selected" (same as overall Suggest). */
@@ -22,6 +26,19 @@ export const CUTTER = {
   sorcerySpeed: 0.5,
   /** Curve fit: a bucket this many points (of 100) over its expected share scores 0. */
   curveExcessFull: 10,
+  /**
+   * Curve fit: the first this-many buckets (0-1 and 2) are never penalized. A deck that's cheap is rarely a reason to
+   * cut a 1-mana cantrip (Preordain was suggested in spellslinger decks for this alone; tuning, Nov 8, 2026).
+   */
+  curveFreeBuckets: 2,
+  /**
+   * Weakest in Ramp: in a deck of at least `fixingMinColors` colors, a ramp card that makes 2+ of them gets this many
+   * extra flexibility points (Chromatic Lantern was among the weakest ramp in 5-color decks; tuning, Nov 8, 2026).
+   */
+  fixingPoints: 2,
+  fixingMinColors: 3,
+  /** Weakest in role: cards that give back their whole cost (Frantic Search untaps three lands) rank as free. */
+  freeTags: ["full-refund"],
   /** Cheat targets: mana value at or above this, in a deck with at least `cheatEnablers` enablers. */
   cheatMinManaValue: 6,
   cheatEnablers: 4,

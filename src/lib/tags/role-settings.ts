@@ -12,11 +12,20 @@ export const customKey = (slug: string) => `c:${slug}`;
 
 /** A hidden role is stored beside the targets as "hide:<key>": 1, so defaults and new decks carry it too. */
 const HIDE_PREFIX = "hide:";
+/**
+ * Roles hidden until the user shows them, which is stored as "hide:<key>": 0. Tutors (David, Nov 8, 2026): a target
+ * of 3 put every existing deck under target, so the role is opt-in.
+ */
+export const HIDDEN_BY_DEFAULT = ["tutors"];
 export const hiddenRoleKeys = (targets: Record<string, number>) =>
-  new Set(Object.keys(targets).filter((k) => k.startsWith(HIDE_PREFIX) && targets[k]).map((k) => k.slice(HIDE_PREFIX.length)));
+  new Set([
+    ...Object.keys(targets).filter((k) => k.startsWith(HIDE_PREFIX) && targets[k]).map((k) => k.slice(HIDE_PREFIX.length)),
+    ...HIDDEN_BY_DEFAULT.filter((k) => targets[HIDE_PREFIX + k] === undefined),
+  ]);
 export function withRoleHidden(targets: Record<string, number>, key: string, hidden: boolean) {
   const rest = { ...targets };
   delete rest[HIDE_PREFIX + key];
+  if (HIDDEN_BY_DEFAULT.includes(key)) return { ...rest, [HIDE_PREFIX + key]: hidden ? 1 : 0 };
   return hidden ? { ...rest, [HIDE_PREFIX + key]: 1 } : rest;
 }
 

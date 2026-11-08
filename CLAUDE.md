@@ -30,7 +30,7 @@ A Commander (EDH) deck builder where **Scryfall Tagger tags drive everything**: 
 | 7. Friend test | **In progress**: 7a share links + feedback, 7b spoiler fallback, QA on 10 decks, speed pass, UI pass (all merged Oct 24, 2026); Google sign-in and `SUPABASE_SERVICE_ROLE_KEY` set up and checked live. Left: the friend test itself |
 | Design pass | Done (merged Oct 31, 2026): three judge-panel rounds. Final scores UI 14, UX 15, Visual 15, Readability 14, Fun 15, Bugs 17 (baseline 13, 12, 8, 13, 9, 15) |
 | Printings + foil | Built Oct 31, 2026 (from the v2 backlog, at David's request). See "Printings and foil" below |
-| Smart Cutter (v2) | **Built Nov 7, 2026** (C1-C5, first C6 tuning). Migration 0034 applied; tested on 10 decks with no failures. See "Smart Cutter" below |
+| Smart Cutter (v2) | **Built Nov 7, 2026** (C1-C5), quality check and tuning Nov 8, 2026 (popularity weight, Tutors hidden by default; notes in `docs/spec.md`). See "Smart Cutter" below |
 | v2 | **In progress** (started Nov 8, 2026, after Smart Cutter passed a quality check). Backlog lives in `docs/spec.md` → "v2 backlog". See "v2 autonomy" below |
 
 ## Phase 3 plan (agreed Oct 18, 2026)
