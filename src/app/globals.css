@@ -52,7 +52,8 @@
   --color-gold: var(--gold);
   --color-gold-ink: var(--gold-ink);
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-fraunces), Georgia, serif;
+  /* Gamer look (v2): Cinzel for titles, close in spirit to card titles; Fraunces stays as the fallback. */
+  --font-display: var(--font-cinzel), var(--font-fraunces), Georgia, serif;
 }
 
 body {
@@ -87,8 +88,8 @@ input[type="radio"] {
 @layer components {
   .display {
     font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    letter-spacing: 0.01em;
   }
 
   .eyebrow {
@@ -148,10 +149,14 @@ input[type="radio"] {
     box-shadow: inset 0 0 0 2px var(--gold-ink);
   }
 
+  /* A card-frame feel: the outer border plus a faint inner line in the deck's colors (gold elsewhere). */
   .panel {
     border-radius: 0.9rem;
     border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
     background: var(--panel);
+    box-shadow:
+      inset 0 0 0 3px var(--panel),
+      inset 0 0 0 4px color-mix(in srgb, var(--deck-accent, var(--gold)) 22%, transparent);
   }
 
   .card-lift {
@@ -331,5 +336,51 @@ input[type="radio"] {
 @media (max-width: 639px) {
   .btn {
     padding: 0 0.6rem;
+  }
+}
+
+/* Gamer look (v2): the deck page's accent comes from the commander's colors (deck-colors.ts sets both looks). */
+.deck-colors {
+  --deck-accent: var(--accent-d1);
+  --deck-accent-2: var(--accent-d2);
+}
+[data-theme="light"] .deck-colors {
+  --deck-accent: var(--accent-l1);
+  --deck-accent-2: var(--accent-l2);
+}
+
+/* Mana confetti when a deck becomes Complete. */
+@keyframes mana-fall {
+  from {
+    transform: translate(0, -40px) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--drift, 0px), 105vh) rotate(540deg);
+    opacity: 0.2;
+  }
+}
+.mana-confetti-piece {
+  animation: mana-fall 2.4s ease-in forwards;
+  opacity: 0;
+}
+
+/* Spin the wheel: the die rolls while five commanders are dealt. */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(200deg) scale(1.25); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.dice-roll {
+  display: inline-block;
+  animation: dice-roll 0.7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mana-confetti {
+    display: none;
+  }
+  .dice-roll {
+    animation: none;
   }
 }

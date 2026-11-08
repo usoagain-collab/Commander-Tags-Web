@@ -63,6 +63,14 @@ export function SpinPanel({ tree, onChoose, onClose }: { tree: TagTree | null; o
         </div>
 
         {error && <p className="text-red-400">{error}</p>}
+        {cards === null && !error && (
+          <p className="text-center text-lg" aria-live="polite">
+            <span className="dice-roll" aria-hidden>
+              🎲
+            </span>{" "}
+            Rolling…
+          </p>
+        )}
         <ul key={spins} className="grid grid-cols-1 gap-5 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
           {cards === null && !error
             ? Array.from({ length: SPIN_COUNT }, (_, i) => <li key={i} className="aspect-[63/88] animate-pulse rounded-xl bg-foreground/10" />)

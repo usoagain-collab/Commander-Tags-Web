@@ -109,6 +109,7 @@ import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
+import { deckAccentVars } from "@/lib/ui/deck-colors";
 import { estimatePower } from "@/lib/brackets/power";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
@@ -1052,7 +1053,7 @@ export function DeckEditor({
   }
 
   return (
-    <main>
+    <main className="deck-colors" style={deckAccentVars(commanders.length ? identity : null) as React.CSSProperties | undefined}>
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <DeckHero
         coverArt={coverArt}
