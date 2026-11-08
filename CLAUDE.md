@@ -201,6 +201,14 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - `src/lib/commanders/spin.ts` (tested): `spinCommanders` picks random EDHREC ranks (1 to 33,000) and takes the first `card_summaries` row at or after each that can be commander, is legal and isn't a Background (one index walk, about 0.1 s; no new SQL), skipping repeats and fronts that aren't legendary (`leadsFromFront`). `shownTags` (gameplay tags minus wording noise, deepest first), `archetypesFor` (starter archetypes whose tag signals the commander's tags fall under, by weight). UI `spin-panel.tsx` on GlassOverlay, opened by 🎲 Spin the wheel in the "Who leads this deck?" box.
 
+## Schema features (v2, built Nov 8, 2026; migrations 0036-0039)
+
+- **Change mana cost (0036):** `decks.mana_values` (oracle id -> 0..20), `src/lib/deck/mana-values.ts`. The editor builds lines from `applyManaValues(cards, values)`, so every stat follows; the card sheet's `ManaValueControl` saves directly. `deck_bundle` / `shared_deck` return it; `copyDeck` carries it.
+- **Wish list (0037):** table `wishlist` (owner, oracle, quantity, foil, note), owner-only. `/wishlist` (`wishlist-view.tsx`), `use-wishlist.ts` for the sheet and Search buttons.
+- **Collection (0038):** table `collection` (owner, oracle, quantity, foil_quantity). `src/lib/deck/collection.ts` (CSV / list parser, `ownedState`, `unownedPrice`, tested), `use-collection.ts` (loads 1,000 rows a page), `/collection` page, `owned-badge.tsx`. Marks appear only once you own something.
+- **Mixed copies (0039):** `deck_cards.printing_split` jsonb, rows return it as `split`. `src/lib/deck/splits.ts` (`splitParts`, `rowPrice`, `totalPriceWithSplits`, `expandLines` for exports, `artCount`; tested). Card sheet `MixedPrintings` reuses `PrintingPicker`; saved with a direct `deck_cards` update.
+- 0036 and 0039 each redefine `deck_bundle` and `shared_deck`; 0039 is the current definition.
+
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
 
 - Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).

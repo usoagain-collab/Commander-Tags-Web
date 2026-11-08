@@ -38,6 +38,10 @@ type Props = {
   identity: Set<string> | null;
   commanderName: string | null;
   onAdd: (card: CardSummary, board: Board) => void;
+  /** Wish list (v2): mark and toggle cards on your list. */
+  wish?: { has: (oracleId: string) => boolean; toggle: (oracleId: string) => void };
+  /** Collection tracking (v2): copies you own of a card, when you track a collection. */
+  ownedOf?: (oracleId: string) => number;
   onPreview: (card: CardSummary | null) => void;
   onClose: () => void;
   /** "Hide cards in deck" (remembered with the other view settings). */
@@ -50,7 +54,7 @@ type Props = {
   initialText?: string;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wish, ownedOf }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -206,7 +210,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     const id = oracleIdOf(sf);
     return !!id && inDeck(id) > 0;
   };
-  const shown = hideInDeck ? results.filter((sf) => !isInDeck(sf)) : results;
+  const [onlyOwned, setOnlyOwned] = useState(false);
+  const isOwned = (sf: ScryfallCard) => {
+    const id = oracleIdOf(sf);
+    return !!id && !!ownedOf && ownedOf(id) > 0;
+  };
+  const shown = results.filter((sf) => (!hideInDeck || !isInDeck(sf)) && (!onlyOwned || !ownedOf || isOwned(sf)));
   const hiddenCount = results.length - shown.length;
 
   return (
@@ -296,6 +305,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           <input type="checkbox" checked={hideInDeck} onChange={(e) => onHideInDeck(e.target.checked)} />
           Hide cards in deck
         </label>
+        {ownedOf && (
+          <label className="flex items-center gap-1.5" title="Only cards in your collection">
+            <input type="checkbox" checked={onlyOwned} onChange={(e) => setOnlyOwned(e.target.checked)} />
+            Hide cards I don&apos;t own
+          </label>
+        )}
         <span className="opacity-70">
           Type <code>otag:</code> or <code>art:</code> for tag suggestions ·{" "}
           <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="underline">
@@ -318,9 +333,9 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       ))}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       {total === 0 && !error && !loading && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
-      {hideInDeck && hiddenCount > 0 && (
+      {(hideInDeck || onlyOwned) && hiddenCount > 0 && (
         <p className="mt-2 text-xs opacity-60">
-          {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} already in your deck hidden
+          {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} hidden ({[hideInDeck && "in your deck", onlyOwned && "not owned"].filter(Boolean).join(" or ")})
           {shown.length === 0 && nextPage ? " · Show more to see the next page" : ""}
         </p>
       )}
@@ -378,6 +393,16 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                         className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10"
                       >
                         ♛
+                      </button>
+                    )}
+                    {wish && (
+                      <button
+                        onClick={() => wish.toggle(card.oracle_id)}
+                        aria-pressed={wish.has(card.oracle_id)}
+                        title={wish.has(card.oracle_id) ? `Take ${card.name} off your wish list` : `Add ${card.name} to your wish list`}
+                        className={`rounded border px-1.5 py-0.5 hover:bg-foreground/10 ${wish.has(card.oracle_id) ? "border-gold text-gold" : "border-foreground/20"}`}
+                      >
+                        {wish.has(card.oracle_id) ? "♥" : "♡"}
                       </button>
                     )}
                     <span className="ml-auto tabular-nums opacity-60">

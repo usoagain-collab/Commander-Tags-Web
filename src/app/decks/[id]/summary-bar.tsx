@@ -9,7 +9,7 @@ import { isLand } from "@/lib/tags/roles";
  * even though they're listed under their front face's type. Phones show size, lands and price only (one line);
  * the type counts are also in Stats.
  */
-export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; size: number; price: number }) {
+export function SummaryBar({ deckLines, size, price, unowned }: { deckLines: DeckLine[]; size: number; price: number; unowned?: number }) {
   const types = groupByType(deckLines).filter((g) => g.section !== "Land");
   const lands = deckLines.filter((l) => l.card.counts_as_land).reduce((n, l) => n + l.quantity, 0);
   const mdfc = deckLines.filter((l) => l.card.counts_as_land && !isLand(l.card.type_line)).reduce((n, l) => n + l.quantity, 0);
@@ -34,6 +34,11 @@ export function SummaryBar({ deckLines, size, price }: { deckLines: DeckLine[]; 
           </span>
         )}
         <span className="ml-auto tabular-nums opacity-70">${price.toFixed(2)}</span>
+        {unowned !== undefined && (
+          <span className="tabular-nums" title="What the cards you don't own yet would cost (basic lands left out)">
+            Still to buy ${unowned.toFixed(2)}
+          </span>
+        )}
       </div>
     </div>
   );

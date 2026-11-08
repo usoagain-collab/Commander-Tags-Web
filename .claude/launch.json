@@ -1,0 +1,40 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\npm.cmd",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "prod",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\npm.cmd",
+      "runtimeArgs": [
+        "run",
+        "start"
+      ],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "banned-preview-3001",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\npm.cmd",
+      "runtimeArgs": [
+        "--prefix",
+        ".claude/worktrees/banned-preview",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3001"
+      ],
+      "port": 3001,
+      "autoPort": false
+    }
+  ]
+}
