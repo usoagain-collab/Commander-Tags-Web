@@ -156,6 +156,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Your default printing (David chose, Nov 1, 2026: all your decks):** "Make this my default in all decks" in the picker. Table `preferred_printings` (migration 0028), private to the owner; `deck_preferred_printings` gives a shared deck's viewers only the defaults for cards in it, and the owner all of them. Order: pick in this deck, then your default, then the site's. `effectivePrintings` in `model.ts` merges them for display, price and export; edits, undo and versions still use the deck's own picks. Saved directly, not Ctrl+Z (`use-preferred-printings.ts`). The default never includes foil. Making the deck's plain pick your default clears that pick, so the deck follows later changes. Search and Suggest still show the site's image until a card is added.
 - **Known limit:** one printing per card per board, so 10 Forests share one art and foil state (v2 backlog: mixed copies). Add to another deck doesn't carry the printing.
 
+## Change log timeline (friend-test idea, Nov 7, 2026)
+
+- History opens on a **Timeline** tab (newest first, grouped by edit: added / removed / copies changed / moved between boards), with the old version list under **Saved versions**. `change-timeline.tsx`, logic in `src/lib/deck/change-log.ts` (`readTimeline`, tested).
+- Migration 0030: table `deck_change_log`, written by a `deck_cards` trigger (insert, delete, quantity change), so every edit path lands there without app changes; `edit_id` = transaction id groups one edit. Keeps the newest 150 rows per deck; owner-only. Undo shows as the opposite change. Card names are stored at log time.
+
 ## Stack (decided)
 
 - **Next.js + TypeScript**, hosted on **Vercel** (free tier).
