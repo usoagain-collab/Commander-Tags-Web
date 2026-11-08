@@ -1,5 +1,6 @@
 "use client";
 
+// History: the change log timeline (every card added, removed or moved; change-timeline.tsx) and version history.
 // Version history (step 3h). Lists the deck's saved versions (automatic ones at the start of each editing
 // session, the latest 10 kept; named ones you save), shows what changed, and restores one as a single
 // undoable edit. Restoring saves the current deck as a version first (apply_deck_changes, migration 0010).
@@ -19,6 +20,7 @@ import {
   type DiffLine,
   type VersionMeta,
 } from "@/lib/deck/versions";
+import { ChangeTimeline } from "./change-timeline";
 import { Panel } from "./deck-text-panel";
 
 type Version = VersionMeta & { state: DeckState };
@@ -46,6 +48,7 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"restore" | "delete" | null>(null);
   const [reload, setReload] = useState(0);
+  const [tab, setTab] = useState<"timeline" | "versions">("timeline");
   const asked = useRef(new Set<string>()); // ids already looked up, so a card missing from our data isn't re-asked forever
 
   useEffect(() => {
@@ -115,7 +118,31 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
   }
 
   return (
-    <Panel title="Version history" onClose={onClose}>
+    <Panel title="History" onClose={onClose}>
+      <div role="tablist" aria-label="History" className="mb-3 flex gap-1">
+        {(["timeline", "versions"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={`min-h-11 rounded-lg px-4 text-sm font-medium ${
+              tab === t ? "bg-gold text-gold-ink" : "border border-foreground/20 hover:bg-foreground/10"
+            }`}
+          >
+            {t === "timeline" ? "Timeline" : "Saved versions"}
+          </button>
+        ))}
+      </div>
+      {tab === "timeline" ? <ChangeTimeline deckId={deckId} savedTick={savedTick} /> : versionsTab()}
+    </Panel>
+  );
+
+  // A plain function, not a component, so typing in the version name box keeps focus.
+  function versionsTab() {
+    return (
+      <>
       <p className="text-sm opacity-70">
         A version is saved automatically when you start editing after a 30-minute break (the latest 10 are kept), and
         whenever you save one by name below (kept until you delete it).
@@ -269,8 +296,9 @@ export function HistoryPanel({ deckId, current, cards, savedTick, canSnapshot, o
           )}
         </div>
       </div>
-    </Panel>
-  );
+      </>
+    );
+  }
 }
 
 const label = (v: Version) => `${versionTitle(v)}, ${versionDate(v.created_at)}`;
