@@ -32,6 +32,8 @@ export type SuggestSource = {
   roleKey?: string;
   /** Overall Suggest: tag slugs of the roles to find staples for (most-played cards, themes or not). */
   staples?: string[];
+  /** Overall Suggest while the deck is under its Lands target: how many lands it's short (v2). */
+  landsShort?: number;
 };
 
 type Props = {
@@ -66,15 +68,18 @@ export function SuggestPanel(props: Props) {
   const [pool, setPool] = useState<PoolCard[] | null>(null);
   // Overall Suggest only: most-played cards for the roles the deck is short on.
   const [staplePool, setStaplePool] = useState<PoolCard[]>([]);
+  // Overall Suggest under the Lands target only: lands, ranked like role picks.
+  const [landPool, setLandPool] = useState<PoolCard[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [combos, setCombos] = useState<ComboRow[] | null>(null);
   const [showAbove, setShowAbove] = useState(false);
-  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${identity.join("")}`;
+  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${identity.join("")}`;
 
   useEffect(() => {
     let live = true;
     setPool(null);
     setStaplePool([]);
+    setLandPool([]);
     setCombos(null);
     setError(null);
     (async () => {
@@ -87,21 +92,24 @@ export function SuggestPanel(props: Props) {
         return res;
       };
       // Staples need only the most-played end, so no least-played tail.
-      const [main, staples] = await Promise.all([
+      const [main, staples, lands] = await Promise.all([
         ask(source.slugs, !!source.lands, 60),
         source.staples?.length ? ask(source.staples, false, 0) : Promise.resolve({ data: [], error: null }),
+        source.landsShort ? ask([], true, 60) : Promise.resolve({ data: [], error: null }),
       ]);
       if (!live) return;
       if (main.error) return setError(`Couldn't load suggestions: ${main.error.message}`);
       const found = (main.data ?? []) as PoolCard[];
       const foundStaples = staples.error ? [] : ((staples.data ?? []) as PoolCard[]);
+      const foundLands = lands.error ? [] : ((lands.data ?? []) as PoolCard[]);
       // Combos between the deck and the candidates, so a card that completes one can be held back (5c).
-      const ids = [...new Set([...props.bracket.deckIds, ...found.map((c) => c.oracle_id), ...foundStaples.map((c) => c.oracle_id)])];
+      const ids = [...new Set([...props.bracket.deckIds, ...found.map((c) => c.oracle_id), ...foundStaples.map((c) => c.oracle_id), ...foundLands.map((c) => c.oracle_id)])];
       const c = ids.length ? await supabase.rpc("combos_within", { p_ids: ids }) : { data: [], error: null };
       if (!live) return;
       setCombos(c.error ? [] : ((c.data ?? []) as ComboRow[]));
       if (c.error) setError(`Couldn't check combos, so suggestions may include some: ${c.error.message}`);
       setStaplePool(foundStaples);
+      setLandPool(foundLands);
       setPool(found);
     })();
     return () => {
@@ -114,9 +122,10 @@ export function SuggestPanel(props: Props) {
   const target = props.bracket.target;
   const eligible = pool && combos ? pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))) : [];
   const eligibleStaples = pool && combos ? staplePool.filter((c) => !isInDeck(c.oracle_id)) : [];
+  const eligibleLands = pool && combos ? landPool.filter((c) => !isInDeck(c.oracle_id)) : [];
   const deckInput: EvaluateInput = { ...props.bracket.deck, combos: combos ?? [] };
   const issues = new Map<string, Finding[]>();
-  for (const c of [...eligible, ...eligibleStaples]) {
+  for (const c of [...eligible, ...eligibleStaples, ...eligibleLands]) {
     if (issues.has(c.oracle_id)) continue;
     const found = candidateIssues(deckInput, { line: { board: "main", quantity: 1, card: c }, tags: c.tags }, target);
     if (found.length) issues.set(c.oracle_id, found);
@@ -132,17 +141,26 @@ export function SuggestPanel(props: Props) {
           { ...score, dismissed: props.dismissed },
         );
   const stapleIds = new Set(staples.map((r) => r.card.oracle_id));
+  // Lands while the deck is short of its target: themes, how cheap and how played, like a role's picks; up to 8.
+  const lands: Scored[] = source.landsShort
+    ? scorePool(
+        eligibleLands.filter((c) => allowed(c) && (style !== "budget" || (c.price_usd != null && Number(c.price_usd) <= priceCap))),
+        { ...score, dismissed: props.dismissed, role: true, limit: 8 },
+      )
+    : [];
+  const landIds = new Set(lands.map((r) => r.card.oracle_id));
   // A staple shows once, in the Staples row.
   const hiddenAbove = new Set(
-    [...eligible, ...eligibleStaples].filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id)).map((c) => c.oracle_id),
+    [...eligible, ...eligibleStaples, ...eligibleLands].filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id)).map((c) => c.oracle_id),
   ).size;
   const rows: Scored[] = scorePool(
-    eligible.filter((c) => allowed(c) && !stapleIds.has(c.oracle_id)),
+    eligible.filter((c) => allowed(c) && !stapleIds.has(c.oracle_id) && !landIds.has(c.oracle_id)),
     { ...score, dismissed: props.dismissed, role: !!source.roleKey },
   );
   const nameOf = (x: string) =>
     pool?.find((c) => c.oracle_id === x)?.name ??
     staplePool.find((c) => c.oracle_id === x)?.name ??
+    landPool.find((c) => c.oracle_id === x)?.name ??
     props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ??
     "a card in your deck";
   const flagsOf = (id: string) => (issues.get(id) ?? []).map((f) => cardFlag(f, id, nameOf));
@@ -183,6 +201,18 @@ export function SuggestPanel(props: Props) {
           <span className="opacity-60">({hiddenAbove} {showAbove ? "marked" : "hidden"})</span>
         </label>
       )}
+      {lands.length > 0 && (
+        <section aria-label="Lands" className="mt-3">
+          <h3 className="eyebrow">
+            Lands: you&apos;re {source.landsShort} short of your target
+          </h3>
+          <p className="text-[13px] opacity-70">Ranked like the other picks: your themes, then how widely played. More → Auto build land base fills them all at once.</p>
+          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+            {lands.map((r) => cardFor(r, false))}
+          </ul>
+          {!staples.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
+        </section>
+      )}
       {staples.length > 0 && (
         <section aria-label="Staples" className="mt-3">
           <h3 className="eyebrow">Staples for roles you&apos;re short on</h3>
@@ -193,7 +223,7 @@ export function SuggestPanel(props: Props) {
           {rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
       )}
-      {pool !== null && combos !== null && rows.length === 0 && !staples.length && (
+      {pool !== null && combos !== null && rows.length === 0 && !staples.length && !lands.length && (
         <p className="mt-3 text-sm opacity-60">
           {pool.length && score.settings.style === "budget"
             ? "Nothing under this price cap. Try raising it."
