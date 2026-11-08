@@ -42,6 +42,8 @@ type Props = {
   /** Category picker and My tags (step 3f), shown above the card's roles and tags. */
   extra?: React.ReactNode;
   /** This card's art heads the deck page. */
+  /** Wish list (v2): whether this card is on your list, and a toggle. Absent for signed-out viewers. */
+  wish?: { on: boolean; onToggle: () => void };
   isCover: boolean;
   onCover: (on: boolean) => void;
 };
@@ -190,6 +192,16 @@ export function CardSheet(props: Props) {
               {!readOnly && card.image_art_crop && (
                 <button type="button" onClick={() => props.onCover(!props.isCover)} className="mt-1 block min-h-9 text-[13px] underline opacity-80 hover:opacity-100">
                   {props.isCover ? "✓ Deck image · Back to the commander's art" : "Use as deck image"}
+                </button>
+              )}
+              {props.wish && (
+                <button
+                  type="button"
+                  onClick={props.wish.onToggle}
+                  aria-pressed={props.wish.on}
+                  className={`mt-1 inline-flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-sm ${props.wish.on ? "border-gold text-gold" : "border-foreground/20"}`}
+                >
+                  {props.wish.on ? "♥ On your wish list" : "♡ Wish list"}
                 </button>
               )}
               {tutor && <TutorNote />}

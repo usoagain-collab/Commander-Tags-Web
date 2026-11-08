@@ -38,6 +38,8 @@ type Props = {
   identity: Set<string> | null;
   commanderName: string | null;
   onAdd: (card: CardSummary, board: Board) => void;
+  /** Wish list (v2): mark and toggle cards on your list. */
+  wish?: { has: (oracleId: string) => boolean; toggle: (oracleId: string) => void };
   onPreview: (card: CardSummary | null) => void;
   onClose: () => void;
   /** "Hide cards in deck" (remembered with the other view settings). */
@@ -50,7 +52,7 @@ type Props = {
   initialText?: string;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wish }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -378,6 +380,16 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                         className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10"
                       >
                         ♛
+                      </button>
+                    )}
+                    {wish && (
+                      <button
+                        onClick={() => wish.toggle(card.oracle_id)}
+                        aria-pressed={wish.has(card.oracle_id)}
+                        title={wish.has(card.oracle_id) ? `Take ${card.name} off your wish list` : `Add ${card.name} to your wish list`}
+                        className={`rounded border px-1.5 py-0.5 hover:bg-foreground/10 ${wish.has(card.oracle_id) ? "border-gold text-gold" : "border-foreground/20"}`}
+                      >
+                        {wish.has(card.oracle_id) ? "♥" : "♡"}
                       </button>
                     )}
                     <span className="ml-auto tabular-nums opacity-60">
