@@ -4,6 +4,8 @@
 // file draws the wide-screen table and the shared dialogs, and turns drags, clicks and keys into those functions.
 // Narrow, short or touch screens get the layout in phone-table.tsx. The game is kept in session storage, so a refresh
 // doesn't lose it (this tab only; nothing goes to the database).
+import { useRoom } from "@/lib/playtest/use-room";
+import { Multiplayer } from "./multiplayer";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -45,7 +47,14 @@ import {
 const DRAG_TYPE = "application/x-ctw-iid";
 const storageKey = (deckId: string) => `playtest:${deckId}`;
 
-type Props = { deck: { id: string; name: string }; cards: DeckCard[]; tokens: DeckToken[]; canFlag: boolean };
+type Props = {
+  deck: { id: string; name: string };
+  cards: DeckCard[];
+  tokens: DeckToken[];
+  canFlag: boolean;
+  /** Your name at a shared table (v2 multiplayer). */
+  playerName?: string | null;
+};
 
 /** Reads a CSS media query, live. */
 function useMedia(query: string) {
@@ -60,7 +69,7 @@ function useMedia(query: string) {
   );
 }
 
-export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
+export function PlaytestTable({ deck, cards, tokens, canFlag, playerName }: Props) {
   const key = deckKey(cards);
   // A narrow window, a sideways phone, or any touch screen: mouse-style dragging doesn't suit these.
   const compact = useMedia("(max-width: 767px), (max-height: 520px), (pointer: coarse)");
@@ -117,6 +126,8 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
 
   const update = useCallback((fn: (g: GameState) => GameState) => setGame((g) => (g ? fn(g) : g)), []);
   const clearPreview = useCallback(() => setPreview(null), []);
+  // Multiplayer (v2): a shared table by room code; each player runs their own game.
+  const room = useRoom(game, { name: playerName || "Player", deck: deck.name });
   const restart = () => setGame((g) => newGame(cards, Date.now() >>> 0, g?.freeMulligan ?? true));
 
   // Keys for the common actions (6d adds the rest and a help sheet).
@@ -222,6 +233,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag }: Props) {
       {tool === "mill" && <MillDialog compact={compact} game={game} update={update} onClose={() => setTool(null)} />}
       {tool === "tokens" && <TokenPicker compact={compact} tokens={tokens} update={update} onClose={() => setTool(null)} />}
       {help && <ShortcutSheet onClose={() => setHelp(false)} />}
+      <Multiplayer room={room} compact={compact} />
       {toast && (
         <div role="status" className={`fixed left-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-gold px-4 py-2 text-sm text-gold-ink shadow-lg ${compact ? "top-14" : "bottom-6"}`}>
           {toast}
