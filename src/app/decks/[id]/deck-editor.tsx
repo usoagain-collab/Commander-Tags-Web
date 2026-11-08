@@ -109,6 +109,7 @@ import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
+import { estimatePower } from "@/lib/brackets/power";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
@@ -673,6 +674,20 @@ export function DeckEditor({
   const suggestThemes: ThemeTag[] = trees
     ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: roleTagSet, hidden }).slice(0, 15)
     : [];
+  // Refined bracket estimate (v2): how the deck plays, on top of the rules floor. Shown on the Bracket screen.
+  const power =
+    estimate && trees && tags.tree
+      ? estimatePower({
+          lines: [...commanders, ...companions, ...mainLines],
+          rolesOf: lineRoleKeys,
+          tagsOf: (id) => tags.oracleTags[id] ?? [],
+          counterTags: tags.tree.descendants(["counterspell"].filter((t) => tags.tree!.has(t))),
+          // The commander's pinned tags lead the theme list but often only the commander has them.
+          topThemes: new Set(suggestThemes.filter((t) => !t.pinned).slice(0, 5).map((t) => t.key)),
+          themeKeysOf: (l) => cardKeys({ oracle: tags.oracleTags[l.card.oracle_id] ?? [], art: [], commander: false, land: false }, themeSettings.specific, trees),
+          estimate,
+        })
+      : null;
   const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
   const suggestStyle = useSuggestSettings(deck.id, suggestSettings, readOnly);
   const dismissed = useDismissed(deck.id, dismissedSuggestions, readOnly);
@@ -1238,6 +1253,7 @@ export function DeckEditor({
           saveError={bracket.saveError}
           comboError={combos.error}
           paused={!!sheet}
+          power={power}
           onTarget={bracket.setTarget}
           onOpenCard={openLine}
           onClose={closePanel}
