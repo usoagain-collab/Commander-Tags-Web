@@ -348,6 +348,13 @@ Default mode first, power user after. Each step ends usable.
 6. **C5 Power user tools (built Nov 7, 2026):** walkthrough, head to head, 2-for-1 swaps, what-if preview.
 7. **C6 Tuning pass (first round Nov 7, 2026):** compare cuts against how David would cut Omo and two QA decks; tune curves and weights; phone check.
 
+**Quality check notes (Nov 8, 2026; nothing broken, tuning for David to weigh):**
+- Every QA deck sits far over the Ramp target (22-33 / 10), so the weakest 3 are almost always Ramp or Card advantage cards and theme fit is 0 for all of them.
+- Chromatic Lantern is among the weakest 3 in 5 of 10 decks (mana value 3 against mostly 2-mana ramp), even in 4- and 5-color decks where it fixes colors.
+- Preordain shows up in Niv-Mizzet and Talrand (spellslinger) only because 1-drops are over the expected curve share.
+- A swap can add to a role that is already far over target (Omo: Sea Gate Restoration, Card advantage, swapped for Migration Path while Ramp is 26 / 10).
+- The new Tutors role (target 3 at bracket 3) puts existing decks under target (Omo 0 / 3), so they no longer show every role met.
+
 ### Open questions and risks
 
 | Topic | Issue | Proposal |
