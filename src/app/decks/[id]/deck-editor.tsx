@@ -106,6 +106,7 @@ import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
 import { Avatar } from "@/components/avatar";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
+import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
@@ -382,7 +383,7 @@ export function DeckEditor({
 
   // Text from quick add's "See all results", for the Search panel to open with.
   const [searchSeed, setSearchSeed] = useState<string | undefined>(undefined);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
   const [editingTargets, setEditingTargets] = useState(false);
@@ -1216,6 +1217,18 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
+      {panel === "spin" && !readOnly && (
+        <SpinPanel
+          tree={tags.tree}
+          onClose={() => setPanel(null)}
+          onChoose={(card) => {
+            if (run(planAdd(entries, card, "commander"), card)) {
+              setPanel(null);
+              say(`${card.name} leads this deck.`, true);
+            }
+          }}
+        />
+      )}
       {panel === "bracket" && (
         <BracketPanel
           target={bracket.target}
@@ -1357,9 +1370,14 @@ export function DeckEditor({
                   onPreview={setPreview}
                 />
               </div>
-              <button type="button" onClick={() => setPanel("import")} className="mt-3 min-h-10 px-2 text-sm underline opacity-85 hover:opacity-100">
-                Or import a list you already have
-              </button>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                <button type="button" onClick={() => setPanel("spin")} className="btn min-h-11" title="Five random commanders to choose from">
+                  🎲 Spin the wheel
+                </button>
+                <button type="button" onClick={() => setPanel("import")} className="min-h-10 px-2 text-sm underline opacity-85 hover:opacity-100">
+                  Or import a list you already have
+                </button>
+              </div>
             </div>
           )}
           {/* Narrower screens: roles stay in view as a strip; targets and tags sit behind one row of tabs. */}
