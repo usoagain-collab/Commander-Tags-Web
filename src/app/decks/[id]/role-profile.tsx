@@ -360,7 +360,7 @@ function InfoTip({ role, tree }: { role: ResolvedRole; tree: TagTree | null }) {
 type Tag = { slug: string; label: string; size: number; description: string | null };
 
 /** Pick any oracle tag, name the role, set a target: e.g. "Sac outlets: 6" (spec). */
-function AddRole({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (r: CustomRole) => void; onCancel: () => void }) {
+export function AddRole({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (r: CustomRole) => void; onCancel: () => void }) {
   const supabase = useMemo(() => createClient(), []);
   const [text, setText] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
