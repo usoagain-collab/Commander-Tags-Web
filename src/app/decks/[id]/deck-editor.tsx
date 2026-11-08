@@ -644,7 +644,13 @@ export function DeckEditor({
     // Specific mode scores exact tags only, so ask for exactly those; Broad also matches every sub-tag. (Sub-tags of
     // broad themes like "triggered ability" made the pool huge and slow without changing the scores.)
     const slugs = suggestThemes.map((t) => t.slug);
-    openSuggest({ label: "this deck", slugs: themeSettings.specific ? slugs : [...tags.tree.descendants(slugs)] });
+    // Staples come from the roles the deck is short on (lands aside: they have their own 💡).
+    const short = roles.filter((r) => !r.land && r.tagSet && (counts[r.key] ?? 0) < r.target);
+    openSuggest({
+      label: "this deck",
+      slugs: themeSettings.specific ? slugs : [...tags.tree.descendants(slugs)],
+      staples: short.flatMap((r) => [...r.tagSet!]),
+    });
   };
   const keyCounts = deckKeyCounts(themeCards);
   const hiddenList = [...hidden].map((key) => {
