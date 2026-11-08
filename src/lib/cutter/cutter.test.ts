@@ -273,6 +273,39 @@ describe("keepScores and planCuts", () => {
   });
 });
 
+describe("tuning (Nov 8, 2026)", () => {
+  const { roles, make } = deck({ ramp: 1, draw: 0, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+  const of = (scores: ReturnType<typeof keepScores>, name: string) => scores.find((s) => s.entry.card.name === name)!;
+
+  it("never penalizes cheap cards for the curve", () => {
+    // Every spell is a 1-drop, far over any expected share.
+    const cards = ["A", "B", "C", "D"].map((n) => make(card(`Cantrip ${n}`, 1, "Sorcery"), ["pure-draw"]));
+    const scores = keepScores(ctxFor(cards, roles));
+    expect(of(scores, "Cantrip A").parts.curve).toBe(1);
+    expect(explainCut(of(scores, "Cantrip A"), ARCHETYPES[0]).curve).toContain("cheap cards never count against it");
+  });
+
+  it("ranks a card that refunds its whole cost as free within its role", () => {
+    const frantic = make(card("Frantic Search", 3, "Instant"), ["pure-draw", "full-refund"]);
+    const cards = [frantic, make(card("Draw 2", 2, "Instant"), ["pure-draw"]), make(card("Draw 2b", 2, "Instant"), ["pure-draw"])];
+    const r = deck({ ramp: 0, draw: 1, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+    const scores = keepScores(ctxFor(cards.map((c) => ({ ...c, roles: rolesOf(c.card, c.tags, r.roles) })), r.roles));
+    expect(of(scores, "Frantic Search").parts.weakest).toBeGreaterThan(of(scores, "Draw 2").parts.weakest);
+  });
+
+  it("counts color fixing as flexibility for Ramp in decks of 3+ colors", () => {
+    const fixer = make(card("Lantern", 3, "Artifact", { produced_mana: ["W", "U", "B", "R", "G"] }), ["mana-rock"]);
+    const plain = make(card("Plain rock", 3, "Artifact", { produced_mana: ["C"] }), ["mana-rock"]);
+    const other = make(card("Other rock", 3, "Artifact", { produced_mana: ["C"] }), ["mana-rock"]);
+    const cards = [fixer, plain, other];
+    const five = keepScores(ctxFor(cards, roles, { identity: new Set(["W", "U", "B", "R", "G"]) }));
+    expect(of(five, "Lantern").parts.weakest).toBeGreaterThan(of(five, "Plain rock").parts.weakest);
+    // In a two-color deck fixing doesn't count, so the three rocks tie.
+    const two = keepScores(ctxFor(cards, roles, { identity: new Set(["U", "G"]) }));
+    expect(of(two, "Lantern").parts.weakest).toBe(of(two, "Plain rock").parts.weakest);
+  });
+});
+
 describe("suggestCuts", () => {
   const { roles, make } = deck({ ramp: 0, wipes: 0, draw: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 40 });
   const bears = (n: number) => Array.from({ length: n }, (_, i) => make(card(`Bear ${i}`, 2), ["pure-draw"]));
@@ -401,6 +434,13 @@ describe("swaps", () => {
     const pick = pickSwap(ctx, of("Slow ramp"), [pool("Signet", 2, ["mana-rock"]), pool("Off-role", 1, ["pure-draw"])], opts);
     expect(pick?.card.name).toBe("Signet");
     expect(pick!.keep).toBeGreaterThan(of("Slow ramp").keep);
+  });
+
+  it("never swaps in a card that adds to another role already at target", () => {
+    // Draw has three cards for a target of 1, so a card that also draws would push it further over.
+    const both = pool("Ramp and draw", 1, ["land-ramp", "pure-draw"], "Instant");
+    expect(pickSwap(ctx, of("Slow ramp"), [both], opts)).toBeNull();
+    expect(pickSwap(ctx, of("Slow ramp"), [both, pool("Signet", 2, ["mana-rock"])], opts)?.card.name).toBe("Signet");
   });
 
   it("skips cards the caller rules out", () => {

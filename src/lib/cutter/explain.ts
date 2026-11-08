@@ -2,6 +2,7 @@
 // Turns a CardScore into short sentences; the Cutter screen only lays them out.
 import { prettyTag } from "@/lib/tags/pretty";
 import { CURVE_LABELS } from "./archetype";
+import { CUTTER } from "./config";
 import type { Archetype } from "./archetypes";
 import type { CardScore, Part } from "./score";
 
@@ -54,7 +55,8 @@ export function explainCut(s: CardScore, archetype: Archetype, archetypeName = a
 
   const curve = s.flags.cheatTarget
     ? "Not counted on the curve: the deck can likely cheat it into play"
-    : `${bucketName(f.bucket)} are ${pct(f.bucketShare)} of your spells; ${archetypeName} expects ${pct(f.expectedShare)}`;
+    : `${bucketName(f.bucket)} are ${pct(f.bucketShare)} of your spells; ${archetypeName} expects ${pct(f.expectedShare)}` +
+      (f.bucket < CUTTER.curveFreeBuckets && f.bucketShare > f.expectedShare ? " (cheap cards never count against it)" : "");
 
   const flags = [
     ...s.flags.bracket.map((b) => `Above your bracket: ${b}`),

@@ -22,6 +22,19 @@ export const CUTTER = {
   sorcerySpeed: 0.5,
   /** Curve fit: a bucket this many points (of 100) over its expected share scores 0. */
   curveExcessFull: 10,
+  /**
+   * Curve fit: the first this-many buckets (0-1 and 2) are never penalized. A deck that's cheap is rarely a reason to
+   * cut a 1-mana cantrip (Preordain was suggested in spellslinger decks for this alone; tuning, Nov 8, 2026).
+   */
+  curveFreeBuckets: 2,
+  /**
+   * Weakest in Ramp: in a deck of at least `fixingMinColors` colors, a ramp card that makes 2+ of them gets this many
+   * extra flexibility points (Chromatic Lantern was among the weakest ramp in 5-color decks; tuning, Nov 8, 2026).
+   */
+  fixingPoints: 2,
+  fixingMinColors: 3,
+  /** Weakest in role: cards that give back their whole cost (Frantic Search untaps three lands) rank as free. */
+  freeTags: ["full-refund"],
   /** Cheat targets: mana value at or above this, in a deck with at least `cheatEnablers` enablers. */
   cheatMinManaValue: 6,
   cheatEnablers: 4,

@@ -22,6 +22,8 @@ export type RoleDef = {
    * count as Ramp only, while ramp cards that really draw still count for both (David, Oct 19, 2026).
    */
   notVia?: { role: string; slugs: string[] };
+  /** A card carrying one of `tags` (sub-tags included) that also fills one of `roles` doesn't count here. */
+  notWhen?: { tags: string[]; roles: string[] };
   /** Plain-language explanation for the role's info icon. */
   about?: string;
   custom?: boolean;
@@ -41,6 +43,9 @@ export const STANDARD_ROLES: RoleDef[] = [
     name: "Ramp",
     target: DEFAULT_ROLE_TARGETS.ramp,
     slugs: ["ramp", "mana-rock", "mana-dork", "land-ramp"],
+    // Removal that hands the opponent a land (Path to Exile, Erode, Settle the Wreckage) is tagged land-ramp, but
+    // it ramps them, not you. Symmetrical ramp (Collective Voyage, New Frontiers) carries the same tag and still counts.
+    notWhen: { tags: ["donate-rampant-growth"], roles: ["removal", "wipes"] },
     about: "Cards that get you extra mana or extra lands. Lands themselves count under Lands, not here.",
   },
   {
@@ -96,7 +101,7 @@ export const STANDARD_ROLES: RoleDef[] = [
   },
 ];
 
-export type ResolvedRole = RoleDef & { tagSet: Set<string> | null; missing: string[]; notViaSet?: Set<string> };
+export type ResolvedRole = RoleDef & { tagSet: Set<string> | null; missing: string[]; notViaSet?: Set<string>; notWhenSet?: Set<string> };
 
 /** Expands each role's slugs to their full subtrees. Slugs not in the data are reported, not fatal. */
 export function resolveRoles(roles: RoleDef[], tree: TagTree): ResolvedRole[] {
@@ -110,6 +115,7 @@ export function resolveRoles(roles: RoleDef[], tree: TagTree): ResolvedRole[] {
       tagSet,
       missing: r.slugs.filter((s) => !tree.has(s)),
       notViaSet: r.notVia ? tree.descendants(r.notVia.slugs.filter((s) => tree.has(s))) : undefined,
+      notWhenSet: r.notWhen ? tree.descendants(r.notWhen.tags.filter((s) => tree.has(s))) : undefined,
     };
   });
 }
@@ -143,6 +149,10 @@ export function rolesOf(card: RoleCard, slugs: string[] | undefined, roles: Reso
     if (!r.notVia || !r.notViaSet || !filled.has(r.key) || !filled.has(r.notVia.role)) continue;
     const otherTags = tags.filter((t) => r.tagSet!.has(t) && !r.notViaSet!.has(t));
     if (otherTags.length === 0) filled.delete(r.key);
+  }
+  for (const r of roles) {
+    if (!r.notWhen || !r.notWhenSet || !filled.has(r.key)) continue;
+    if (r.notWhen.roles.some((k) => filled.has(k)) && tags.some((t) => r.notWhenSet!.has(t))) filled.delete(r.key);
   }
   return roles.filter((r) => filled.has(r.key)).map((r) => r.key);
 }
