@@ -104,6 +104,7 @@ import { prettyTag, roleColor } from "@/lib/tags/pretty";
 import { Avatar } from "@/components/avatar";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import type { Builder } from "./load-deck";
+import { copyDeck } from "../actions";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
 import type { CutterCard } from "@/lib/cutter/archetype";
@@ -379,6 +380,7 @@ export function DeckEditor({
   const [searchSeed, setSearchSeed] = useState<string | undefined>(undefined);
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
+  const [copying, setCopying] = useState(false);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -959,6 +961,25 @@ export function DeckEditor({
     }
   };
 
+  /** Copy to my decks (v2): the server makes the copy and opens it; a signed-out viewer goes to sign in first. */
+  function copy() {
+    if (copying) return;
+    if (!userId) {
+      window.location.href = `/login?next=${encodeURIComponent(`/decks/${deck.id}`)}`;
+      return;
+    }
+    if (!readOnly && status.state !== "saved") {
+      say("Wait a moment: your last edits are still saving.");
+      return;
+    }
+    setCopying(true);
+    copyDeck(deck.id).catch((e: unknown) => {
+      // A redirect to the new deck also lands here in some Next versions; only real errors carry a message we show.
+      if (e instanceof Error && !/NEXT_REDIRECT/.test(e.message)) say(e.message);
+      setCopying(false);
+    });
+  }
+
   return (
     <main>
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
@@ -1002,7 +1023,12 @@ export function DeckEditor({
         actions={
           <>
             {readOnly && (
-              <Link href={userId ? "/decks" : `/login?next=${encodeURIComponent("/decks")}`} className="btn btn-gold">
+              <button type="button" className="btn btn-gold" disabled={copying} onClick={copy} title="A private copy in your decks, to change as you like">
+                {copying ? "Copying…" : "⧉ Copy to my decks"}
+              </button>
+            )}
+            {readOnly && (
+              <Link href={userId ? "/decks" : `/login?next=${encodeURIComponent("/decks")}`} className="btn">
                 ✦ Build your own
               </Link>
             )}
@@ -1051,6 +1077,7 @@ export function DeckEditor({
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
                 ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
+                ...(readOnly ? [] : [{ key: "copy", label: copying ? "Copying…" : "Make a copy", active: false, onPick: copy }]),
               ]}
             />
           </>

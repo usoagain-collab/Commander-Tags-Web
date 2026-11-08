@@ -66,3 +66,69 @@ export async function deleteDeck(formData: FormData) {
   if (error) throw new Error(`Couldn't delete the deck: ${error.message}`);
   revalidatePath("/decks");
 }
+
+type SharedRow = {
+  oracle_id: string;
+  board: string;
+  quantity: number;
+  category: string | null;
+  printing: ({ id: string; foil?: boolean } & Record<string, unknown>) | null;
+};
+
+/**
+ * Copy to my decks (v2): a private copy of any deck you can open (yours, unlisted or public), with its cards,
+ * printings, categories, role targets and bracket. My tags, flags and suggestion settings stay with the original.
+ * shared_deck decides what you may read, so a private deck of someone else can't be copied.
+ */
+export async function copyDeck(id: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect(`/login?next=${encodeURIComponent(`/decks/${id}`)}`);
+
+  const { data: shared, error: readError } = await supabase.rpc("shared_deck", { p_id: id });
+  if (readError || !shared) throw new Error(`Couldn't read that deck${readError ? `: ${readError.message}` : "."}`);
+  const src = shared.deck as { name: string; owner_id: string; role_targets: unknown; custom_roles: unknown; target_bracket: number | null; cover_oracle_id: string | null };
+  const rows = (shared.rows ?? []) as SharedRow[];
+
+  const name = (src.owner_id === user.id ? `${src.name} (copy)` : src.name).slice(0, 120);
+  const { data: deck, error } = await supabase
+    .from("decks")
+    .insert({
+      name,
+      target_bracket: src.target_bracket ?? 3,
+      role_targets: src.role_targets ?? {},
+      custom_roles: src.custom_roles ?? [],
+      cover_oracle_id: src.cover_oracle_id,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`Couldn't copy the deck: ${error.message}`);
+
+  if (rows.length > 0) {
+    const { error: rowsError } = await supabase.from("deck_cards").insert(
+      rows.map((r) => {
+        const { id: printingId, foil, ...info } = r.printing ?? { id: null };
+        return {
+          deck_id: deck.id,
+          oracle_id: r.oracle_id,
+          board: r.board,
+          quantity: r.quantity,
+          category: r.category,
+          printing_id: printingId,
+          foil: r.printing ? foil === true : false,
+          printing_info: r.printing ? info : null,
+        };
+      }),
+    );
+    if (rowsError) {
+      // Leave no half-copied deck behind.
+      await supabase.from("decks").delete().eq("id", deck.id);
+      throw new Error(`Couldn't copy the cards: ${rowsError.message}`);
+    }
+  }
+
+  revalidatePath("/decks");
+  redirect(`/decks/${deck.id}`);
+}
