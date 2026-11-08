@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { entryKey, type Board, type Categories, type Entries, type Printings } from "@/lib/deck/model";
 import { printingImage } from "@/lib/deck/printing";
+import { readManaValues } from "@/lib/deck/mana-values";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets, withoutBracketTargets } from "@/lib/tags/role-settings";
 import { readCutterPrefs, readCutterState } from "@/lib/cutter/state";
@@ -58,7 +59,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   return (
     <DeckEditor
-      deck={{ id: deck.id, name: deck.name, visibility: deck.visibility, cover_oracle_id: deck.cover_oracle_id }}
+      deck={{ id: deck.id, name: deck.name, visibility: deck.visibility, cover_oracle_id: deck.cover_oracle_id, mana_values: readManaValues(deck.mana_values) }}
       initialEntries={entries}
       initialCategories={categories}
       initialPrintings={printings}

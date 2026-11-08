@@ -24,6 +24,8 @@ export type DeckRow = {
   target_bracket: number | null;
   cover_oracle_id?: string | null;
   playtest_flags?: Record<string, number> | null;
+  /** Change mana cost (migration 0036): oracle id -> counted mana value. */
+  mana_values?: unknown;
   /** Smart Cutter state (migration 0033), owner only. */
   cutter?: unknown;
 };
