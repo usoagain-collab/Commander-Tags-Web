@@ -43,6 +43,8 @@ type Props = {
   /** Category picker and My tags (step 3f), shown above the card's roles and tags. */
   extra?: React.ReactNode;
   /** This card's art heads the deck page. */
+  /** Wish list (v2): whether this card is on your list, and a toggle. Absent for signed-out viewers. */
+  wish?: { on: boolean; onToggle: () => void };
   isCover: boolean;
   onCover: (on: boolean) => void;
   /** Change mana cost (v2): the card's own mana value, this deck's override (null = none), and a setter. */
@@ -197,6 +199,16 @@ export function CardSheet(props: Props) {
               )}
               {props.manaValue && (board === "main" || board === "commander" || props.manaValue.counted !== null) && (
                 <ManaValueControl {...props.manaValue} readOnly={readOnly} />
+              )}
+              {props.wish && (
+                <button
+                  type="button"
+                  onClick={props.wish.onToggle}
+                  aria-pressed={props.wish.on}
+                  className={`mt-1 inline-flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-sm ${props.wish.on ? "border-gold text-gold" : "border-foreground/20"}`}
+                >
+                  {props.wish.on ? "♥ On your wish list" : "♡ Wish list"}
+                </button>
               )}
               {tutor && <TutorNote />}
               {!!props.flags && (

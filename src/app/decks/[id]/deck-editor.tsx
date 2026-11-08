@@ -112,6 +112,7 @@ import { copyDeck } from "../actions";
 import { deckAccentVars } from "@/lib/ui/deck-colors";
 import { estimatePower } from "@/lib/brackets/power";
 import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
+import { useWishlist } from "@/lib/deck/use-wishlist";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
@@ -401,6 +402,7 @@ export function DeckEditor({
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
+  const wishlist = useWishlist(userId);
   const [editingTargets, setEditingTargets] = useState(false);
 
   /** A whole import is one change: one save call, one undo step. */
@@ -1188,6 +1190,7 @@ export function DeckEditor({
           withBanned={prefs.allowBanned === true}
           onWithBanned={(on) => updatePrefs({ allowBanned: on })}
           initialText={searchSeed}
+          wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
         />
         </div>
       )}
@@ -1628,6 +1631,7 @@ export function DeckEditor({
             counted: manaValues[sheetLine.card.oracle_id] ?? null,
             onChange: (v) => setManaValue(sheetLine.card.oracle_id, v, cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value),
           }}
+          wish={userId ? { on: wishlist.has(sheetLine.card.oracle_id), onToggle: async () => say(await wishlist.toggle(sheetLine.card.oracle_id)) } : undefined}
           onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (
