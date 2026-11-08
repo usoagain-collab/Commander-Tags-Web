@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ManaSymbol } from "@/components/mana-cost";
+import { ManaConfetti } from "./mana-confetti";
 import type { CardSummary } from "@/lib/deck/model";
 
 const WUBRG = ["W", "U", "B", "R", "G"];
@@ -50,11 +51,20 @@ export function DeckHero({
   const pips = identity ? WUBRG.filter((c) => identity.has(c)) : [];
   return (
     <header className="relative isolate z-30 border-b border-foreground/10">
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-0.5" style={{ background: "linear-gradient(90deg, var(--deck-accent, transparent), var(--deck-accent-2, transparent))", opacity: 0.8 }} />
       {/* The art sits in its own clipped layer, so the More menu can hang outside the hero. */}
       <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden">
         {art && <img src={art} alt="" className="h-full w-full scale-105 object-cover object-[center_25%] opacity-75" />}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/65 to-background/10" />
         <div className="absolute inset-0 bg-gradient-to-r from-background/85 via-background/30 to-transparent" />
+        {/* The commander's colors glow up from the bottom corners (gamer look, v2). */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(55% 70% at 8% 105%, color-mix(in srgb, var(--deck-accent, transparent) 30%, transparent), transparent), radial-gradient(50% 65% at 92% 105%, color-mix(in srgb, var(--deck-accent-2, transparent) 24%, transparent), transparent)",
+          }}
+        />
         {celebrate && <div className="shimmer absolute inset-0" />}
       </div>
       <div className={`mx-auto flex ${wide ? "" : "max-w-[1500px]"} items-end gap-5 px-4 pb-4 sm:px-6 ${art ? "pt-2 lg:pt-8" : "pt-2 sm:pt-4"}`}>
@@ -110,6 +120,7 @@ export function DeckHero({
           <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">{actions}</div>
         </div>
       </div>
+      {celebrate && <ManaConfetti colors={pips.length ? pips : ["C"]} />}
     </header>
   );
 }
