@@ -31,7 +31,7 @@ export type DeckRow = {
 };
 /** The deck's builder, shown as "Built by …" to everyone else. */
 export type Builder = { name: string | null; avatarUrl: string | null };
-export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null };
+export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null; split?: unknown };
 export type Profile = {
   tag_view?: Record<string, unknown> | null;
   default_role_targets?: unknown;
