@@ -46,8 +46,11 @@ type Props = {
   /** This card's art heads the deck page. */
   /** Wish list (v2): whether this card is on your list, and a toggle. Absent for signed-out viewers. */
   wish?: { on: boolean; onToggle: () => void };
-  /** Collection tracking (v2): copies you own, and a setter. Absent for signed-out viewers. */
-  collection?: { have: number; foil: number; onChange: (quantity: number) => void };
+  /**
+   * Collection tracking (v2): copies you own of the printing shown (`exact`) and of the card in all (`total`), your
+   * other printings, and a way to add or remove copies of the shown one. Absent for signed-out viewers.
+   */
+  collection?: { exact: number; total: number; shownLabel: string; others: { label: string; quantity: number }[]; onAdd: (delta: number) => void };
   /** Mixed copies (v2): printings for some of this row's copies. Only for rows with more than one copy. */
   mixed?: { parts: SplitPart[]; onChange: (parts: SplitPart[]) => void };
   isCover: boolean;
@@ -215,19 +218,7 @@ export function CardSheet(props: Props) {
                   {props.wish.on ? "♥ On your wish list" : "♡ Wish list"}
                 </button>
               )}
-              {props.collection && (
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="opacity-85">In your collection</span>
-                  <button type="button" aria-label="One fewer in your collection" disabled={props.collection.have <= 0} onClick={() => props.collection!.onChange(props.collection!.have - 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
-                    −
-                  </button>
-                  <span className="w-6 text-center font-semibold tabular-nums">{props.collection.have}</span>
-                  <button type="button" aria-label="One more in your collection" onClick={() => props.collection!.onChange(props.collection!.have + 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
-                    +
-                  </button>
-                  {props.collection.foil > 0 && <span className="text-xs text-gold">+ {props.collection.foil} foil</span>}
-                </div>
-              )}
+              {props.collection && <CollectionControl card={card} {...props.collection} />}
               {tutor && <TutorNote />}
               {!!props.flags && (
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
@@ -540,6 +531,40 @@ function MixedPrintings({
           onDone={() => setAdding(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** The card sheet's collection box: add the printing shown, change its count, and see your other printings. */
+function CollectionControl({ card, exact, total, shownLabel, others, onAdd }: { card: CardSummary } & NonNullable<Props["collection"]>) {
+  if (total === 0)
+    return (
+      <button type="button" onClick={() => onAdd(1)} className="mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-md border border-foreground/20 px-3 text-sm font-medium hover:bg-foreground/10">
+        ＋ Add to my collection
+      </button>
+    );
+  const tone = exact > 0 ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300";
+  return (
+    <div className="mt-1 rounded-md border border-foreground/15 p-2 text-sm">
+      <p className={`font-medium ${tone}`}>✓ In your collection{exact > 0 ? "" : ", in another printing"}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <span className="min-w-0 opacity-85">{shownLabel}</span>
+        <button type="button" aria-label="One fewer of this printing" disabled={exact <= 0} onClick={() => onAdd(-1)} className="min-h-10 min-w-10 rounded-md border border-foreground/20 disabled:opacity-40">
+          −
+        </button>
+        <span className="w-6 text-center font-semibold tabular-nums">{exact}</span>
+        <button type="button" aria-label="One more of this printing" onClick={() => onAdd(1)} className="min-h-10 min-w-10 rounded-md border border-foreground/20">
+          +
+        </button>
+      </div>
+      {others.length > 0 && (
+        <p className="mt-1 text-xs opacity-80">
+          Also: {others.map((o) => `${o.quantity} × ${o.label}`).join(" · ")}
+        </p>
+      )}
+      <a href={`/collection?q=${encodeURIComponent(card.name)}`} className="mt-1 inline-flex min-h-9 items-center text-xs text-gold hover:underline">
+        Open in Collection ›
+      </a>
     </div>
   );
 }

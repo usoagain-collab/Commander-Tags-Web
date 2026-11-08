@@ -15,6 +15,8 @@ type Props = {
   onTag: (tag: MyTag, on: boolean) => void;
   onCopies: (n: number) => void;
   onRemove: () => void;
+  /** Collection (v2): own every selected copy in the printing shown. Absent for signed-out viewers. */
+  onMarkOwned?: () => void;
   onSelectAll: () => void;
   onClear: () => void;
   onDone: () => void;
@@ -101,6 +103,12 @@ export function BulkBar(props: Props) {
               Set
             </BarButton>
           </form>
+        )}
+
+        {props.onMarkOwned && (
+          <BarButton disabled={none} onClick={props.onMarkOwned}>
+            ✓ Mark owned
+          </BarButton>
         )}
 
         {confirmRemove ? (
