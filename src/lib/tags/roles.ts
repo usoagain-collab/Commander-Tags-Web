@@ -1,6 +1,7 @@
 // Roles, ported from the prototype's STANDARD_ROLES / resolveRoles / rolesOf.
 // Each role is a set of tag slugs plus all their descendants; Lands come from the type line.
 // The seven slugs that don't exist in Scryfall's data were dropped (CLAUDE.md, Phase 3 plan).
+import { BRACKET_RULES } from "@/lib/brackets/rules";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import type { TagTree } from "./tree";
 
@@ -10,6 +11,8 @@ export type RoleDef = {
   target: number;
   /** Tag slugs; each includes its whole subtree. Absent for Lands. */
   slugs?: string[];
+  /** Tag slugs whose subtrees don't count, even under `slugs` (land tutors are Ramp, not Tutors). */
+  except?: string[];
   land?: boolean;
   /** A card in this other role doesn't count here (targeted removal excludes board wipes). */
   exclude?: string;
@@ -78,6 +81,16 @@ export const STANDARD_ROLES: RoleDef[] = [
     slugs: ["recursion"],
     about: "Cards that get cards back from your graveyard: reanimation, regrowth and similar.",
   },
+  {
+    key: "tutors",
+    name: "Tutors",
+    // Follows the deck's target bracket until the slider is moved (buildRoleDefs); this is bracket 3's.
+    target: BRACKET_RULES.tutorTargets[3],
+    slugs: ["tutor"],
+    except: ["tutor-land"],
+    about:
+      "Cards that search your library for another card. Land tutors count as Ramp instead. The target follows your target bracket (fewer tutors in low brackets, more in high ones) until you move the slider.",
+  },
 ];
 
 export type ResolvedRole = RoleDef & { tagSet: Set<string> | null; missing: string[]; notViaSet?: Set<string> };
@@ -87,9 +100,11 @@ export function resolveRoles(roles: RoleDef[], tree: TagTree): ResolvedRole[] {
   return roles.map((r) => {
     if (r.land || !r.slugs) return { ...r, tagSet: null, missing: [] };
     const found = r.slugs.filter((s) => tree.has(s));
+    const tagSet = tree.descendants(found);
+    if (r.except) for (const s of tree.descendants(r.except.filter((x) => tree.has(x)))) tagSet.delete(s);
     return {
       ...r,
-      tagSet: tree.descendants(found),
+      tagSet,
       missing: r.slugs.filter((s) => !tree.has(s)),
       notViaSet: r.notVia ? tree.descendants(r.notVia.slugs.filter((s) => tree.has(s))) : undefined,
     };

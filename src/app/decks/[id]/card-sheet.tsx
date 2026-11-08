@@ -11,6 +11,8 @@ import { CommanderLegality, LegalityAndRulings, RulesText, useCardDetails } from
 import { CardTags } from "./card-tags";
 import { printingImage, printingPrice, type ChosenPrinting } from "@/lib/deck/printing";
 import { PrintingPicker } from "./printing-picker";
+import { TUTORS_KEY } from "@/lib/tags/role-settings";
+import { TutorBadge, TutorNote } from "./tutor-label";
 
 type Props = {
   deckId: string;
@@ -51,6 +53,7 @@ type Props = {
  */
 export function CardSheet(props: Props) {
   const { line, index, total, warnings, readOnly, onClose, onPrev, onNext } = props;
+  const tutor = props.roleKeys.includes(TUTORS_KEY);
   const { card, board, quantity, printing } = line;
   const closeRef = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<"main" | "decks" | "printing">("main");
@@ -132,14 +135,21 @@ export function CardSheet(props: Props) {
         <div className="grid gap-5 sm:grid-cols-[minmax(0,260px)_1fr]">
           <div className="mx-auto w-full max-w-[300px] space-y-2">
             {image ? (
-              <img
-                key={image /* a new element, so the old art doesn't linger while the new image loads */}
-                src={image}
-                alt={details?.flippable ? details.faces[face].name : card.name}
-                width={300}
-                height={418}
-                className="mx-auto max-h-[38vh] w-auto rounded-[4.75%/3.5%] shadow-lg sm:max-h-none sm:w-full"
-              />
+              <div className="relative mx-auto w-fit sm:w-full">
+                <img
+                  key={image /* a new element, so the old art doesn't linger while the new image loads */}
+                  src={image}
+                  alt={details?.flippable ? details.faces[face].name : card.name}
+                  width={300}
+                  height={418}
+                  className="mx-auto max-h-[38vh] w-auto rounded-[4.75%/3.5%] shadow-lg sm:max-h-none sm:w-full"
+                />
+                {tutor && (
+                  <span className="pointer-events-none absolute right-2 top-[7%]">
+                    <TutorBadge />
+                  </span>
+                )}
+              </div>
             ) : (
               <div className="flex aspect-[63/88] items-center justify-center rounded-xl border p-4 text-center">{card.name}</div>
             )}
@@ -182,6 +192,7 @@ export function CardSheet(props: Props) {
                   {props.isCover ? "✓ Deck image · Back to the commander's art" : "Use as deck image"}
                 </button>
               )}
+              {tutor && <TutorNote />}
               {!!props.flags && (
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
                   ⚑ Flagged as an underperformer {props.flags}× in playtests

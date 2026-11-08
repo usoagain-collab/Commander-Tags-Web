@@ -39,7 +39,17 @@ import {
 } from "@/lib/deck/model";
 import { groupLines, readViewSettings, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
-import { buildRoleDefs, customKey, hiddenRoleKeys, roleCounts, roleStatus, withRoleHidden, type CustomRole } from "@/lib/tags/role-settings";
+import {
+  buildRoleDefs,
+  customKey,
+  hiddenRoleKeys,
+  roleCounts,
+  roleStatus,
+  TUTORS_KEY,
+  withoutBracketTargets,
+  withRoleHidden,
+  type CustomRole,
+} from "@/lib/tags/role-settings";
 import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
@@ -441,7 +451,11 @@ export function DeckEditor({
   // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
   const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
   const [defaults, setDefaults] = useState(profileDefaults);
-  const roleDefs = useMemo(() => buildRoleDefs(roleSettings.targets, roleSettings.custom), [roleSettings.targets, roleSettings.custom]);
+  // Tutors follows the target bracket until its slider is moved (C1b).
+  const roleDefs = useMemo(
+    () => buildRoleDefs(roleSettings.targets, roleSettings.custom, bracket.target),
+    [roleSettings.targets, roleSettings.custom, bracket.target],
+  );
   const allRoles = useMemo(() => (tags.tree ? resolveRoles(roleDefs, tags.tree) : []), [tags.tree, roleDefs]);
   const hiddenRoles = useMemo(() => hiddenRoleKeys(roleSettings.targets), [roleSettings.targets]);
   const roles = useMemo(() => allRoles.filter((r) => !hiddenRoles.has(r.key)), [allRoles, hiddenRoles]);
@@ -523,6 +537,7 @@ export function DeckEditor({
       // Basic lands and most lands have no function tags; only flag spells.
       untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
       flags: flags[id] ?? 0,
+      tutor: lineRoleKeys(line).includes(TUTORS_KEY),
       highlighted: matchesHighlight(line),
       fresh: fresh === id,
       // In Group by Role the heading already names the first role.
@@ -680,12 +695,11 @@ export function DeckEditor({
   const saveDefaults = async () => {
     if (!userId) return "Sign in to save defaults.";
     const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ default_role_targets: roleSettings.targets, custom_roles: roleSettings.custom })
-      .eq("id", userId);
+    // Tutors stays out: each deck follows its own bracket for it.
+    const targets = withoutBracketTargets(roleSettings.targets);
+    const { error } = await supabase.from("profiles").update({ default_role_targets: targets, custom_roles: roleSettings.custom }).eq("id", userId);
     if (error) return `Couldn't save: ${error.message}`;
-    setDefaults({ targets: roleSettings.targets, custom: roleSettings.custom });
+    setDefaults({ targets, custom: roleSettings.custom });
     return "Saved. New decks will start with these targets.";
   };
   const renderProfile = (hideTitle = false) => (
@@ -715,7 +729,7 @@ export function DeckEditor({
         if (highlight === `role:${key}`) setHighlight(null);
       }}
       onResetDefaults={() => {
-        roleSettings.setTargets(defaults.targets);
+        roleSettings.setTargets(withoutBracketTargets(defaults.targets));
         roleSettings.setCustom(defaults.custom);
       }}
     />

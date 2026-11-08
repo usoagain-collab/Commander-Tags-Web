@@ -14,6 +14,7 @@ const ROLE_COLORS: Record<string, string> = {
   "Board wipes": "#f0964a",
   Protection: "var(--role-protection)",
   Recursion: "#b08be0",
+  Tutors: "#5b7cfa",
 };
 
 /** Each standard role has its own color, the same everywhere; custom roles use the accent. */

@@ -1,5 +1,6 @@
 // Role targets and custom roles (Phase 3c). Saved with each deck (decks.role_targets / custom_roles);
 // "Save as my defaults" copies them to the user's profile so new decks start from them.
+import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import type { DeckLine } from "@/lib/deck/model";
 import { STANDARD_ROLES, type RoleDef } from "./roles";
 
@@ -43,10 +44,28 @@ export function readCustomRoles(saved: unknown): CustomRole[] {
   });
 }
 
-/** The roles for a deck: the standard ones with this deck's targets, then its custom roles. */
-export function buildRoleDefs(targets: Record<string, number>, custom: CustomRole[]): RoleDef[] {
+/** Roles whose default target comes from the deck's target bracket rather than from defaults (David, Nov 7, 2026). */
+export const TUTORS_KEY = "tutors";
+const bracketDefault = (key: string, bracket: BracketNumber): number | undefined =>
+  key === TUTORS_KEY ? BRACKET_RULES.tutorTargets[bracket] : undefined;
+
+/**
+ * Targets without the bracket-based ones, for "Save as my defaults", Reset and new decks: a deck with no Tutors
+ * number follows its own bracket.
+ */
+export function withoutBracketTargets(targets: Record<string, number>): Record<string, number> {
+  const rest = { ...targets };
+  delete rest[TUTORS_KEY];
+  return rest;
+}
+
+/**
+ * The roles for a deck: the standard ones with this deck's targets, then its custom roles. A role with no saved
+ * target uses its bracket default (Tutors), otherwise the app default.
+ */
+export function buildRoleDefs(targets: Record<string, number>, custom: CustomRole[], bracket: BracketNumber = 3): RoleDef[] {
   return [
-    ...STANDARD_ROLES.map((r) => ({ ...r, target: targets[r.key] ?? r.target })),
+    ...STANDARD_ROLES.map((r) => ({ ...r, target: targets[r.key] ?? bracketDefault(r.key, bracket) ?? r.target })),
     ...custom.map((c) => ({ key: customKey(c.slug), name: c.name, target: c.target, slugs: [c.slug], custom: true })),
   ];
 }

@@ -270,7 +270,7 @@ describe("keepScores and planCuts", () => {
 });
 
 describe("suggestCuts", () => {
-  const { roles, make } = deck({ ramp: 0, wipes: 0, draw: 0, removal: 0, protection: 0, recursion: 0, lands: 40 });
+  const { roles, make } = deck({ ramp: 0, wipes: 0, draw: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 40 });
   const bears = (n: number) => Array.from({ length: n }, (_, i) => make(card(`Bear ${i}`, 2), ["pure-draw"]));
   const forest = (n: number) => make(card("Forest", 0, "Basic Land — Forest"), [], { quantity: n });
 

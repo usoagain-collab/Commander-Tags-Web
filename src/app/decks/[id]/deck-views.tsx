@@ -6,6 +6,7 @@ import type { DeckLine } from "@/lib/deck/model";
 import type { MyTag } from "@/lib/tags/my-tags";
 import { CardLine } from "./card-line";
 import { MyTagChips } from "./my-tags-ui";
+import { TutorBadge } from "./tutor-label";
 
 /** A deck line plus what the views show about it. */
 export type DeckItem = {
@@ -25,6 +26,8 @@ export type DeckItem = {
   selected?: boolean;
   /** Times this card was flagged as an underperformer in the playtester (6d). */
   flags: number;
+  /** Counts toward the Tutors role (C1b): shows the blue Tutor label. */
+  tutor: boolean;
 };
 export type ViewSection = {
   key: string;
@@ -417,6 +420,7 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
           ⚠
         </span>
       )}
+      {item.tutor && <TutorBadge />}
       {item.untagged && <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">untagged</span>}
       {item.flags > 0 && (
         <span title={`Flagged as an underperformer ${item.flags}× in playtests`} className="rounded bg-rose-600 px-1.5 py-0.5 text-xs font-semibold text-white">

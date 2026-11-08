@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
+import { withoutBracketTargets } from "@/lib/tags/role-settings";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -35,7 +36,8 @@ export async function createDeck(formData: FormData) {
     .insert({
       name,
       target_bracket,
-      role_targets: { ...DEFAULT_ROLE_TARGETS, ...(profile?.default_role_targets ?? {}) },
+      // No Tutors number: a new deck follows its bracket for that one.
+      role_targets: withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...(profile?.default_role_targets ?? {}) }),
       custom_roles: profile?.custom_roles ?? [],
     })
     .select("id")
