@@ -12,7 +12,7 @@ import { loadDeck, UUID } from "./load-deck";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) return { title: "Deck · Deck Genome" };
-  const { deck, rows, cards, preferred } = await loadDeck(id, "editor");
+  const { deck, builder, rows, cards, preferred } = await loadDeck(id, "editor");
   if (!deck) return { title: "Deck · Deck Genome" };
   // What a pasted link shows in Discord and elsewhere. Only someone allowed to open the deck gets this far.
   const commanderIds = new Set(rows.filter((r) => r.board === "commander").map((r) => r.oracle_id));
@@ -20,7 +20,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const commanderPrinting = rows.filter((r) => r.board === "commander").map((r) => r.printing ?? preferred[r.oracle_id]).find(Boolean);
   const size = rows.filter((r) => r.board === "commander" || r.board === "main").reduce((n, r) => n + r.quantity, 0);
   const title = `${deck.name} · Deck Genome`;
-  const description = [commanders.map((c) => c.name).join(" & ") || "Commander deck", `${size} cards`, `Bracket ${deck.target_bracket ?? 3}`].join(" · ");
+  const description = [commanders.map((c) => c.name).join(" & ") || "Commander deck", `${size} cards`, `Bracket ${deck.target_bracket ?? 3}`, builder?.name && `by ${builder.name}`]
+    .filter(Boolean)
+    .join(" · ");
   const art = commanderPrinting ? printingImage(commanderPrinting.id, "art_crop") : commanders.find((c) => c.image_art_crop)?.image_art_crop;
   return {
     title,
@@ -65,6 +67,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       initialTags={initialTags}
       initialCombos={initialCombos}
       readOnly={!owner}
+      builder={owner ? null : loaded.builder}
       savedTagView={profile?.tag_view ?? {}}
       hiddenTags={profile?.hidden_tags ?? []}
       userId={user?.id ?? null}

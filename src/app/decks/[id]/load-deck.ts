@@ -27,6 +27,8 @@ export type DeckRow = {
   /** Smart Cutter state (migration 0033), owner only. */
   cutter?: unknown;
 };
+/** The deck's builder, shown as "Built by …" to everyone else. */
+export type Builder = { name: string | null; avatarUrl: string | null };
 export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null };
 export type Profile = {
   tag_view?: Record<string, unknown> | null;
@@ -50,13 +52,17 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 export const loadDeck = cache(async (id: string, kind: "editor" | "playtest") => {
   const supabase = await createClient();
-  const [user, res] = await Promise.all([
+  const [user, res, builderRes] = await Promise.all([
     getCurrentUser(),
     supabase.rpc("deck_bundle", { p_id: id, p_tags: kind === "editor", p_tokens: kind === "playtest" }),
+    // Who built it (migration 0035), asked alongside so it costs no extra wait. A failure only hides the name.
+    supabase.rpc("deck_builder", { p_id: id }),
   ]);
   if (res.error) throw new Error(`Couldn't load the deck: ${res.error.message}`);
   const b = res.data as Bundle | null;
   if (!b) return { user, deck: null } as const;
   const tags: InitialTags | undefined = b.tags ? { ...b.tags, ids: b.cards.map((c) => c.oracle_id) } : undefined;
-  return { user, deck: b.deck, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile, preferred: b.preferred ?? {} } as const;
+  const raw = builderRes.data as { name: string | null; avatar_url: string | null } | null;
+  const builder: Builder | null = raw ? { name: raw.name, avatarUrl: raw.avatar_url } : null;
+  return { user, deck: b.deck, builder, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile, preferred: b.preferred ?? {} } as const;
 });
