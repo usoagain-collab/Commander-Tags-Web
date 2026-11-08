@@ -175,6 +175,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - A shared deck's header says "Built by <picture> <name>" to everyone but the owner, and the link preview adds "by <name>". SQL `deck_builder(id)` (migration 0035, security definer: name and picture only, for unlisted / public / own decks) runs beside `deck_bundle` in `loadDeck`; if it fails, the old "A deck shared with you" line shows. Settings → **Your name** edits `profiles.display_name` (starts as the sign-in name; at most 40 characters, checked in 0035).
 
+## Copy to my decks (v2, built Nov 8, 2026)
+
+- `copyDeck(id)` server action in `src/app/decks/actions.ts`: reads through `shared_deck` (so only decks you may open), inserts a private deck plus its `deck_cards` rows (printing, foil, category), deletes the new deck if the rows fail, then opens it. Shared viewers get a gold **Copy to my decks**; owners get **More → Make a copy** (named "… (copy)"), which waits until edits are saved.
+
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
 
 - Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).
