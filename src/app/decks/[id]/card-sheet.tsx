@@ -1,5 +1,6 @@
 "use client";
 
+import { MAX_MANA_VALUE } from "@/lib/deck/mana-values";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ManaCost } from "@/components/mana-cost";
@@ -44,6 +45,8 @@ type Props = {
   /** This card's art heads the deck page. */
   isCover: boolean;
   onCover: (on: boolean) => void;
+  /** Change mana cost (v2): the card's own mana value, this deck's override (null = none), and a setter. */
+  manaValue?: { own: number; counted: number | null; onChange: (value: number | null) => void };
 };
 
 /**
@@ -191,6 +194,9 @@ export function CardSheet(props: Props) {
                 <button type="button" onClick={() => props.onCover(!props.isCover)} className="mt-1 block min-h-9 text-[13px] underline opacity-80 hover:opacity-100">
                   {props.isCover ? "✓ Deck image · Back to the commander's art" : "Use as deck image"}
                 </button>
+              )}
+              {props.manaValue && (board === "main" || board === "commander" || props.manaValue.counted !== null) && (
+                <ManaValueControl {...props.manaValue} readOnly={readOnly} />
               )}
               {tutor && <TutorNote />}
               {!!props.flags && (
@@ -380,5 +386,32 @@ function SheetButton({ onClick, label, children }: { onClick: () => void; label:
     >
       {children}
     </button>
+  );
+}
+
+/** "Counts as mana value N for stats": for X spells and cards you always cast for less (v2). */
+function ManaValueControl({ own, counted, onChange, readOnly }: { own: number; counted: number | null; onChange: (v: number | null) => void; readOnly: boolean }) {
+  const value = counted ?? own;
+  if (readOnly) return counted !== null ? <p className="mt-1 text-sm">Counts as mana value {counted} in this deck&apos;s stats (printed {own}).</p> : null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+      <span className="opacity-85" title="For X spells and cards you usually cast for less: the curve, average and mana value groups use this number">
+        Mana value for stats
+      </span>
+      <button type="button" aria-label="Lower the counted mana value" disabled={value <= 0} onClick={() => onChange(value - 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
+        −
+      </button>
+      <span className={`w-6 text-center font-semibold tabular-nums ${counted !== null ? "text-gold" : ""}`}>{value}</span>
+      <button type="button" aria-label="Raise the counted mana value" disabled={value >= MAX_MANA_VALUE} onClick={() => onChange(value + 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
+        +
+      </button>
+      {counted !== null ? (
+        <button type="button" onClick={() => onChange(null)} className="min-h-9 px-1 text-[13px] underline opacity-80">
+          Back to {own}
+        </button>
+      ) : (
+        <span className="text-[13px] opacity-60">printed</span>
+      )}
+    </div>
   );
 }

@@ -111,6 +111,7 @@ import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
 import { deckAccentVars } from "@/lib/ui/deck-colors";
 import { estimatePower } from "@/lib/brackets/power";
+import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
@@ -195,7 +196,7 @@ function reducer(state: State, action: Action): State {
 export type Visibility = "private" | "unlisted" | "public";
 
 type Props = {
-  deck: { id: string; name: string; visibility: Visibility; cover_oracle_id?: string | null };
+  deck: { id: string; name: string; visibility: Visibility; cover_oracle_id?: string | null; mana_values?: ManaValues };
   initialEntries: Entries;
   initialCategories: Categories;
   initialPrintings: Printings;
@@ -279,6 +280,18 @@ export function DeckEditor({
     if (error) {
       setCoverId(before);
       setNotice(`Couldn't change the deck image: ${error.message}`);
+    }
+  };
+  // Change mana cost (v2): saved directly to decks.mana_values, like the deck image.
+  const [manaValues, setManaValues] = useState<ManaValues>(deck.mana_values ?? {});
+  const setManaValue = async (oracleId: string, value: number | null, own: number) => {
+    const before = manaValues;
+    const next = withManaValue(manaValues, oracleId, value, own);
+    setManaValues(next);
+    const { error } = await createClient().from("decks").update({ mana_values: next }).eq("id", deck.id);
+    if (error) {
+      setManaValues(before);
+      setNotice(`Couldn't change the mana value: ${error.message}`);
     }
   };
   const clearFlags = async (oracleId: string) => {
@@ -533,10 +546,11 @@ export function DeckEditor({
   // ---------- what's on screen ----------
   const identity = deckIdentity(entries, cards);
   const size = deckSize(entries);
-  const commanders = linesFor(entries, cards, "commander", shownPrintings);
-  const companions = linesFor(entries, cards, "companion", shownPrintings);
-  const mainLines = linesFor(entries, cards, "main", shownPrintings);
-  const maybeLines = linesFor(entries, cards, "maybe", shownPrintings);
+  const countedCards = useMemo(() => applyManaValues(cards, manaValues), [cards, manaValues]);
+  const commanders = linesFor(entries, countedCards, "commander", shownPrintings);
+  const companions = linesFor(entries, countedCards, "companion", shownPrintings);
+  const mainLines = linesFor(entries, countedCards, "main", shownPrintings);
+  const maybeLines = linesFor(entries, countedCards, "maybe", shownPrintings);
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
   // The deck as the bracket check sees it (also used to screen suggestions, 5c).
@@ -1609,6 +1623,11 @@ export function DeckEditor({
           flags={flags[sheetLine.card.oracle_id] ?? 0}
           isCover={coverId === sheetLine.card.oracle_id}
           onCover={(on) => chooseCover(on ? sheetLine.card.oracle_id : null)}
+          manaValue={{
+            own: cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value,
+            counted: manaValues[sheetLine.card.oracle_id] ?? null,
+            onChange: (v) => setManaValue(sheetLine.card.oracle_id, v, cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value),
+          }}
           onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (
