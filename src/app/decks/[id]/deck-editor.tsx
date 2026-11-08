@@ -1133,7 +1133,26 @@ export function DeckEditor({
         onOpenCommander={(i) => openLine(commanders[i])}
         note={
           readOnly &&
-          (builder?.name ? (
+          (builder?.precon ? (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
+              <span className="rounded bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-black">Precon</span>
+              <span className="font-semibold">{builder.precon.set_name}</span>
+              {builder.precon.release && (
+                <span className="opacity-80">
+                  {new Date(`${builder.precon.release}T12:00:00Z`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                </span>
+              )}
+              <Link href="/precons" className="underline opacity-80 hover:opacity-100">
+                All precons
+              </Link>
+              <span className="text-xs opacity-60">
+                List from{" "}
+                <a href="https://mtgjson.com" target="_blank" rel="noreferrer" className="underline">
+                  MTGJSON
+                </a>
+              </span>
+            </p>
+          ) : builder?.name ? (
             <p className="mt-1.5 flex items-center gap-2 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
               <Avatar url={builder.avatarUrl} name={builder.name} size={24} />
               <span>
@@ -1159,7 +1178,7 @@ export function DeckEditor({
           <>
             {readOnly && (
               <button type="button" className="btn btn-gold" disabled={copying} onClick={copy} title="A private copy in your decks, to change as you like">
-                {copying ? "Copying…" : "⧉ Copy to my decks"}
+                {copying ? "Copying…" : builder?.precon ? "⧉ Start a deck from this" : "⧉ Copy to my decks"}
               </button>
             )}
             {readOnly && (

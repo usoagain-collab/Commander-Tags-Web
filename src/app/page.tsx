@@ -46,9 +46,14 @@ export default async function Home() {
             New set out? Find every card that fits your commander, keep the deck balanced, and share something worth
             bragging about.
           </p>
-          <Link href="/decks" className="btn btn-gold mt-8 min-h-12 px-6 text-base">
-            {user ? "Go to my decks" : "Start building"}
-          </Link>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link href="/decks" className="btn btn-gold min-h-12 px-6 text-base">
+              {user ? "Go to my decks" : "Start building"}
+            </Link>
+            <Link href="/precons" className="btn min-h-12 px-6 text-base">
+              Explore precons
+            </Link>
+          </div>
         </div>
       </section>
       <section className="mx-auto grid max-w-5xl gap-4 px-6 pb-16 sm:grid-cols-3">
