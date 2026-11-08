@@ -752,10 +752,13 @@ export function DeckEditor({
     const slugs = suggestThemes.map((t) => t.slug);
     // Staples come from the roles the deck is short on (lands aside: they have their own 💡).
     const short = roles.filter((r) => !r.land && r.tagSet && (counts[r.key] ?? 0) < r.target);
+    const landsRole = roles.find((r) => r.land);
     openSuggest({
       label: "this deck",
       slugs: themeSettings.specific ? slugs : [...tags.tree.descendants(slugs)],
       staples: short.flatMap((r) => [...r.tagSet!]),
+      // Under the Lands target, lands join the suggestions (v2); a hidden Lands role asks for none.
+      landsShort: Math.max(0, (landsRole ? landsRole.target - (counts[landsRole.key] ?? 0) : 0)) || undefined,
     });
   };
   const keyCounts = deckKeyCounts(themeCards);
