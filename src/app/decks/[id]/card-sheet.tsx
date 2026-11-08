@@ -45,6 +45,8 @@ type Props = {
   /** This card's art heads the deck page. */
   /** Wish list (v2): whether this card is on your list, and a toggle. Absent for signed-out viewers. */
   wish?: { on: boolean; onToggle: () => void };
+  /** Collection tracking (v2): copies you own, and a setter. Absent for signed-out viewers. */
+  collection?: { have: number; foil: number; onChange: (quantity: number) => void };
   isCover: boolean;
   onCover: (on: boolean) => void;
   /** Change mana cost (v2): the card's own mana value, this deck's override (null = none), and a setter. */
@@ -209,6 +211,19 @@ export function CardSheet(props: Props) {
                 >
                   {props.wish.on ? "♥ On your wish list" : "♡ Wish list"}
                 </button>
+              )}
+              {props.collection && (
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="opacity-85">In your collection</span>
+                  <button type="button" aria-label="One fewer in your collection" disabled={props.collection.have <= 0} onClick={() => props.collection!.onChange(props.collection!.have - 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
+                    −
+                  </button>
+                  <span className="w-6 text-center font-semibold tabular-nums">{props.collection.have}</span>
+                  <button type="button" aria-label="One more in your collection" onClick={() => props.collection!.onChange(props.collection!.have + 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
+                    +
+                  </button>
+                  {props.collection.foil > 0 && <span className="text-xs text-gold">+ {props.collection.foil} foil</span>}
+                </div>
               )}
               {tutor && <TutorNote />}
               {!!props.flags && (
