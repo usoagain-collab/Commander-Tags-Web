@@ -1,6 +1,7 @@
 "use client";
 
 import { ManaCost } from "@/components/mana-cost";
+import { OwnedBadge } from "./owned-badge";
 import type { DeckItem } from "./deck-views";
 import { MyTagChips } from "./my-tags-ui";
 import { roleColor } from "@/lib/tags/pretty";
@@ -103,6 +104,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
           </span>
         )}
         {tutor && <TutorChip />}
+        {item.owned && <OwnedBadge owned={item.owned} chip />}
         {item.locked && (
           <span title="Locked: the Smart Cutter never suggests cutting it" className="shrink-0 text-xs">
             🔒

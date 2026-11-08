@@ -1,5 +1,6 @@
 "use client";
 
+import { OwnedBadge } from "./owned-badge";
 import { useState } from "react";
 import type { ViewMode } from "@/lib/deck/grouping";
 import type { DeckLine } from "@/lib/deck/model";
@@ -30,6 +31,8 @@ export type DeckItem = {
   tutor: boolean;
   /** Locked in the Smart Cutter: never suggested as a cut. */
   locked?: boolean;
+  /** Collection tracking (v2): copies you own against copies in the deck; absent when you track no collection. */
+  owned?: { have: number; need: number };
 };
 export type ViewSection = {
   key: string;
@@ -429,6 +432,7 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
         </span>
       )}
       {item.untagged && <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">untagged</span>}
+      {item.owned && <OwnedBadge owned={item.owned} />}
       {item.flags > 0 && (
         <span title={`Flagged as an underperformer ${item.flags}× in playtests`} className="rounded bg-rose-600 px-1.5 py-0.5 text-xs font-semibold text-white">
           ⚑{item.flags}
@@ -437,3 +441,4 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
     </span>
   );
 }
+

@@ -38,6 +38,8 @@ type Props = {
   identity: Set<string> | null;
   commanderName: string | null;
   onAdd: (card: CardSummary, board: Board) => void;
+  /** Collection tracking (v2): copies you own of a card, when you track a collection. */
+  ownedOf?: (oracleId: string) => number;
   onPreview: (card: CardSummary | null) => void;
   onClose: () => void;
   /** "Hide cards in deck" (remembered with the other view settings). */
@@ -50,7 +52,7 @@ type Props = {
   initialText?: string;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, ownedOf }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -206,7 +208,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     const id = oracleIdOf(sf);
     return !!id && inDeck(id) > 0;
   };
-  const shown = hideInDeck ? results.filter((sf) => !isInDeck(sf)) : results;
+  const [onlyOwned, setOnlyOwned] = useState(false);
+  const isOwned = (sf: ScryfallCard) => {
+    const id = oracleIdOf(sf);
+    return !!id && !!ownedOf && ownedOf(id) > 0;
+  };
+  const shown = results.filter((sf) => (!hideInDeck || !isInDeck(sf)) && (!onlyOwned || !ownedOf || isOwned(sf)));
   const hiddenCount = results.length - shown.length;
 
   return (
@@ -296,6 +303,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           <input type="checkbox" checked={hideInDeck} onChange={(e) => onHideInDeck(e.target.checked)} />
           Hide cards in deck
         </label>
+        {ownedOf && (
+          <label className="flex items-center gap-1.5" title="Only cards in your collection">
+            <input type="checkbox" checked={onlyOwned} onChange={(e) => setOnlyOwned(e.target.checked)} />
+            Hide cards I don&apos;t own
+          </label>
+        )}
         <span className="opacity-70">
           Type <code>otag:</code> or <code>art:</code> for tag suggestions ·{" "}
           <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="underline">
@@ -318,9 +331,9 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       ))}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       {total === 0 && !error && !loading && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
-      {hideInDeck && hiddenCount > 0 && (
+      {(hideInDeck || onlyOwned) && hiddenCount > 0 && (
         <p className="mt-2 text-xs opacity-60">
-          {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} already in your deck hidden
+          {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} hidden ({[hideInDeck && "in your deck", onlyOwned && "not owned"].filter(Boolean).join(" or ")})
           {shown.length === 0 && nextPage ? " · Show more to see the next page" : ""}
         </p>
       )}

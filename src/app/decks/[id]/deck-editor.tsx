@@ -109,6 +109,8 @@ import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
+import { ownedCopies, unownedPrice } from "@/lib/deck/collection";
+import { useCollection } from "@/lib/deck/use-collection";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
@@ -386,6 +388,7 @@ export function DeckEditor({
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
+  const collection = useCollection(userId);
   const [editingTargets, setEditingTargets] = useState(false);
 
   /** A whole import is one change: one save call, one undo step. */
@@ -584,6 +587,7 @@ export function DeckEditor({
       myTags: showMyTags ? myTagsOfCard(id) : [],
       manual: !!categories[entryKey(line.board, id)],
       selected: selecting ? selected.has(entryKey(line.board, id)) : undefined,
+      owned: collection.tracking ? { have: ownedCopies(collection.owned, id), need: line.quantity } : undefined,
     };
   };
   // Role subgroups (step 3e): for each role, which subgroup each card that fills it goes in.
@@ -1158,6 +1162,7 @@ export function DeckEditor({
           withBanned={prefs.allowBanned === true}
           onWithBanned={(on) => updatePrefs({ allowBanned: on })}
           initialText={searchSeed}
+          ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
         />
         </div>
       )}
@@ -1558,7 +1563,12 @@ export function DeckEditor({
         />
       )}
 
-      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards, undefined, shownPrintings)} />
+      <SummaryBar
+        deckLines={[...commanders, ...mainLines]}
+        size={size}
+        price={totalPrice(entries, cards, undefined, shownPrintings)}
+        unowned={collection.tracking ? unownedPrice(collection.owned, [...commanders, ...companions, ...mainLines]) : undefined}
+      />
 
       {selecting && !readOnly && (
         <>
@@ -1592,6 +1602,18 @@ export function DeckEditor({
           flags={flags[sheetLine.card.oracle_id] ?? 0}
           isCover={coverId === sheetLine.card.oracle_id}
           onCover={(on) => chooseCover(on ? sheetLine.card.oracle_id : null)}
+          collection={
+            userId && collection.loaded
+              ? {
+                  have: collection.owned.get(sheetLine.card.oracle_id)?.quantity ?? 0,
+                  foil: collection.owned.get(sheetLine.card.oracle_id)?.foil_quantity ?? 0,
+                  onChange: async (n) => {
+                    const failed = await collection.setQuantity(sheetLine.card.oracle_id, n);
+                    if (failed) say(failed);
+                  },
+                }
+              : undefined
+          }
           onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (

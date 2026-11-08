@@ -22,6 +22,11 @@ export async function SiteHeader() {
               <Link href="/decks" className="flex min-h-11 items-center px-2 font-medium hover:text-gold">
                 My decks
               </Link>
+              <Link href="/collection" className="flex min-h-11 items-center px-2 hover:text-gold" title="Cards you own">
+                <span className="hidden sm:inline">Collection</span>
+                <span aria-hidden className="sm:hidden">▤</span>
+                <span className="sr-only sm:hidden">Collection</span>
+              </Link>
               <Link href="/settings" aria-label="Settings" className="flex min-h-11 items-center gap-2 px-2 hover:text-gold">
                 <Avatar url={look.avatarUrl} name={look.name} size={28} />
                 <span className="hidden sm:inline">Settings</span>
