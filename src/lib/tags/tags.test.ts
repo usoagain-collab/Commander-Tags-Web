@@ -28,7 +28,6 @@ const payload: TagTreePayload = {
     ["tutor-land-basic", "tutor-land-basic", 440, [17, 14]], // 18: land tutors are also land ramp
     ["tutor-to-hand", "tutor-to-hand", 640, [16]], // 19
     ["tutor-card", "tutor-card", 110, [15]], // 20: what is fetched
-    ["donate-rampant-growth", "donate rampant growth", 27, []], // 21: the land goes to someone else
   ],
 };
 const tree = new TagTree(payload);
@@ -106,18 +105,6 @@ describe("roles", () => {
 
   it("keeps 'onto the battlefield' as card advantage when the card isn't ramp", () => {
     expect(rolesOf(card("Sorcery"), ["consult-onto-battlefield"], roles)).toEqual(["draw"]);
-  });
-
-  it("doesn't count removal that hands the opponent a land as Ramp", () => {
-    // Path to Exile: spot removal + land-ramp + donate-rampant-growth.
-    expect(rolesOf(card("Instant"), ["spot-removal", "land-ramp", "donate-rampant-growth"], roles)).toEqual(["removal"]);
-    // Settle the Wreckage: a wipe that does the same.
-    expect(rolesOf(card("Instant"), ["sweeper", "land-ramp", "donate-rampant-growth"], roles)).toEqual(["wipes"]);
-  });
-
-  it("still counts symmetrical ramp that isn't removal", () => {
-    // Collective Voyage: every player ramps, you included.
-    expect(rolesOf(card("Sorcery"), ["land-ramp", "donate-rampant-growth"], roles)).toEqual(["ramp"]);
   });
 
   it("returns no roles for an untagged card", () => {

@@ -92,6 +92,7 @@ export function readCutterPrefs(saved: unknown): CutterPrefs {
     weakest: num(w.weakest, 0, 1, DEFAULT_WEIGHTS.weakest),
     theme: num(w.theme, 0, 1, DEFAULT_WEIGHTS.theme),
     curve: num(w.curve, 0, 1, DEFAULT_WEIGHTS.curve),
+    popularity: num(w.popularity, 0, 1, DEFAULT_WEIGHTS.popularity),
   };
   const sum = Object.values(weights).reduce((a, b) => a + b, 0);
   const archetypes = (Array.isArray(p.archetypes) ? p.archetypes : []).flatMap((a): Archetype[] => {

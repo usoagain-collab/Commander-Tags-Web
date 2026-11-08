@@ -2,8 +2,12 @@
 // uses lives here, so tuning means editing one file. Archetypes are in archetypes.ts.
 
 /** Keep score components. Default weights add up to 1; power users can change them (normalized on use). */
-export type CutterWeights = { coverage: number; saturation: number; weakest: number; theme: number; curve: number };
-export const DEFAULT_WEIGHTS: CutterWeights = { coverage: 0.3, saturation: 0.25, weakest: 0.2, theme: 0.15, curve: 0.1 };
+export type CutterWeights = { coverage: number; saturation: number; weakest: number; theme: number; curve: number; popularity: number };
+/**
+ * Popularity (EDHREC rank, log scale) has its own weight because staples are staples for a reason (David, Nov 8, 2026:
+ * Rhystic Study and Chromatic Lantern made shortlists just for costing 3). Function still carries most of the score.
+ */
+export const DEFAULT_WEIGHTS: CutterWeights = { coverage: 0.25, saturation: 0.2, weakest: 0.2, theme: 0.15, curve: 0.08, popularity: 0.12 };
 
 export const CUTTER = {
   /** How many top gameplay themes count as "selected" (same as overall Suggest). */

@@ -3,7 +3,7 @@
 import type { ComboRow, Finding } from "@/lib/brackets/evaluate";
 import type { DeckLine } from "@/lib/deck/model";
 import { colorBalance, pipsOf, type Color } from "@/lib/deck/stats";
-import { popularity } from "@/lib/suggest/score";
+import { logPopularity, popularity } from "@/lib/suggest/score";
 import { isLand, type ResolvedRole } from "@/lib/tags/roles";
 import type { TagKey, ThemeTag } from "@/lib/tags/themes";
 import type { TagTree } from "@/lib/tags/tree";
@@ -146,7 +146,10 @@ export function keepScores(ctx: CutterContext): CardScore[] {
     const maxFlex = Math.max(...flex);
     const q = CUTTER.quality;
     const quality = mates.map(
-      (c, i) => q.manaValue * standing(mvs, i, false) + q.speed * speedOf(c) + q.flexibility * (maxFlex ? flex[i] / maxFlex : 1),
+      (c, i) =>
+        q.manaValue * standing(mvs, i, false) +
+        q.speed * speedOf(c) +
+        q.flexibility * (maxFlex ? flex[i] / maxFlex : 1),
     );
     const m = new Map<string, { standing: number; position: number; of: number }>();
     mates.forEach((c, i) => m.set(c.card.oracle_id, { standing: standing(quality, i, true), position: positionFromBottom(quality, i), of: mates.length }));
@@ -266,7 +269,7 @@ export function keepScores(ctx: CutterContext): CardScore[] {
   const maxHits = Math.max(0, ...scored.map((r) => r.hits));
   const maxFit = Math.max(0, ...scored.map((r) => r.fitRaw));
   const w = prefs.weights;
-  const wSum = w.coverage + w.saturation + w.weakest + w.theme + w.curve || 1;
+  const wSum = w.coverage + w.saturation + w.weakest + w.theme + w.curve + w.popularity || 1;
   const inFinding = (id: string) => ctx.bracketFindings.filter((f) => f.cards.includes(id)).map((f) => f.label);
 
   return rows.map((r): CardScore => {
@@ -276,8 +279,16 @@ export function keepScores(ctx: CutterContext): CardScore[] {
       weakest: r.weakest,
       theme: maxFit ? r.fitRaw / maxFit : CUTTER.neutral,
       curve: r.curveFit,
+      popularity: logPopularity(r.entry.card.edhrec_rank),
     };
-    const keep = (w.coverage * parts.coverage + w.saturation * parts.saturation + w.weakest * parts.weakest + w.theme * parts.theme + w.curve * parts.curve) / wSum;
+    const keep =
+      (w.coverage * parts.coverage +
+        w.saturation * parts.saturation +
+        w.weakest * parts.weakest +
+        w.theme * parts.theme +
+        w.curve * parts.curve +
+        w.popularity * parts.popularity) /
+      wSum;
     const id = r.entry.card.oracle_id;
     return {
       entry: r.entry,

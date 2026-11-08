@@ -10,6 +10,11 @@ const ordinal = (n: number) => (n === 1 ? "" : `${n}${n % 10 === 2 && n !== 12 ?
 const pct = (n: number) => `${Math.round(n)}%`;
 const bucketName = (b: number) => (b === 0 ? "0-1 mana spells" : b === 6 ? "7+ mana spells" : `${CURVE_LABELS[b]}-drops`);
 
+const popularityText = (rank: number | null) =>
+  !rank
+    ? "No EDHREC rank, so it counts as rarely played"
+    : `EDHREC rank #${rank.toLocaleString("en-US")}: ${rank <= 300 ? "a staple, among the most played cards" : rank <= 3000 ? "widely played" : rank <= 10000 ? "played now and then" : "rarely played"}`;
+
 /** One line for the shortlist and the cutting-room floor, also saved as the cut's reason in History. */
 export function cutReason(s: CardScore): string {
   const over = s.facts.roles.filter((r) => r.count > r.target);
@@ -82,6 +87,7 @@ export function explainCut(s: CardScore, archetype: Archetype, archetypeName = a
     { part: "weakest" as Part, label: "Weakest in role", value: p.weakest, text: ranked.length ? ranked[0] : rank },
     { part: "theme" as Part, label: "Theme fit", value: p.theme, text: themeText },
     { part: "curve" as Part, label: "Curve fit", value: p.curve, text: s.flags.cheatTarget ? "Left off the curve" : curve },
+    { part: "popularity" as Part, label: "Popularity", value: p.popularity, text: popularityText(s.entry.card.edhrec_rank) },
   ];
   return { hits, rank, curve, flags, parts };
 }
