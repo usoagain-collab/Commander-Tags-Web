@@ -48,3 +48,7 @@ jobs:
       # at cards. Streams a ~700 MB file; about 2 minutes.
       - run: npm run import:combos
         if: steps.secret.outputs.ok == 'true'
+      # Commander precons from MTGJSON (v2). After the Scryfall import, because decks point at cards. Only new
+      # decks and those released in the last 90 days are checked; unchanged lists are skipped.
+      - run: npm run import:precons
+        if: steps.secret.outputs.ok == 'true'

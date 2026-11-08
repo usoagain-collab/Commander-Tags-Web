@@ -12,7 +12,8 @@
     "import": "node --env-file-if-exists=.env.local scripts/import-scryfall.mts",
     "test": "vitest run",
     "import:combos": "node --env-file-if-exists=.env.local scripts/import-combos.mts",
-    "cutter:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/cutter-check.mts"
+    "cutter:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/cutter-check.mts",
+    "import:precons": "node --env-file-if-exists=.env.local scripts/import-precons.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

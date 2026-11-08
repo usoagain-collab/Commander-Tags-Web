@@ -29,8 +29,10 @@ export type DeckRow = {
   /** Smart Cutter state (migration 0033), owner only. */
   cutter?: unknown;
 };
-/** The deck's builder, shown as "Built by …" to everyone else. */
-export type Builder = { name: string | null; avatarUrl: string | null };
+/** A precon deck (v2, migration 0041): which product it is. */
+export type PreconInfo = { code: string; set_name: string; release: string | null; collector: boolean; source: string | null };
+/** The deck's builder, shown as "Built by …" to everyone else, or the precon it is. */
+export type Builder = { name: string | null; avatarUrl: string | null; precon?: PreconInfo | null };
 export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null; split?: unknown };
 export type Profile = {
   tag_view?: Record<string, unknown> | null;
@@ -64,7 +66,7 @@ export const loadDeck = cache(async (id: string, kind: "editor" | "playtest") =>
   const b = res.data as Bundle | null;
   if (!b) return { user, deck: null } as const;
   const tags: InitialTags | undefined = b.tags ? { ...b.tags, ids: b.cards.map((c) => c.oracle_id) } : undefined;
-  const raw = builderRes.data as { name: string | null; avatar_url: string | null } | null;
-  const builder: Builder | null = raw ? { name: raw.name, avatarUrl: raw.avatar_url } : null;
+  const raw = builderRes.data as { name: string | null; avatar_url: string | null; precon?: PreconInfo | null } | null;
+  const builder: Builder | null = raw ? { name: raw.name, avatarUrl: raw.avatar_url, precon: raw.precon ?? null } : null;
   return { user, deck: b.deck, builder, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile, preferred: b.preferred ?? {} } as const;
 });
