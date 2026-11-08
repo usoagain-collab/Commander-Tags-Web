@@ -191,7 +191,7 @@ Considered and deliberately left out of this project.
 
 ## Smart Cutter (v2 design)
 
-Drafted Nov 7, 2026 from David's brief, adapted to the codebase. **Status: built Nov 7, 2026 (C1-C5); C6 tuning done on Omo and the 9 QA decks. Migration 0034 (cut reasons in History) is written but not applied yet.**
+Drafted Nov 7, 2026 from David's brief, adapted to the codebase. **Status: built Nov 7, 2026 (C1-C5); C6 tuning done on Omo and the 9 QA decks. Migration 0034 (cut reasons in History) applied Nov 7, 2026. Tested end to end on 10 decks (Omo plus copies of the 9 QA decks: over, exactly and under 100, brackets 1-4) with no failures.**
 
 Helps a builder cut cards systematically, using the deck's roles, top themes and role targets, and explains every suggestion. Cuts are judged by **function** (what the deck needs) the same way suggestions are, never by popularity alone.
 
@@ -321,7 +321,7 @@ The C1 check suggested cutting Mystical Tutor and Enlightened Tutor: they fill n
 | `decks.cutter` jsonb, default `{}` | `{ locks: [oracle_id], dismissed: {oracle_id: reason or ""}, archetype: {key, status: auto / confirmed / picked, rejected: [keys]}, curve: {oracle_id: "curve" or "cheat"}, h2h: [[winner, loser], …] (newest 300) }` | Per-deck state, like `suggest_settings`. Read defensively by `readCutterState`; saved half a second after a change, not part of Ctrl+Z (like sliders). Returned by `deck_bundle`; never shown to shared viewers |
 | `profiles.cutter_prefs` jsonb, default `{}` | `{ power: bool, weights: {...}, comboProtect: true, belowTargetWarning: true, cutsToMaybe: false, archetypes: [custom profiles] }` | Per-user settings, set on `/settings` (and the weights inside the Cutter). Returned by `deck_bundle`'s profile |
 | `card_summaries.instant_speed` | Appended to the view: front face is an Instant, or its oracle text has Flash | "Weakest in role" speed. `oracle_text` is in `cards` but not sent to the browser today |
-| `deck_change_log.label` and `note` text + `apply_deck_changes(…, p_notes jsonb)` (**migration 0034, written, not applied yet**) | The function stores `{label, cards: {oracle_id: reason}}` in a transaction-local setting; the change-log trigger copies the label and each card's reason | The Timeline shows "Smart Cutter" with each cut's reason. Until 0034 is applied, Apply still saves (autosave retries without the notes), only the reasons are missing |
+| `deck_change_log.label` and `note` text + `apply_deck_changes(…, p_notes jsonb)` (**migration 0034, applied Nov 7, 2026**) | The function stores `{label, cards: {oracle_id: reason}}` in a transaction-local setting; the change-log trigger copies the label and each card's reason | The Timeline shows "Smart Cutter" with each cut's reason. Autosave also retries without the notes if a database lacks 0034, so deploy order can't break Apply |
 | No new board | `deck_cards.board` check stays as it is | David's choice: the floor lives only on the Cutter screen |
 
 ### Code layout

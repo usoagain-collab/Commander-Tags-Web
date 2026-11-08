@@ -3,7 +3,7 @@
 // Smart Cutter screen (v2, docs/spec.md → Smart Cutter): full-screen frosted glass like Bracket and Stats.
 // The cutting-room floor lives only here (session storage for this tab, so a refresh keeps it); Apply saves every
 // cut and swap as one edit: one Ctrl+Z, one Timeline entry labeled "Smart Cutter" with each card's reason.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { candidateIssues, type ComboRow, type EvaluateInput, type Finding } from "@/lib/brackets/evaluate";
 import type { BracketNumber } from "@/lib/brackets/rules";
 import {
@@ -213,6 +213,7 @@ export function CutterPanel(props: {
 
   // ---------- swaps: one-for-one at exactly 100, and 2-for-1 for power users ----------
   const supabase = useMemo(() => createClient(), []);
+  const poolCache = useRef(new Map<string, Promise<{ pool: PoolCard[]; combos: ComboRow[] } | { error: string }>>());
   const [swaps, setSwaps] = useState<{ key: string; picks: Record<string, SwapPick | null>; pairs: { pair: Pair; pick: SwapPick | null }[]; error?: string } | null>(null);
   const exactCuts = plan.mode === "exact" ? plan.cuts.map((c) => c.score) : [];
   // Power users' 2-for-1 pairs load with the swaps, so switching tool tabs doesn't fetch again.
@@ -228,16 +229,30 @@ export function CutterPanel(props: {
       for (const s of exactCuts) if (!s.facts.roles.length) s.facts.themes.forEach((t) => slugs.add(t.slug));
       if (!slugs.size) return setSwaps({ key: swapKey, picks: {}, pairs: [] });
       const deckIds = [...new Set(props.lines.map((l) => l.card.oracle_id))];
-      const call = () =>
-        supabase.rpc("suggestion_pool", { p_slugs: [...slugs], p_identity: props.identity ? [...props.identity] : ["W", "U", "B", "R", "G"], p_exclude: deckIds, p_lands: false, p_tail: 60 });
-      let res = await call();
-      if (res.error && /timeout/i.test(res.error.message) && live) res = await call();
+      // The pool query is heavy (and can time out on a cold database), so each set of tags is asked for once per
+      // visit: cutting, locking or restoring a card reshuffles the weakest three but usually not their roles.
+      const cacheKey = `${[...slugs].sort().join(",")}|${[...deckIds].sort().join(",")}`;
+      let load = poolCache.current.get(cacheKey);
+      if (!load) {
+        load = (async () => {
+          const call = () =>
+            supabase.rpc("suggestion_pool", { p_slugs: [...slugs], p_identity: props.identity ? [...props.identity] : ["W", "U", "B", "R", "G"], p_exclude: deckIds, p_lands: false, p_tail: 60 });
+          let res = await call();
+          if (res.error && /timeout/i.test(res.error.message)) res = await call();
+          if (res.error) return { error: res.error.message };
+          const pool = (res.data ?? []) as PoolCard[];
+          const c = await supabase.rpc("combos_within", { p_ids: [...deckIds, ...pool.map((p) => p.oracle_id)] });
+          return { pool, combos: c.error ? [] : ((c.data ?? []) as ComboRow[]) };
+        })();
+        poolCache.current.set(cacheKey, load);
+      }
+      const loaded = await load;
       if (!live) return;
-      if (res.error) return setSwaps({ key: swapKey, picks: {}, pairs: [], error: `Couldn't load swaps: ${res.error.message}` });
-      const pool = (res.data ?? []) as PoolCard[];
-      const c = await supabase.rpc("combos_within", { p_ids: [...deckIds, ...pool.map((p) => p.oracle_id)] });
-      if (!live) return;
-      const combos = c.error ? [] : ((c.data ?? []) as ComboRow[]);
+      if ("error" in loaded) {
+        poolCache.current.delete(cacheKey); // try again next time
+        return setSwaps({ key: swapKey, picks: {}, pairs: [], error: `Couldn't load swaps: ${loaded.error}` });
+      }
+      const { pool, combos } = loaded;
       const deck: EvaluateInput = { ...props.bracket.deck, combos };
       const skip = (p: PoolCard) =>
         props.dismissedSuggestions.has(p.oracle_id) ||
