@@ -1646,7 +1646,6 @@ export function DeckEditor({
         price={totalPriceWithSplits(entries, cards, shownPrintings, splits)}
         unowned={collection.tracking ? unownedPrice(collection.owned, [...commanders, ...companions, ...mainLines]) : undefined}
       />
-      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPriceWithSplits(entries, cards, shownPrintings, splits)} />
 
       {selecting && !readOnly && (
         <>
