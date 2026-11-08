@@ -4,6 +4,7 @@ import { ManaCost } from "@/components/mana-cost";
 import type { DeckItem } from "./deck-views";
 import { MyTagChips } from "./my-tags-ui";
 import { roleColor } from "@/lib/tags/pretty";
+import { TutorChip } from "./tutor-label";
 
 type Props = {
   item: DeckItem;
@@ -17,7 +18,9 @@ type Props = {
 
 /** One card in Text view. The row opens the card sheet; quick −/+/✕ show next to the name on hover (mouse screens). */
 export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: Props) {
-  const { line, warnings, untagged, highlighted, roleNames, myTags, manual, selected, flags, fresh } = item;
+  const { line, warnings, untagged, highlighted, myTags, manual, selected, flags, fresh, tutor } = item;
+  // The Tutor chip names that role already.
+  const roleNames = tutor ? item.roleNames.filter((r) => r !== "Tutors") : item.roleNames;
   const selecting = selected !== undefined;
   const { card, board, quantity } = line;
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
@@ -97,6 +100,12 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
         {flags > 0 && (
           <span title={`Flagged as an underperformer ${flags}× in playtests`} className="shrink-0 rounded bg-rose-600/15 px-1.5 py-0.5 text-xs text-rose-700 dark:text-rose-300">
             ⚑{flags}
+          </span>
+        )}
+        {tutor && <TutorChip />}
+        {item.locked && (
+          <span title="Locked: the Smart Cutter never suggests cutting it" className="shrink-0 text-xs">
+            🔒
           </span>
         )}
         {untagged && (

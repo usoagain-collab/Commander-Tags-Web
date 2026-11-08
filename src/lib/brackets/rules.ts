@@ -33,6 +33,12 @@ export const BRACKET_RULES = {
   comboBracketUntagged: 3 as BracketNumber,
   /** Count combos that also need a generic piece ("any sacrifice outlet") as two-card combos? */
   comboCountsWithRequirements: false,
+  /**
+   * Default Tutors role target per bracket (David, Nov 7, 2026): fewer tutors in low brackets, more in high ones.
+   * Deck Genome's suggestion, not a WotC rule (the October 2025 update removed tutor limits), so it never moves the
+   * bracket estimate. A deck follows these until its Tutors slider is moved.
+   */
+  tutorTargets: { 1: 0, 2: 1, 3: 3, 4: 6, 5: 10 } as Record<BracketNumber, number>,
   /** Oracle tags (with their sub-tags) that mark the card kinds the brackets limit. */
   tags: { massLandDenial: ["mass-land-denial"], extraTurn: ["extra-turn"] },
 };

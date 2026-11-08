@@ -11,7 +11,8 @@
     "db:migrate": "node --env-file=.env.local scripts/db-migrate.mjs",
     "import": "node --env-file-if-exists=.env.local scripts/import-scryfall.mts",
     "test": "vitest run",
-    "import:combos": "node --env-file-if-exists=.env.local scripts/import-combos.mts"
+    "import:combos": "node --env-file-if-exists=.env.local scripts/import-combos.mts",
+    "cutter:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/cutter-check.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -34,6 +35,7 @@
     "@types/stream-json": "^1.7.8",
     "eslint": "^9",
     "eslint-config-next": "15.5.27",
+    "jiti": "^2.7.0",
     "stream-json": "^1.9.1",
     "tailwindcss": "^4",
     "typescript": "^5",

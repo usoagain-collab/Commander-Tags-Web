@@ -1,4 +1,5 @@
 // Default role targets (CLAUDE.md / spec). They don't change with bracket; users can save their own in their profile.
+// Tutors is the exception: its default comes from the target bracket (BRACKET_RULES.tutorTargets), so it isn't here.
 // Role-to-tag mapping is ported from the prototype in Phase 3.
 export const DEFAULT_ROLE_TARGETS: Record<string, number> = {
   lands: 37,

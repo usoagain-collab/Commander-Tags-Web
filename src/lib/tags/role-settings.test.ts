@@ -10,6 +10,7 @@ import {
   roleNameFromLabel,
   roleStatus,
   statusText,
+  withoutBracketTargets,
 } from "./role-settings";
 
 describe("saved role settings", () => {
@@ -48,6 +49,18 @@ describe("buildRoleDefs", () => {
     expect(defs.find((r) => r.key === "ramp")!.target).toBe(14);
     expect(defs.find((r) => r.key === "lands")!.target).toBe(37); // untouched default
     expect(defs.at(-1)).toEqual({ key: "c:landfall", name: "Landfall", target: 8, slugs: ["landfall"], custom: true });
+  });
+
+  it("gives Tutors its bracket's target until the deck saves its own", () => {
+    const tutors = (targets: Record<string, number>, bracket?: 1 | 2 | 3 | 4 | 5) =>
+      buildRoleDefs(targets, [], bracket).find((r) => r.key === "tutors")!.target;
+    expect([1, 2, 3, 4, 5].map((b) => tutors({}, b as 1))).toEqual([0, 1, 3, 6, 10]);
+    expect(tutors({})).toBe(3); // no bracket given: bracket 3
+    expect(tutors({ tutors: 5 }, 1)).toBe(5); // a moved slider wins over the bracket
+  });
+
+  it("leaves Tutors out of defaults, so each deck follows its own bracket", () => {
+    expect(withoutBracketTargets({ ramp: 12, tutors: 4, "hide:tutors": 1 })).toEqual({ ramp: 12, "hide:tutors": 1 });
   });
 });
 

@@ -22,7 +22,8 @@ export function ChangeTimeline({ deckId, savedTick }: { deckId: string; savedTic
     (async () => {
       const { data, error } = await supabase
         .from("deck_change_log")
-        .select("id, edit_id, changed_at, oracle_id, name, board, from_qty, to_qty")
+        // "*" so the label and note columns (migration 0034) come along when they exist, and nothing breaks before.
+        .select("*")
         .eq("deck_id", deckId)
         .order("id", { ascending: false })
         .limit(150);
@@ -71,6 +72,7 @@ function EditEntry({ edit }: { edit: TimelineEdit }) {
         <time dateTime={edit.at} title={new Date(edit.at).toLocaleString()}>
           {timeAgo(edit.at)}
         </time>
+        {edit.label && <span className="font-semibold text-foreground opacity-100"> · {edit.label}</span>}
         {edit.items.length > 1 && (
           <>
             {" · "}
@@ -85,6 +87,7 @@ function EditEntry({ edit }: { edit: TimelineEdit }) {
         {items.map((it, i) => (
           <li key={`${it.oracle_id}|${it.board}|${i}`}>
             <ItemText item={it} />
+            {it.note && <p className="text-xs opacity-65">{it.note}</p>}
           </li>
         ))}
       </ul>

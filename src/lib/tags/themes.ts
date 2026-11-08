@@ -42,6 +42,17 @@ export const MECHANIC_NOISE = new Set([
   // they rose to the top themes and drove the picks (City of Brass, Chrome Mox) in the same check.
   "activated ability",
   "triggered ability",
+  // Smart Cutter check on Omo and the 9 QA decks (David, Nov 7, 2026): in the top themes of many unrelated decks,
+  // because they describe wording, rules history or mana refunds rather than what a deck does.
+  "interrupt",
+  "intervening if clause",
+  "namesake spell",
+  "single target instant/sorcery",
+  "mini refund",
+  "refund",
+  "full refund",
+  "evasion",
+  "commander identity matters",
 ]);
 /** Oracle tags about names, wording and frame: not gameplay, so they belong with Flavor. */
 export const FLAVOR_ORACLE = new Set(["single english word name", "alliteration", "flavor name", "color break", "illustrated"]);

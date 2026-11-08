@@ -2,7 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { entryKey, type Board, type Categories, type Entries, type Printings } from "@/lib/deck/model";
 import { printingImage } from "@/lib/deck/printing";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
-import { readCustomRoles, readTargets } from "@/lib/tags/role-settings";
+import { readCustomRoles, readTargets, withoutBracketTargets } from "@/lib/tags/role-settings";
+import { readCutterPrefs, readCutterState } from "@/lib/cutter/state";
 import { readSuggestSettings } from "@/lib/suggest/score";
 import type { BracketNumber } from "@/lib/brackets/rules";
 import { DeckEditor } from "./deck-editor";
@@ -72,9 +73,11 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       suggestSettings={readSuggestSettings(owner ? deck.suggest_settings : null)}
       dismissedSuggestions={owner ? (deck.dismissed_suggestions ?? []) : []}
       playtestFlags={owner ? (deck.playtest_flags ?? {}) : {}}
+      cutterState={readCutterState(owner ? deck.cutter : null)}
+      cutterPrefs={readCutterPrefs(profile?.cutter_prefs)}
       targetBracket={((deck.target_bracket as number | null) ?? 3) as BracketNumber}
       profileDefaults={{
-        targets: { ...DEFAULT_ROLE_TARGETS, ...readTargets(profile?.default_role_targets) },
+        targets: withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...readTargets(profile?.default_role_targets) }),
         custom: readCustomRoles(profile?.custom_roles),
       }}
     />

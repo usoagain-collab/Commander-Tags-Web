@@ -39,7 +39,17 @@ import {
 } from "@/lib/deck/model";
 import { groupLines, readViewSettings, sortLines, type ViewSettings } from "@/lib/deck/grouping";
 import { useAutosave, type SaveStatus } from "@/lib/deck/use-autosave";
-import { buildRoleDefs, customKey, hiddenRoleKeys, roleCounts, roleStatus, withRoleHidden, type CustomRole } from "@/lib/tags/role-settings";
+import {
+  buildRoleDefs,
+  customKey,
+  hiddenRoleKeys,
+  roleCounts,
+  roleStatus,
+  TUTORS_KEY,
+  withoutBracketTargets,
+  withRoleHidden,
+  type CustomRole,
+} from "@/lib/tags/role-settings";
 import { isLand, resolveRoles, rolesOf } from "@/lib/tags/roles";
 import { useRoleSettings } from "@/lib/tags/use-role-settings";
 import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
@@ -92,6 +102,11 @@ import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
+import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
+import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
+import type { CutterCard } from "@/lib/cutter/archetype";
+import type { CutterPrefs, CutterState } from "@/lib/cutter/state";
+import { useCutterPrefs, useCutterState } from "@/lib/cutter/use-cutter";
 
 type State = {
   entries: Entries;
@@ -189,6 +204,9 @@ type Props = {
   suggestSettings: SuggestSettings;
   dismissedSuggestions: string[];
   playtestFlags: Record<string, number>;
+  /** Smart Cutter: this deck's state (decks.cutter) and your settings (profiles.cutter_prefs). */
+  cutterState: CutterState;
+  cutterPrefs: CutterPrefs;
   targetBracket: BracketNumber;
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
 };
@@ -217,6 +235,8 @@ export function DeckEditor({
   suggestSettings,
   dismissedSuggestions,
   playtestFlags,
+  cutterState,
+  cutterPrefs,
   targetBracket,
   profileDefaults,
 }: Props) {
@@ -352,7 +372,7 @@ export function DeckEditor({
 
   // Text from quick add's "See all results", for the Search panel to open with.
   const [searchSeed, setSearchSeed] = useState<string | undefined>(undefined);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
 
   /** A whole import is one change: one save call, one undo step. */
@@ -441,7 +461,11 @@ export function DeckEditor({
   // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
   const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
   const [defaults, setDefaults] = useState(profileDefaults);
-  const roleDefs = useMemo(() => buildRoleDefs(roleSettings.targets, roleSettings.custom), [roleSettings.targets, roleSettings.custom]);
+  // Tutors follows the target bracket until its slider is moved (C1b).
+  const roleDefs = useMemo(
+    () => buildRoleDefs(roleSettings.targets, roleSettings.custom, bracket.target),
+    [roleSettings.targets, roleSettings.custom, bracket.target],
+  );
   const allRoles = useMemo(() => (tags.tree ? resolveRoles(roleDefs, tags.tree) : []), [tags.tree, roleDefs]);
   const hiddenRoles = useMemo(() => hiddenRoleKeys(roleSettings.targets), [roleSettings.targets]);
   const roles = useMemo(() => allRoles.filter((r) => !hiddenRoles.has(r.key)), [allRoles, hiddenRoles]);
@@ -523,6 +547,8 @@ export function DeckEditor({
       // Basic lands and most lands have no function tags; only flag spells.
       untagged: tags.loaded.has(id) && !tags.oracleTags[id]?.length && !isLand(line.card.type_line),
       flags: flags[id] ?? 0,
+      tutor: lineRoleKeys(line).includes(TUTORS_KEY),
+      locked: line.board === "main" && locked.has(id),
       highlighted: matchesHighlight(line),
       fresh: fresh === id,
       // In Group by Role the heading already names the first role.
@@ -624,6 +650,61 @@ export function DeckEditor({
   const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
   const suggestStyle = useSuggestSettings(deck.id, suggestSettings, readOnly);
   const dismissed = useDismissed(deck.id, dismissedSuggestions, readOnly);
+
+  // ---------- Smart Cutter (v2) ----------
+  const cutter = useCutterState(deck.id, cutterState, readOnly);
+  const cutterSettings = useCutterPrefs(readOnly ? null : userId, cutterPrefs);
+  const locked = new Set(cutter.state.locks);
+  const toggleLock = (card: CardSummary, on: boolean) => {
+    cutter.setState((st) => ({ ...st, locks: on ? [...new Set([...st.locks, card.oracle_id])] : st.locks.filter((x) => x !== card.oracle_id) }));
+    say(on ? `${card.name} is locked: the Smart Cutter will never suggest cutting it.` : `${card.name} is unlocked.`);
+  };
+  const cutterCards = (): CutterCard[] =>
+    [...commanders, ...mainLines].map((l) => ({
+      card: l.card,
+      quantity: l.quantity,
+      commander: l.board === "commander",
+      tags: tags.oracleTags[l.card.oracle_id] ?? [],
+      roles: lineRoleKeys(l),
+    }));
+  /** Asks first when a manual removal would put a role below target (David, Nov 7, 2026); otherwise just does it. */
+  const [belowTarget, setBelowTarget] = useState<{ lines: string[]; proceed: () => void } | null>(null);
+  const guardRemoval = (plan: Plan, proceed: () => void) => {
+    if (readOnly || !plan.ok || !cutterSettings.prefs.belowTargetWarning) return proceed();
+    const net: Record<string, number> = {};
+    for (const r of plan.change.rows) if (r.board === "main" || r.board === "commander") net[r.oracle_id] = (net[r.oracle_id] ?? 0) + r.from - r.to;
+    const removing = Object.fromEntries(Object.entries(net).filter(([, n]) => n > 0));
+    const rows = Object.keys(removing).length ? belowTargetWarning(cutterCards(), roles, removing) : [];
+    if (!rows.length) return proceed();
+    setBelowTarget({ lines: belowTargetText(rows), proceed });
+  };
+  /** Smart Cutter Apply: every cut and swap as one edit, with a reason per card for the Timeline. */
+  const applyCuts = (cuts: CutItem[], adds: AddItem[], toMaybe: boolean): boolean => {
+    type Item = { cut: true; c: CutItem } | { cut: false; a: AddItem };
+    const items: Item[] = [...cuts.map((c) => ({ cut: true as const, c })), ...adds.map((a) => ({ cut: false as const, a }))];
+    const n = cuts.reduce((x, c) => x + c.quantity, 0);
+    const label = `Smart Cutter: cut ${n === 1 ? "1 card" : `${n} cards`}${adds.length ? `, added ${adds.length}` : ""}${toMaybe ? " (to the maybeboard)" : ""}`;
+    const { plan, skipped } = planBulk(
+      entries,
+      items,
+      (e, it) => {
+        if (!it.cut) return planAdd(e, it.a.card, "main");
+        if (toMaybe) return planMove(e, it.c.card, "main", "maybe");
+        return planSetQuantity(e, it.c.card, "main", Math.max(0, (e[entryKey("main", it.c.card.oracle_id)] ?? 0) - it.c.quantity));
+      },
+      () => label,
+    );
+    if (!plan.ok) {
+      say(plan.reason);
+      return false;
+    }
+    const notes = Object.fromEntries([...cuts.map((c) => [c.card.oracle_id, c.reason]), ...adds.map((a) => [a.card.oracle_id, a.reason])]);
+    const change = keepPrintings(keepCategories({ ...plan.change, notes: { label: "Smart Cutter", cards: notes } }, state.categories), state.printings);
+    dispatch({ type: "apply", change, cards: adds.map((a) => a.card) });
+    save(toSavePayload(change));
+    say(`${label}.${skipped.length ? ` Skipped ${skipped.length}: ${skipped[0]}` : ""} Ctrl+Z undoes it.`, true);
+    return true;
+  };
   const openSuggest = (source: SuggestSource) => {
     setSuggestFor(source);
     setPanel("suggest");
@@ -686,12 +767,11 @@ export function DeckEditor({
   const saveDefaults = async () => {
     if (!userId) return "Sign in to save defaults.";
     const supabase = createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ default_role_targets: roleSettings.targets, custom_roles: roleSettings.custom })
-      .eq("id", userId);
+    // Tutors stays out: each deck follows its own bracket for it.
+    const targets = withoutBracketTargets(roleSettings.targets);
+    const { error } = await supabase.from("profiles").update({ default_role_targets: targets, custom_roles: roleSettings.custom }).eq("id", userId);
     if (error) return `Couldn't save: ${error.message}`;
-    setDefaults({ targets: roleSettings.targets, custom: roleSettings.custom });
+    setDefaults({ targets, custom: roleSettings.custom });
     return "Saved. New decks will start with these targets.";
   };
   const renderProfile = (hideTitle = false) => (
@@ -721,7 +801,7 @@ export function DeckEditor({
         if (highlight === `role:${key}`) setHighlight(null);
       }}
       onResetDefaults={() => {
-        roleSettings.setTargets(defaults.targets);
+        roleSettings.setTargets(withoutBracketTargets(defaults.targets));
         roleSettings.setCustom(defaults.custom);
       }}
     />
@@ -798,6 +878,10 @@ export function DeckEditor({
   };
   const plural = (n: number) => (n === 1 ? "1 card" : `${n} cards`);
   const bulkMove = (to: Board) => {
+    const planned = planBulk(entries, selectedLines, (e, l) => planMove(e, l.card, l.board, to), () => "");
+    guardRemoval(planned.plan, () => bulkMoveNow(to));
+  };
+  const bulkMoveNow = (to: Board) => {
     const change = runBulk(
       planBulk(entries, selectedLines, (e, l) => planMove(e, l.card, l.board, to), (n) => `Moved ${plural(n)} to the ${BOARD_LABELS[to].toLowerCase()}`),
     );
@@ -822,8 +906,10 @@ export function DeckEditor({
       ),
     );
   const bulkRemove = () => {
-    if (runBulk(planBulk(entries, selectedLines, (e, l) => planSetQuantity(e, l.card, l.board, 0), (n) => `Removed ${plural(n)}`)))
-      setSelected(new Set());
+    const planned = planBulk(entries, selectedLines, (e, l) => planSetQuantity(e, l.card, l.board, 0), (n) => `Removed ${plural(n)}`);
+    guardRemoval(planned.plan, () => {
+      if (runBulk(planned)) setSelected(new Set());
+    });
   };
   const bulkTag = (t: MyTag, on: boolean) => {
     const unique = [...new Map(selectedLines.map((l) => [l.card.oracle_id, l.card])).values()];
@@ -934,6 +1020,11 @@ export function DeckEditor({
             >
               ▶ Playtest
             </Link>
+            {!readOnly && size > 100 && (
+              <button type="button" className="btn btn-gold" aria-pressed={panel === "cutter"} onClick={() => setPanel("cutter")} title="Smart Cutter: what to cut, and why">
+                ✂ Cut {size - 100}
+              </button>
+            )}
             {!readOnly && (
               <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
                 ↗ Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
@@ -945,6 +1036,7 @@ export function DeckEditor({
                 { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
                 ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
+                ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
               ]}
             />
           </>
@@ -1040,6 +1132,55 @@ export function DeckEditor({
           paused={!!sheet}
           onOpenCard={openLine}
           onClose={closePanel}
+        />
+      )}
+      {panel === "cutter" && !readOnly && tags.tree && (
+        <CutterPanel
+          deckId={deck.id}
+          lines={[...commanders, ...mainLines]}
+          roleKeysOf={lineRoleKeys}
+          tagsOf={(id) => tags.oracleTags[id] ?? []}
+          roles={roles}
+          tree={tags.tree}
+          themesFor={(list) =>
+            trees
+              ? themeTags(
+                  list.map((c) => ({ oracle: c.tags, art: [], commander: c.commander, land: isLand(c.card.type_line) })),
+                  { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: roleTagSet, hidden },
+                ).slice(0, 15)
+              : []
+          }
+          keysOf={(t) => (trees ? cardKeys({ oracle: t, art: [], commander: false, land: false }, themeSettings.specific, trees) : [])}
+          rolesFor={(c, t) => visibleRoleKeys(c, t)}
+          combos={combos.combos}
+          bracketFindings={estimate ? overTarget(estimate, bracket.target) : []}
+          bracket={{ target: bracket.target, deck: bracketDeck }}
+          identity={identity}
+          dismissedSuggestions={dismissed.dismissed}
+          state={cutter.state}
+          setState={cutter.setState}
+          prefs={cutterSettings.prefs}
+          setPrefs={cutterSettings.setPrefs}
+          saveError={cutter.saveError ?? cutterSettings.saveError}
+          paused={!!sheet}
+          onApply={applyCuts}
+          onOpenCard={openLine}
+          onSuggestRole={(key) => {
+            setPanel(null);
+            suggestForRole(key);
+          }}
+          onClose={closePanel}
+        />
+      )}
+      {belowTarget && (
+        <BelowTargetDialog
+          lines={belowTarget.lines}
+          onCancel={() => setBelowTarget(null)}
+          onRemove={(stopWarning) => {
+            if (stopWarning) cutterSettings.setPrefs((pr) => ({ ...pr, belowTargetWarning: false }));
+            belowTarget.proceed();
+            setBelowTarget(null);
+          }}
         />
       )}
       {panel === "history" && !readOnly && (
@@ -1242,7 +1383,10 @@ export function DeckEditor({
                 onOpen={clickLine}
                 onHover={(l) => setPreview(l.card)}
                 onQuantity={(l, n) => {
-                  if (run(planSetQuantity(entries, l.card, l.board, n)) && n === 0) say(`Removed ${l.card.name}.`, true);
+                  const plan = planSetQuantity(entries, l.card, l.board, n);
+                  guardRemoval(plan, () => {
+                    if (run(plan) && n === 0) say(`Removed ${l.card.name}.`, true);
+                  });
                 }}
                 onCardDrop={view.group === "role" && !readOnly && roles.length > 0 ? dropOnRole : undefined}
               />
@@ -1334,6 +1478,16 @@ export function DeckEditor({
                     onChange={(key, name) => run(planCategory(categories, sheetLine.card, sheetLine.board, key, name))}
                   />
                 )}
+                {sheetLine.board === "main" && (
+                  <button
+                    type="button"
+                    onClick={() => toggleLock(sheetLine.card, !locked.has(sheetLine.card.oracle_id))}
+                    className="min-h-11 rounded-lg border border-foreground/20 px-3 text-sm"
+                    title="The Smart Cutter never suggests cutting a locked card"
+                  >
+                    {locked.has(sheetLine.card.oracle_id) ? "🔓 Unlock (the Smart Cutter may suggest it)" : "🔒 Lock: never suggest cutting"}
+                  </button>
+                )}
                 {userId && (
                   <SheetMyTags
                     tags={myTags.tags}
@@ -1359,10 +1513,16 @@ export function DeckEditor({
             setSheet(null); // show the highlighted cards
           }}
           onMove={(to) => {
-            if (run(planMove(entries, sheetLine.card, sheetLine.board, to))) setSheet({ oracle_id: sheetLine.card.oracle_id, board: to });
+            const plan = planMove(entries, sheetLine.card, sheetLine.board, to);
+            guardRemoval(plan, () => {
+              if (run(plan)) setSheet({ oracle_id: sheetLine.card.oracle_id, board: to });
+            });
           }}
           onQuantity={(n) => {
-            if (run(planSetQuantity(entries, sheetLine.card, sheetLine.board, n)) && n === 0) say(`Removed ${sheetLine.card.name}.`, true);
+            const plan = planSetQuantity(entries, sheetLine.card, sheetLine.board, n);
+            guardRemoval(plan, () => {
+              if (run(plan) && n === 0) say(`Removed ${sheetLine.card.name}.`, true);
+            });
           }}
           pickedHere={!!printings[entryKey(sheetLine.board, sheetLine.card.oracle_id)]}
           myDefault={preferred[sheetLine.card.oracle_id] ?? null}
@@ -1431,5 +1591,39 @@ function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () =>
     <span className={`hidden text-[13px] sm:inline ${status.state === "saving" ? "text-amber-400" : "text-green-400"}`} aria-live="polite">
       {status.state === "saving" ? "Saving…" : "✓ Saved"}
     </span>
+  );
+}
+
+/** Asks before a manual removal puts a role below target; "Don't warn me again" turns it off (also in Settings). */
+function BelowTargetDialog({ lines, onCancel, onRemove }: { lines: string[]; onCancel: () => void; onRemove: (stopWarning: boolean) => void }) {
+  const [stop, setStop] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+  return (
+    <div role="alertdialog" aria-label="Role below target" className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="panel w-full max-w-md space-y-3 bg-panel-raised p-5 text-sm">
+        <h3 className="display text-xl">Remove anyway?</h3>
+        <ul className="list-disc pl-5 text-amber-800 dark:text-amber-300">
+          {lines.map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+        <label className="flex min-h-11 items-center gap-2">
+          <input type="checkbox" checked={stop} onChange={(e) => setStop(e.target.checked)} className="h-5 w-5" />
+          Don&apos;t warn me again
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" autoFocus className="btn min-h-11" onClick={onCancel}>
+            Keep it
+          </button>
+          <button type="button" className="btn min-h-11 border-red-400 text-red-400" onClick={() => onRemove(stop)}>
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
