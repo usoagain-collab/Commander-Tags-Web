@@ -147,6 +147,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `Sheet` ignores touches for its first 350 ms, because phones send a late click where the finger lifted.
 - **Not yet checked on a real phone:** judges used simulated touch events (Nov 1, 2026: UI 13, Readability 14, Bugs 14, all before their fixes).
 
+## Multiplayer playtesting (v2, built Nov 8, 2026)
+
+- `src/lib/playtest/room.ts` (tested): `viewOf` (what others see: counts for hand and library, the board and graveyard in full), `roomCode` / `readCode` (5 letters with no look-alikes), `turnOrder` (join order), `nextSeat`, `activeSeat`, commander damage limit 21. `use-room.ts`: one Realtime channel `playtest-room:<code>`; presence (key = this tab's id in session storage, plus name and join time) gives the seats, broadcast `state` carries each player's view (sent 250 ms after a change and when someone joins), broadcast `turn` the active player. The room code is in session storage, so a refresh rejoins. UI `playtest/multiplayer.tsx` (button z-40, under dialogs). **Testing:** two browser tabs on the test account are two players.
+
 ## Printings and foil (built Oct 31, 2026)
 
 - **David's choices:** option A, stored on the row: `deck_cards.printing_id`, `foil` (needs a printing), `printing_info` jsonb (set, set_name, number, illustration_id, finishes, usd, usd_foil, usd_etched; migration 0025). **Price = the real price of the choice**, foil price when foil, etched counts as foil. Cards with no choice stay at their cheapest printing. A printing with no price falls back to the cheapest, marked "(est.)" in the card sheet.

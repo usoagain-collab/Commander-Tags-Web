@@ -3,6 +3,7 @@ import type { DeckCard } from "@/lib/playtest/game";
 import { printingImage } from "@/lib/deck/printing";
 import { mergeTokens } from "@/lib/deck/token-merge";
 import { loadDeck, UUID } from "../load-deck";
+import { getProfileLook } from "@/lib/supabase/profile";
 import { PlaytestTable } from "./playtest-table";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -17,7 +18,7 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   if (!UUID.test(id)) notFound();
   // One call brings the deck, its card details and the tokens it can make (6c).
-  const loaded = await loadDeck(id, "playtest");
+  const [loaded, look] = await Promise.all([loadDeck(id, "playtest"), getProfileLook()]);
   const { user, deck } = loaded;
   if (!deck) {
     if (!user) redirect(`/login?next=${encodeURIComponent(`/decks/${id}/playtest`)}`);
@@ -35,7 +36,7 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
   // A game table: dark in both looks, so the felt and the cards keep their contrast.
   return (
     <div data-theme="dark" className="h-full bg-background text-foreground">
-      <PlaytestTable deck={{ id: deck.id, name: deck.name }} cards={cards} tokens={mergeTokens(loaded.tokens)} canFlag={deck.owner_id === user?.id} />
+      <PlaytestTable deck={{ id: deck.id, name: deck.name }} cards={cards} tokens={mergeTokens(loaded.tokens)} canFlag={deck.owner_id === user?.id} playerName={look.name} />
     </div>
   );
 }
