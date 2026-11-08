@@ -171,16 +171,17 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Wish list | Cards you want to buy, separate from any deck | Oct 18, 2026 |
 | Change mana cost | Override a card's displayed mana cost for stats (e.g. X spells) | Oct 18, 2026 |
 | Multiplayer playtesting | Playtest against other players (v1's playtester is solo goldfish, phase 6) | Oct 18, 2026 |
-| Close the mulligan dialog | Friend test: the opening-hand dialog can't be dismissed by clicking outside it. Add a close / cancel button (and click outside or Esc) | Oct 24, 2026 |
 | Gamer look and feel | Friend test: the site feels too professional. Give it an aesthetic for Magic players (theme, colors, card-game feel); exact direction decided in v2 | Oct 24, 2026 |
 | Link sign-in methods | A "Link Google / Discord to this account" button, so one account works with both. Supabase merges sign-ins automatically only when both report the same verified email; otherwise each method makes its own account. Needs manual identity linking turned on in Supabase | Oct 24, 2026 |
 | Refined bracket estimate | A smarter bracket estimator that weighs combos, Game Changers and, most importantly, theme cohesiveness (how tightly the deck's cards share themes), instead of v1's floor from rule-breaking cards alone. Exact specs to be decided in the v2 build | Oct 24, 2026 |
 | Copy to my decks | Design judges: a button on a shared deck that copies it into the viewer's own decks, so a friend can start from it | Oct 31, 2026 |
 | Built by <name> | Design judges: show the builder's name on a shared deck | Oct 31, 2026 |
 | Spin the wheel for a commander | A "Spin the wheel" button when picking a commander for a new deck: it serves 5 random Commander-legal commanders to choose from, with a re-spin. The 5 show as a preview on a full-screen frosted overlay, like the Bracket screen on the deck page. Each one shows the full card image, its tags, and the archetypes it is commonly built for | Nov 7, 2026 |
-| Smart Cutter | Helps cut a deck down using its roles, top themes and targets, and explains every suggestion. Default and power user modes. Full design in "Smart Cutter (v2 design)" below; **design awaiting David's review** | Nov 7, 2026 |
+| Smart Cutter | Helps cut a deck down using its roles, top themes and targets, and explains every suggestion. Default and power user modes. Full design in "Smart Cutter (v2 design)" below; design agreed Nov 7, 2026, **C1 engine built**, C2-C6 to do | Nov 7, 2026 |
 | EDHREC suggestions | An EDHREC option for players who still want the cards other players commonly run with their commander, like Moxfield's EDHREC panel (top cards, high synergy, lands and so on). Cards can be excluded as they show up (e.g. a land you know you won't play), and excluded cards stay off the list for that deck. Data source: EDHREC's per-commander JSON, fetched server-side and cached; **needs EDHREC's permission first** (their Terms of Use bar automated queries and republishing) | Nov 7, 2026 |
 | Reorder the left-column tags | Drag the role profile and top tags on the left into your own order, saved | Nov 7, 2026 |
+| Auto build land base | An "Auto build land base" button that fills the deck's lands up to the Lands target with the best lands in the commander's colors (duals, fetches, shocks and so on, then basics in proportion to the deck's color pips). With no lands it builds the whole base; with some lands it adds only what's missing to reach the target. Utility lands are left for the user to add. Hovering the button (tap the ⓘ on phones) explains what it does and how it picks lands. One undoable `Change` | Nov 7, 2026 |
+| Default roles in the profile | Edit your default roles (standard and custom, their tags, hidden ones) and target numbers on the Settings page, without opening a deck. Today defaults can only be saved from a deck's role profile ("Save as my defaults") | Nov 7, 2026 |
 
 ## Not intended
 
@@ -190,7 +191,7 @@ Considered and deliberately left out of this project.
 
 ## Smart Cutter (v2 design)
 
-Drafted Nov 7, 2026 from David's brief, adapted to the codebase. **Status: awaiting David's review; no feature code yet.**
+Drafted Nov 7, 2026 from David's brief, adapted to the codebase. **Status: design agreed with David Nov 7, 2026; C1 (engine + migration 0033) built, C2-C6 to do.**
 
 Helps a builder cut cards systematically, using the deck's roles, top themes and role targets, and explains every suggestion. Cuts are judged by **function** (what the deck needs) the same way suggestions are, never by popularity alone.
 
