@@ -112,7 +112,8 @@ import { deckAccentVars } from "@/lib/ui/deck-colors";
 import { estimatePower } from "@/lib/brackets/power";
 import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
 import { useWishlist } from "@/lib/deck/use-wishlist";
-import { ownedCopies, unownedPrice } from "@/lib/deck/collection";
+import { isFoilFinish, ownedCopies, ownedMatch, unownedPrice } from "@/lib/deck/collection";
+import { markOwnedChanges, shownParts, targetFor } from "@/lib/deck/collection-targets";
 import { useCollection } from "@/lib/deck/use-collection";
 import { artCount, totalPriceWithSplits, type SplitPart, type Splits } from "@/lib/deck/splits";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
@@ -630,7 +631,7 @@ export function DeckEditor({
       myTags: showMyTags ? myTagsOfCard(id) : [],
       manual: !!categories[entryKey(line.board, id)],
       selected: selecting ? selected.has(entryKey(line.board, id)) : undefined,
-      owned: collection.tracking ? { have: ownedCopies(collection.owned, id), need: line.quantity } : undefined,
+      owned: collection.tracking ? ownedMatch(collection.owned, id, shownParts(line, splits, cards[id])) : undefined,
       arts: (() => {
         const n = splits[entryKey(line.board, id)] ? artCount(line.quantity, line.printing, splits[entryKey(line.board, id)]) : 0;
         return n > 1 ? n : undefined;
@@ -1005,6 +1006,19 @@ export function DeckEditor({
     return r.plan.change;
   };
   const plural = (n: number) => (n === 1 ? "1 card" : `${n} cards`);
+  /** Bulk "Mark owned" (collection, v2): tops your collection up to every selected copy, in the printing shown. */
+  const bulkMarkOwned = async () => {
+    const rows = selectedLines.map((l) => ({ oracleId: l.card.oracle_id, parts: shownParts(l, splits, cards[l.card.oracle_id]) }));
+    try {
+      const changes = await markOwnedChanges(collection.owned, rows);
+      if (!changes.length) return say("You already own all of these, in the printings shown.");
+      const copies = changes.reduce((n, c) => n + c.quantity - (collection.rowOf(c.target)?.quantity ?? 0), 0);
+      const failed = await collection.setMany(changes);
+      say(failed ?? `Added ${copies === 1 ? "1 copy" : `${copies} copies`} to your collection.`);
+    } catch (e) {
+      say(`Couldn't look up those printings on Scryfall: ${(e as Error).message}`);
+    }
+  };
   const bulkMove = (to: Board) => {
     const planned = planBulk(entries, selectedLines, (e, l) => planMove(e, l.card, l.board, to), () => "");
     guardRemoval(planned.plan, () => bulkMoveNow(to));
@@ -1647,6 +1661,7 @@ export function DeckEditor({
             onTag={bulkTag}
             onCopies={bulkCopies}
             onRemove={bulkRemove}
+            onMarkOwned={userId ? bulkMarkOwned : undefined}
             onSelectAll={() => setSelected(new Set(selectable.map((o) => entryKey(o.board, o.card.oracle_id))))}
             onClear={() => setSelected(new Set())}
             onDone={stopSelecting}
@@ -1674,14 +1689,37 @@ export function DeckEditor({
           wish={userId ? { on: wishlist.has(sheetLine.card.oracle_id), onToggle: async () => say(await wishlist.toggle(sheetLine.card.oracle_id)) } : undefined}
           collection={
             userId && collection.loaded
-              ? {
-                  have: collection.owned.get(sheetLine.card.oracle_id)?.quantity ?? 0,
-                  foil: collection.owned.get(sheetLine.card.oracle_id)?.foil_quantity ?? 0,
-                  onChange: async (n) => {
-                    const failed = await collection.setQuantity(sheetLine.card.oracle_id, n);
-                    if (failed) say(failed);
-                  },
-                }
+              ? (() => {
+                  const id = sheetLine.card.oracle_id;
+                  const part = shownParts(sheetLine, splits, cards[id]).at(-1)!;
+                  const mine = collection.owned.get(id) ?? [];
+                  const isShown = (r: (typeof mine)[number]) => !!part.printingId && r.printing_id === part.printingId && isFoilFinish(r.finish) === part.foil;
+                  const p = part.printing;
+                  return {
+                    exact: mine.filter(isShown).reduce((n, r) => n + r.quantity, 0),
+                    total: ownedCopies(collection.owned, id),
+                    shownLabel: (() => {
+                      const info = p ?? mine.find(isShown)?.printing_info;
+                      return info ? `${info.set_name} #${info.number}${part.foil ? ", foil" : ""}` : "The printing shown";
+                    })(),
+                    others: mine
+                      .filter((r) => !isShown(r))
+                      .map((r) => ({
+                        quantity: r.quantity,
+                        label: `${r.printing_info ? `${r.printing_info.set.toUpperCase()} #${r.printing_info.number}` : "printing unknown"}${r.finish === "nonfoil" ? "" : ` ${r.finish}`}`,
+                      })),
+                    onAdd: async (delta: number) => {
+                      try {
+                        const target = await targetFor(id, part);
+                        if (!target) return say("Couldn't tell which printing this is.");
+                        const failed = await collection.add(target, delta);
+                        if (failed) say(failed);
+                      } catch (e) {
+                        say(`Couldn't look up this printing on Scryfall: ${(e as Error).message}`);
+                      }
+                    },
+                  };
+                })()
               : undefined
           }
           mixed={{

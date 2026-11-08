@@ -92,3 +92,21 @@ export async function fetchPrintingsByRef(refs: { set: string; number: string }[
   }
   return found;
 }
+
+/** Printings by Scryfall id, keyed by id (75 per request), each with its oracle id. Used by collection imports. */
+export async function fetchPrintingsById(ids: string[]) {
+  const found = new Map<string, { printing: ChosenPrinting; oracleId: string | null }>();
+  const unique = [...new Set(ids)];
+  for (let i = 0; i < unique.length; i += 75) {
+    if (i) await new Promise((r) => setTimeout(r, 110));
+    const res = await fetch("https://api.scryfall.com/cards/collection", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ identifiers: unique.slice(i, i + 75).map((id) => ({ id })) }),
+    });
+    if (!res.ok) throw new Error(`Scryfall returned ${res.status}`);
+    const body = (await res.json()) as { data: ScryfallPrint[] };
+    for (const c of body.data) found.set(c.id, { printing: toPrinting(c, false), oracleId: oracleIdOf(c) });
+  }
+  return found;
+}

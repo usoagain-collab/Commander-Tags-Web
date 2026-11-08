@@ -1,6 +1,6 @@
 "use client";
 
-import { OwnedBadge } from "./owned-badge";
+import { OwnedBadge, type OwnedMark } from "./owned-badge";
 import { useState } from "react";
 import type { ViewMode } from "@/lib/deck/grouping";
 import type { DeckLine } from "@/lib/deck/model";
@@ -31,8 +31,8 @@ export type DeckItem = {
   tutor: boolean;
   /** Locked in the Smart Cutter: never suggested as a cut. */
   locked?: boolean;
-  /** Collection tracking (v2): copies you own against copies in the deck; absent when you track no collection. */
-  owned?: { have: number; need: number };
+  /** Collection tracking (v2): copies you own (any printing, and the exact one shown) against copies in the deck. */
+  owned?: OwnedMark;
   /** Mixed copies (v2): how many different printings the copies show, when more than one. */
   arts?: number;
 };
