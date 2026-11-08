@@ -8,6 +8,9 @@ import { StatusBadge } from "./card-search";
 
 export type QuickAddHandle = { focus: () => void };
 
+/** The commander box loads this many at a time, and the next page as the list scrolls near its end. */
+const COMMANDER_PAGE = 20;
+
 type Props = {
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary | null) => void;
@@ -35,6 +38,10 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
   // What the shown results are for, and a board waiting on them: Enter can arrive before the search answers.
   const answered = useRef("");
   const pendingBoard = useRef<Board | null>(null);
+  // Commander box paging: more pages may exist, and a page is on its way.
+  const [hasMore, setHasMore] = useState(false);
+  const loadingMore = useRef(false);
+  const listRef = useRef<HTMLUListElement>(null);
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }));
 
@@ -46,19 +53,14 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     const q = text.trim();
     if (q.length < 2) {
       setResults([]);
+      setHasMore(false);
       return;
     }
     const id = ++latest.current;
     const timer = setTimeout(async () => {
-      const { data } = await supabase.rpc("search_cards", {
-        q,
-        lim: commanderOnly ? 25 : 15,
-        p_identity: colors === null ? null : colors.split(""),
-        p_any_legality: withBanned,
-      });
+      const usable = await fetchPage(q, 0);
       if (id !== latest.current) return;
-      const found = (data ?? []) as CardSummary[];
-      const usable = commanderOnly ? found.filter((c) => c.can_be_commander).slice(0, 15) : found;
+      setHasMore(!!commanderOnly && usable.length === COMMANDER_PAGE);
       answered.current = q;
       const waiting = pendingBoard.current;
       pendingBoard.current = null;
@@ -71,6 +73,38 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     // choose only touches this box and calls onAdd; re-running the search for a new onAdd would be wrong.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, supabase, commanderOnly, colors, withBanned]);
+
+  /** One page of matches. The commander box asks the database for commanders only, so every row is usable. */
+  async function fetchPage(q: string, offset: number) {
+    const { data } = await supabase.rpc("search_cards", {
+      q,
+      lim: commanderOnly ? COMMANDER_PAGE : 15,
+      p_identity: colors === null ? null : colors.split(""),
+      p_any_legality: withBanned,
+      p_commanders_only: !!commanderOnly,
+      p_offset: offset,
+    });
+    return (data ?? []) as CardSummary[];
+  }
+
+  /** Commander box: the list scrolled near its end, so fetch the next page and add it below. */
+  async function loadMore() {
+    const q = text.trim();
+    if (!hasMore || loadingMore.current || answered.current !== q) return;
+    loadingMore.current = true;
+    const id = latest.current;
+    const next = await fetchPage(q, results.length);
+    loadingMore.current = false;
+    if (id !== latest.current) return; // the text changed meanwhile
+    const seen = new Set(results.map((c) => c.oracle_id));
+    setResults([...results, ...next.filter((c) => !seen.has(c.oracle_id))]);
+    setHasMore(next.length === COMMANDER_PAGE);
+  }
+
+  // Arrow keys move past the visible rows: keep the active one in view.
+  useEffect(() => {
+    listRef.current?.querySelectorAll('[role="option"]')[active]?.scrollIntoView({ block: "nearest" });
+  }, [active]);
 
   useEffect(() => {
     onPreview(open ? (results[active] ?? null) : null);
@@ -101,6 +135,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       e.preventDefault();
       setOpen(true);
       setActive((i) => Math.min(i + 1, Math.max(results.length - 1, seeAllAt)));
+      if (active >= results.length - 3) void loadMore();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => Math.max(i - 1, 0));
@@ -147,7 +182,12 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       {open && (results.length > 0 || (onSeeAll && answered.current === text.trim() && text.trim().length >= 2)) && (
         <ul
           id="quick-add-results"
+          ref={listRef}
           role="listbox"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            if (el.scrollTop + el.clientHeight > el.scrollHeight - 150) void loadMore();
+          }}
           className="absolute z-30 mt-1 max-h-96 w-full overflow-auto rounded-lg border border-foreground/15 bg-panel-raised text-left shadow-2xl"
         >
           {results.map((card, i) => (
@@ -173,6 +213,11 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
               <ManaCost cost={card.mana_cost} />
             </li>
           ))}
+          {hasMore && (
+            <li role="presentation" className="px-3 py-2 text-center text-[13px] opacity-60">
+              Loading more…
+            </li>
+          )}
           {onSeeAll && results.length === 0 && (
             <li role="presentation" className="px-3 py-2 text-sm opacity-80">
               No card named like that{colors !== null ? " in your commander's colors" : ""}.
