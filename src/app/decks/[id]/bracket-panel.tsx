@@ -2,10 +2,12 @@
 
 // Bracket targeting in the editor (Phase 5b): the header badge, the one place that says the deck is above its
 // target, and the Bracket panel it opens (target picker and every finding). Nothing is ever blocked.
+import { useState } from "react";
 import { bracketSections, estimateLabel, overTarget, type BracketEstimate, type Finding } from "@/lib/brackets/evaluate";
 import { BRACKETS, COMBO_TAG_NAMES, type BracketNumber } from "@/lib/brackets/rules";
 import type { DeckLine } from "@/lib/deck/model";
 import { GlassOverlay } from "./glass-overlay";
+import type { PowerEstimate } from "@/lib/brackets/power";
 
 /** "Bracket 3 · cards 4+": target and estimate; amber when the cards go above the target. */
 export function BracketBadge({
@@ -51,10 +53,13 @@ export function BracketPanel({
   saveError,
   comboError,
   paused,
+  power,
   onTarget,
   onOpenCard,
   onClose,
 }: {
+  /** Refined estimate (v2): how the deck is likely to play, with the points behind it. */
+  power?: PowerEstimate | null;
   target: BracketNumber;
   estimate: BracketEstimate | null;
   /** The cards the estimate looked at. */
@@ -122,6 +127,8 @@ export function BracketPanel({
           {saveError && <p className="mt-1 text-red-400">{saveError}</p>}
           {comboError && <p className="mt-1 text-amber-400">{comboError}</p>}
         </section>
+
+        {power && <HowItPlays power={power} floor={estimate?.floor ?? 1} target={target} linesIn={linesIn} onOpenCard={onOpenCard} />}
 
         {estimate &&
           bracketSections(estimate, target).map((s) => {
@@ -227,4 +234,80 @@ export function cardFlag(f: Finding, oracleId: string, nameOf: (id: string) => s
   if (f.kind === "extra-turns") return "Extra turn";
   const other = f.cards.find((c) => c !== oracleId);
   return `Combo with ${other ? nameOf(other) : "another card"}`;
+}
+
+/**
+ * How it plays (v2): the points model behind "plays like N". Each part opens its cards, so the reason for the
+ * number is never hidden. Rules still set the floor: the cards above can only raise it.
+ */
+function HowItPlays({
+  power,
+  floor,
+  target,
+  linesIn,
+  onOpenCard,
+}: {
+  power: PowerEstimate;
+  floor: BracketNumber;
+  target: BracketNumber;
+  linesIn: (ids: string[]) => DeckLine[];
+  onOpenCard: (line: DeckLine) => void;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const shown = open ? power.parts.find((p) => p.key === open) : null;
+  const ahead = power.playsLike > target;
+  return (
+    <section>
+      <h3 className="eyebrow mb-2">How it plays</h3>
+      <div className="panel p-4">
+        <p className="text-base">
+          <span className={`display text-2xl ${ahead ? "text-amber-300" : ""}`}>Plays like bracket {power.playsLike}</span>
+          <span className="ml-2 opacity-80">power {power.score} / 100</span>
+        </p>
+        <p className="mt-1 opacity-80">
+          {power.playsLike > power.mapped
+            ? `The points alone say ${power.mapped}, but its cards already put it at ${floor} or higher.`
+            : ahead
+              ? `Stronger than your target of ${target}: the parts below show where the power comes from.`
+              : `Within your target of ${target}.`}{" "}
+          Under 15 plays like 1, 15-34 like 2, 35-59 like 3, 60+ like 4.
+        </p>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {power.parts.map((p) => (
+            <li key={p.key}>
+              <button
+                type="button"
+                onClick={() => setOpen(open === p.key ? null : p.key)}
+                disabled={p.cards.length === 0}
+                aria-expanded={open === p.key}
+                className={`block w-full rounded-lg border px-3 py-2 text-left ${open === p.key ? "border-gold" : "border-foreground/15"} ${p.cards.length ? "hover:bg-foreground/5" : "cursor-default"}`}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">{p.label}</span>
+                  <span className="tabular-nums">
+                    {p.points} <span className="opacity-60">/ {p.max}</span>
+                  </span>
+                </span>
+                <span aria-hidden className="mt-1 block h-1.5 overflow-hidden rounded-full bg-foreground/10">
+                  <span className="block h-full rounded-full bg-gold" style={{ width: `${(p.points / p.max) * 100}%` }} />
+                </span>
+                <span className="mt-1 block text-[13px] opacity-75">{p.detail}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {shown && (
+          <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
+            {linesIn(shown.cards).map((l) => (
+              <li key={l.card.oracle_id}>
+                <button type="button" onClick={() => onOpenCard(l)} className="block w-full text-left" title={`Open ${l.card.name}`}>
+                  {l.card.image_normal ? <img src={l.card.image_normal} alt={l.card.name} className="w-full rounded-[4.75%/3.5%]" /> : <span className="text-sm">{l.card.name}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
 }
