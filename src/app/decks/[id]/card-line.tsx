@@ -15,7 +15,7 @@ type Props = {
   drag?: React.HTMLAttributes<HTMLLIElement>;
 };
 
-/** One card in Text view. The name opens the card sheet; quick −/+/✕ sit at the end on wider screens. */
+/** One card in Text view. The row opens the card sheet; quick −/+/✕ show next to the name on hover (mouse screens). */
 export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: Props) {
   const { line, warnings, untagged, highlighted, roleNames, myTags, manual, selected, flags, fresh } = item;
   const selecting = selected !== undefined;
@@ -42,16 +42,45 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
         </span>
       )}
       <span className="w-6 shrink-0 text-right tabular-nums opacity-70">{quantity}</span>
+      {/* The name comes first and wins the room; badges shorten or hide instead (full text in their tooltips). */}
       <button
         type="button"
         onClick={onOpen}
         onFocus={onHover}
         aria-pressed={selected}
-        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left"
+        className="flex min-h-9 min-w-0 items-center text-left"
         title={`Open ${card.name}`}
       >
-        {/* The name keeps at least ~45% of the row; badges shorten instead (full text in their tooltips). */}
-        <span className="min-w-[45%] truncate">{card.name}</span>
+        <span className="truncate">{card.name}</span>
+      </button>
+
+      {/* Quick actions right after the name, for mouse users. On phones everything lives in the card sheet instead (bigger targets). */}
+      {!readOnly && !selecting && (
+        <span className="hidden shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:sm:flex">
+          {multi && (
+            <>
+              <QuickButton label={`One fewer ${card.name}`} onClick={() => onQuantity(quantity - 1)}>
+                −
+              </QuickButton>
+              <QuickButton label={`One more ${card.name}`} onClick={() => onQuantity(quantity + 1)}>
+                +
+              </QuickButton>
+            </>
+          )}
+          <QuickButton label={`Remove ${card.name}`} onClick={() => onQuantity(0)} danger>
+            ✕
+          </QuickButton>
+        </span>
+      )}
+
+      {/* The rest of the row opens the card too (the name button above is the keyboard stop). */}
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={onOpen}
+        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 overflow-hidden text-left"
+        title={`Open ${card.name}`}
+      >
         {line.printing?.foil && (
           <span title="Foil" className="shrink-0 rounded bg-gold/15 px-1.5 py-0.5 text-xs text-gold">
             ✦<span className="hidden sm:inline"> Foil</span>
@@ -96,25 +125,6 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
       <span className="hidden w-14 shrink-0 text-right text-[13px] tabular-nums opacity-80 sm:inline">
         {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "–"}
       </span>
-
-      {/* Quick actions for mouse users. On phones everything lives in the card sheet instead (bigger targets). */}
-      {!readOnly && !selecting && (
-        <span className="hidden shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:sm:flex">
-          {multi && (
-            <>
-              <QuickButton label={`One fewer ${card.name}`} onClick={() => onQuantity(quantity - 1)}>
-                −
-              </QuickButton>
-              <QuickButton label={`One more ${card.name}`} onClick={() => onQuantity(quantity + 1)}>
-                +
-              </QuickButton>
-            </>
-          )}
-          <QuickButton label={`Remove ${card.name}`} onClick={() => onQuantity(0)} danger>
-            ✕
-          </QuickButton>
-        </span>
-      )}
     </li>
   );
 }

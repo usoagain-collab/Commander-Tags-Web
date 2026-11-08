@@ -160,13 +160,16 @@ export function DeckView(props: Props) {
               {!props.collapsed.has(b.section.key) && (
                 <ul className={`grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 ${props.roomy ? "xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]" : ""}`}>
                   {b.section.items.map((it) => (
-                    <li key={it.line.card.oracle_id}>
+                    <li key={it.line.card.oracle_id} className="group relative">
                       <Tile
                         item={it}
                         onOpen={(e) => props.onOpen(it.line, e)}
                         onHover={() => props.onHover(it.line)}
                         drag={dragProps(it.line, !!props.onCardDrop)}
                       />
+                      {!props.readOnly && it.selected === undefined && (
+                        <TileRemove name={it.line.card.name} onRemove={() => props.onQuantity(it.line, 0)} />
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -326,6 +329,24 @@ function Tile({
       <SelectedMark selected={item.selected} />
       {/* Under the image, not on it: the whole tile stays the one tap target. */}
       <MyTagChips tags={item.myTags} className="pointer-events-none mt-1" />
+    </button>
+  );
+}
+
+/**
+ * Quick remove on a grid tile: a round ✕ just off the top-left corner, shown on hover. Mouse screens only; on phones
+ * the whole card stays the one tap target and Remove lives in the card sheet.
+ */
+function TileRemove({ name, onRemove }: { name: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      title={`Remove ${name}`}
+      aria-label={`Remove ${name}`}
+      className="absolute -left-2 -top-2 z-10 hidden h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-black/85 text-sm font-bold text-red-400 opacity-0 shadow transition-[opacity,transform] duration-[140ms] hover:bg-red-600 hover:text-white focus-visible:opacity-100 group-hover:-translate-y-[3px] group-hover:opacity-100 [@media(hover:hover)]:sm:flex"
+    >
+      ✕
     </button>
   );
 }
