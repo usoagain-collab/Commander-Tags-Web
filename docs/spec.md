@@ -202,6 +202,7 @@ Helps a builder cut cards systematically, using the deck's roles, top themes and
 - **Protection = "would drop a role below target"**, not just "the only card left": a card is never suggested if cutting it puts any role under its target, and a manual cut that does so asks first.
 - **The floor survives a refresh** in this tab (session storage), until Apply or Discard.
 - **Apply removes the cut cards** by default, with a "Send cuts to the maybeboard" checkbox.
+- **After the C1 check (Nov 7, 2026):** tutors get a **Tutors role whose default target follows the target bracket** (below); good-stuff decks that detect as Control / stax are left to the Yes / No question; nine vague tags joined the theme noise list (interrupt, intervening if clause, namesake spell, single target instant/sorcery, mini refund, refund, full refund, evasion, commander identity matters), which also cleans up Top tags and Suggest.
 
 ### Where it fits in the app
 
@@ -301,6 +302,17 @@ Tapping anywhere on a suggested card opens its "why" (the whole card is the tap 
 - **Dismiss:** "Not a cut" removes it from the shortlist for this deck. Power user picks a reason (combo piece, pet card, meta call, other). "Show dismissed (N)" brings them back. Separate from Suggest's `dismissed_suggestions`.
 - **Cutting-room floor:** a pile on the Cutter screen. Each card keeps its cut reason (the suggestion's one-line why, or "Cut by hand"), Restore puts it back, and it's the first place swaps look. It disappears on Apply or Discard; until then it's kept in session storage (`cutter:<deckId>`, this tab only, like the playtester), so a refresh doesn't lose it. If the deck changed in the meantime, cards no longer on the mainboard drop off the floor. **Apply** removes the cut cards, or moves them to the maybeboard when "Send cuts to the maybeboard" is ticked (remembered per user). Applied cuts show in History's Timeline as **one** entry labeled "Smart Cutter", each card with its reason.
 
+### Tutors: a role with a bracket-based target (David, Nov 7, 2026)
+
+The C1 check suggested cutting Mystical Tutor and Enlightened Tutor: they fill no role and share no themes, so they score low. Tutors matter differently by power level, so they become a role whose **default target depends on the deck's target bracket**.
+
+- **Tutors role**, a new standard role: the `tutor` tag (1,235 cards) and its sub-tags, **minus land tutors** (`tutor-land` and below, 622 cards: Cultivate, Nature's Lore), which are Ramp. `RoleDef` gains `except` (slugs whose subtrees don't count). It shows in the role profile like the others and can be hidden.
+- **Default target by bracket** (in `src/lib/brackets/rules.ts` next to the other bracket data, so it's one edit to change): 1 Exhibition **0**, 2 Core **1**, 3 Upgraded **3**, 4 Optimized **6**, 5 cEDH **10**. These are Deck Genome's suggestions, not WotC rules: the Oct 2025 bracket update removed tutor limits. Starting guesses to tune.
+- **Follows the bracket until you move it:** with no `tutors` key in `decks.role_targets`, the target comes from the bracket and changes when the bracket does. Moving the slider saves the number, and it stays put after that; Reset brings back the bracket default. "Save as my defaults" doesn't store a tutors number, so every deck keeps following its own bracket.
+- **In the Cutter:** an ordinary role. Over target, tutors feel saturation pressure (a bracket 2 deck with 5 tutors gets told to cut some); at or under target, they are protected by the below-target rule. The "why" says "Tutors 5 / 1 for bracket 2".
+- **Blue Tutor label on the card image** (editor grid tiles, stacks and the card sheet image; a chip on Text rows), for cards that count as Tutors. On desktop, hovering it shows: "Tutors find the card you need, so one tutor can stand in for removal, ramp or a combo piece. They make a deck more consistent and stronger, but also more predictable. Think about how they fit your theme, your power level and your bracket: fewer in low brackets, more in high ones." **Phones:** a hover doesn't exist, and a separate tap target on the image is what David ruled out (Moxfield's ⋯), so the label is not its own button: tapping it opens the card like the rest of the image, and the card sheet shows the same explanation under its roles.
+- **Not a bracket finding:** going over the tutor target never moves the bracket estimate or turns the header badge amber; it's a role like Ramp.
+
 ### Data model changes (migration 0033, applied Nov 7, 2026)
 
 | Change | What | Why |
@@ -328,11 +340,12 @@ Tapping anywhere on a suggested card opens its "why" (the whole card is the tap 
 Default mode first, power user after. Each step ends usable.
 
 1. **C1 Engine + data (built Nov 7, 2026):** migration 0033 (0031 and 0032 went to other features), config, archetypes, detection, effective curve, keep score, guardrails, `planCuts`, all tested. No UI yet; check the results on Omo and the 10 QA decks with David.
-2. **C2 Cutter screen (default):** overlay, archetype label with the Yes / No flow, shortlist for over 100, "why" pop-up, cutting-room floor (kept across a refresh), Restore, Apply as one `Change` with notes (remove, or to the maybeboard), Discard prompt, lock and dismiss.
-3. **C3 Exactly 100 / under 100 + editor guardrails:** 3 weakest with swaps, fill-the-gaps view linking to Suggest, 🔒 in the card sheet and on rows / tiles, below-target warning on every manual removal path, its setting.
-4. **C4 Power user basics:** Settings toggle, weight sliders, dismiss reasons, combo protection switch, curve overrides, custom archetypes editor.
-5. **C5 Power user tools:** walkthrough, head to head, 2-for-1 swaps, what-if preview.
-6. **C6 Tuning pass:** compare cuts against how David would cut Omo and two QA decks; tune curves and weights; phone check.
+2. **C1b Tutors role:** `except` on roles, the Tutors role and its bracket defaults, slider follows the bracket until moved, Tutor label and explanation in the editor and card sheet, tests. No migration (targets already live in `decks.role_targets`).
+3. **C2 Cutter screen (default):** overlay, archetype label with the Yes / No flow, shortlist for over 100, "why" pop-up, cutting-room floor (kept across a refresh), Restore, Apply as one `Change` with notes (remove, or to the maybeboard), Discard prompt, lock and dismiss.
+4. **C3 Exactly 100 / under 100 + editor guardrails:** 3 weakest with swaps, fill-the-gaps view linking to Suggest, 🔒 in the card sheet and on rows / tiles, below-target warning on every manual removal path, its setting.
+5. **C4 Power user basics:** Settings toggle, weight sliders, dismiss reasons, combo protection switch, curve overrides, custom archetypes editor.
+6. **C5 Power user tools:** walkthrough, head to head, 2-for-1 swaps, what-if preview.
+7. **C6 Tuning pass:** compare cuts against how David would cut Omo and two QA decks; tune curves and weights; phone check.
 
 ### Open questions and risks
 
@@ -341,6 +354,7 @@ Default mode first, power user after. Each step ends usable.
 | Protection can leave little to cut | With the below-target rule, a 100-card deck with every role exactly on target protects every card in a role; only theme cards and cards whose roles are all over target remain | Say so plainly: "Every role card holds a role at its target. Raise a target or lower one to free cards up", and still list the weakest theme cards |
 | Tag gaps for archetypes | No tag for voltron, Equipment or Aura (those are type lines), +1/+1 specifically (`counters-matter` covers every counter type), cascade (a keyword, not a tag), or a solid enchantress tag (`enchantment-engine` has 22 cards). `hate` (4,706) is too broad to signal stax on its own | Mix tags with type-line counts and deck facts (as the table does); a test keeps every slug real; tune with real decks |
 | Curves are guesses | No source data for curve per archetype | Start with the table, tune in C6; power users override |
+| Good-stuff decks | Atraxa, Kenrith, Niv-Mizzet and Tymna detect as Control / stax (counterspells and tax pieces are common in staples) | David, Nov 7, 2026: leave it; the Yes / No question corrects it |
 | Overlap of coverage and theme fit | With themes selected, a theme-heavy card scores in both | Accepted by David; coverage counts breadth (how many jobs), theme fit counts centrality (how core the themes are). Watch in C6 |
 | Untagged / new cards | ~200 legal cards have no tags; new cards get tags only after the nightly import | Never suggested, flagged "No tags yet" |
 | Swap pool speed | `suggestion_pool` takes 0.3-0.5 s warm and up to ~8 s on a cold database | Load swaps after the shortlist shows; retry once on timeout (as Suggest does) |
