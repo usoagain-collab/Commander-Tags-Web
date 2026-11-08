@@ -28,6 +28,8 @@ export type DeckItem = {
   flags: number;
   /** Counts toward the Tutors role (C1b): shows the blue Tutor label. */
   tutor: boolean;
+  /** Locked in the Smart Cutter: never suggested as a cut. */
+  locked?: boolean;
 };
 export type ViewSection = {
   key: string;
@@ -421,6 +423,11 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
         </span>
       )}
       {item.tutor && <TutorBadge />}
+      {item.locked && (
+        <span title="Locked: the Smart Cutter never suggests cutting it" className="rounded bg-black/80 px-1.5 py-0.5 text-xs text-white">
+          🔒
+        </span>
+      )}
       {item.untagged && <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">untagged</span>}
       {item.flags > 0 && (
         <span title={`Flagged as an underperformer ${item.flags}× in playtests`} className="rounded bg-rose-600 px-1.5 py-0.5 text-xs font-semibold text-white">

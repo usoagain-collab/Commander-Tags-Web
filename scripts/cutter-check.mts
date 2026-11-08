@@ -45,7 +45,7 @@ for (const id of ids) {
     (await db.query("select hidden_tags from profiles where id = $1", [b.deck.owner_id])).rows[0]?.hidden_tags ?? [],
   );
   const targets = readTargets(b.deck.role_targets);
-  const allRoles = resolveRoles(buildRoleDefs(targets, readCustomRoles(b.deck.custom_roles)), tree);
+  const allRoles = resolveRoles(buildRoleDefs(targets, readCustomRoles(b.deck.custom_roles), (b.deck.target_bracket ?? 3) as BracketNumber), tree);
   const hiddenRoles = hiddenRoleKeys(targets);
   const roles = allRoles.filter((r) => !hiddenRoles.has(r.key));
 

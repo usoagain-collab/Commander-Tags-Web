@@ -23,9 +23,11 @@ const payload: TagTreePayload = {
     ["pure-draw", "pure draw", 900, [10]], // 13
     ["land-ramp", "land ramp", 490, [2]], // 14
     ["tutor", "tutor", 0, []], // 15
-    ["tutor-to-hand", "tutor-to-hand", 640, [15]], // 16
+    ["tutor-to", "tutor-to", 0, [15]], // 16: where the card goes
     ["tutor-land", "tutor-land", 20, [15]], // 17
     ["tutor-land-basic", "tutor-land-basic", 440, [17, 14]], // 18: land tutors are also land ramp
+    ["tutor-to-hand", "tutor-to-hand", 640, [16]], // 19
+    ["tutor-card", "tutor-card", 110, [15]], // 20: what is fetched
   ],
 };
 const tree = new TagTree(payload);
@@ -113,9 +115,9 @@ describe("roles", () => {
 describe("Tutors role", () => {
   const card = (type_line: string) => ({ type_line });
   it("counts tutors but not land tutors, which are Ramp", () => {
-    expect(rolesOf(card("Instant"), ["tutor-to-hand"], roles)).toEqual(["tutors"]);
-    expect(rolesOf(card("Sorcery"), ["tutor-land-basic"], roles)).toEqual(["ramp"]);
+    expect(rolesOf(card("Sorcery"), ["tutor-card", "tutor-to-hand"], roles)).toEqual(["tutors"]); // Demonic Tutor
+    expect(rolesOf(card("Sorcery"), ["tutor-land-basic", "tutor-to-hand"], roles)).toEqual(["ramp"]); // Kodama's Reach
     const tutors = roles.find((r) => r.key === "tutors")!;
-    expect([...tutors.tagSet!].sort()).toEqual(["tutor", "tutor-to-hand"]);
+    expect([...tutors.tagSet!].sort()).toEqual(["tutor", "tutor-card"]);
   });
 });

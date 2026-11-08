@@ -156,6 +156,12 @@ export function keepScores(ctx: CutterContext): CardScore[] {
   const shareOf = new Map(balance.rows.map((r) => [r.color, r.sourceShare]));
 
   const inCombo = new Set(ctx.combos.flatMap((c) => [c.card_a, c.card_b]));
+  // Head to head (power user): each card's win rate, blended 50/50 into weakest in role.
+  const record = new Map<string, { won: number; lost: number }>();
+  for (const [winner, loser] of state.h2h) {
+    record.set(winner, { won: (record.get(winner)?.won ?? 0) + 1, lost: record.get(winner)?.lost ?? 0 });
+    record.set(loser, { won: record.get(loser)?.won ?? 0, lost: (record.get(loser)?.lost ?? 0) + 1 });
+  }
   const locks = new Set(state.locks);
 
   const rows = cards.map((entry) => {
@@ -198,6 +204,9 @@ export function keepScores(ctx: CutterContext): CardScore[] {
         themeRank = { theme: best, position: positionFromBottom(mvs, i), of: mates.length };
       }
     }
+
+    const h2h = record.get(id);
+    if (h2h) weakest = 0.5 * weakest + 0.5 * (h2h.won / (h2h.won + h2h.lost));
 
     // Curve fit.
     const bucket = curveBucket(entry.card.mana_value);

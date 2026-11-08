@@ -65,6 +65,24 @@ describe("readTimeline", () => {
   });
 });
 
+describe("Smart Cutter notes (migration 0034)", () => {
+  it("carries the edit label and each card's reason, also through a move", () => {
+    const t = readTimeline([
+      { ...row(7, "2026-11-07T11:00:00Z", "Cultivate", "main", 1, 0), label: "Smart Cutter", note: "Ramp 12 / 10" },
+      { ...row(7, "2026-11-07T11:00:00Z", "Cultivate", "maybe", 0, 1), label: "Smart Cutter", note: "Ramp 12 / 10" },
+      { ...row(7, "2026-11-07T11:00:00Z", "Opt", "main", 1, 0), label: "Smart Cutter", note: null },
+    ]);
+    expect(t[0].label).toBe("Smart Cutter");
+    expect(t[0].items[0]).toMatchObject({ kind: "moved", name: "Cultivate", note: "Ramp 12 / 10" });
+    expect(t[0].items[1]).toMatchObject({ kind: "removed", name: "Opt" });
+    expect(t[0].items[1]).not.toHaveProperty("note");
+  });
+
+  it("leaves ordinary edits without a label", () => {
+    expect(readTimeline([row(8, "2026-11-07T12:00:00Z", "Opt", "main", 0, 1)])[0]).not.toHaveProperty("label");
+  });
+});
+
 describe("timeAgo", () => {
   const now = Date.parse("2026-11-07T12:00:00Z");
   it("reads recent times in words", () => {

@@ -177,7 +177,7 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Copy to my decks | Design judges: a button on a shared deck that copies it into the viewer's own decks, so a friend can start from it | Oct 31, 2026 |
 | Built by <name> | Design judges: show the builder's name on a shared deck | Oct 31, 2026 |
 | Spin the wheel for a commander | A "Spin the wheel" button when picking a commander for a new deck: it serves 5 random Commander-legal commanders to choose from, with a re-spin. The 5 show as a preview on a full-screen frosted overlay, like the Bracket screen on the deck page. Each one shows the full card image, its tags, and the archetypes it is commonly built for | Nov 7, 2026 |
-| Smart Cutter | Helps cut a deck down using its roles, top themes and targets, and explains every suggestion. Default and power user modes. Full design in "Smart Cutter (v2 design)" below; design agreed Nov 7, 2026, **C1 engine built**, C2-C6 to do | Nov 7, 2026 |
+| Smart Cutter | Helps cut a deck down using its roles, top themes and targets, and explains every suggestion. Default and power user modes. **Built Nov 7, 2026**; design in "Smart Cutter (v2 design)" below | Nov 7, 2026 |
 | EDHREC suggestions | An EDHREC option for players who still want the cards other players commonly run with their commander, like Moxfield's EDHREC panel (top cards, high synergy, lands and so on). Cards can be excluded as they show up (e.g. a land you know you won't play), and excluded cards stay off the list for that deck. Data source: EDHREC's per-commander JSON, fetched server-side and cached; **needs EDHREC's permission first** (their Terms of Use bar automated queries and republishing) | Nov 7, 2026 |
 | Reorder the left-column tags | Drag the roles and top tags in the left column into your own order, saved. The role profile's "Adjust targets" button becomes **"Edit targets"**, and dragging works only in that edit mode (so a stray drag never moves anything; on phones the whole row is the drag handle) | Nov 7, 2026 |
 | Auto build land base | An "Auto build land base" button that fills the deck's lands up to the Lands target with the best lands in the commander's colors (duals, fetches, shocks and so on, then basics in proportion to the deck's color pips). With no lands it builds the whole base; with some lands it adds only what's missing to reach the target. Utility lands are left for the user to add. Hovering the button (tap the ⓘ on phones) explains what it does and how it picks lands. One undoable `Change` | Nov 7, 2026 |
@@ -191,7 +191,7 @@ Considered and deliberately left out of this project.
 
 ## Smart Cutter (v2 design)
 
-Drafted Nov 7, 2026 from David's brief, adapted to the codebase. **Status: design agreed with David Nov 7, 2026; C1 (engine + migration 0033) built, C2-C6 to do.**
+Drafted Nov 7, 2026 from David's brief, adapted to the codebase. **Status: built Nov 7, 2026 (C1-C5); C6 tuning done on Omo and the 9 QA decks. Migration 0034 (cut reasons in History) is written but not applied yet.**
 
 Helps a builder cut cards systematically, using the deck's roles, top themes and role targets, and explains every suggestion. Cuts are judged by **function** (what the deck needs) the same way suggestions are, never by popularity alone.
 
@@ -307,7 +307,7 @@ Tapping anywhere on a suggested card opens its "why" (the whole card is the tap 
 
 The C1 check suggested cutting Mystical Tutor and Enlightened Tutor: they fill no role and share no themes, so they score low. Tutors matter differently by power level, so they become a role whose **default target depends on the deck's target bracket**.
 
-- **Tutors role**, a new standard role: the `tutor` tag (1,235 cards) and its sub-tags, **minus land tutors** (`tutor-land` and below, 622 cards: Cultivate, Nature's Lore), which are Ramp. `RoleDef` gains `except` (slugs whose subtrees don't count). It shows in the role profile like the others and can be hidden.
+- **Tutors role**, a new standard role: the `tutor` tag (1,235 cards) and its sub-tags, **minus land tutors and destination tags** (`tutor-land` and `tutor-to` subtrees). Scryfall tags what a tutor fetches (`tutor-card`, `tutor-creature`, `tutor-land-basic`) and separately where it goes (`tutor-to-hand`, `tutor-to-battlefield`); land fetchers like Kodama's Reach and Kura carry only a land kind plus a destination, so they count as Ramp. `RoleDef` gains `except` (slugs whose subtrees don't count). It shows in the role profile like the others and can be hidden.
 - **Default target by bracket** (in `src/lib/brackets/rules.ts` next to the other bracket data, so it's one edit to change): 1 Exhibition **0**, 2 Core **1**, 3 Upgraded **3**, 4 Optimized **6**, 5 cEDH **10**. These are Deck Genome's suggestions, not WotC rules: the Oct 2025 bracket update removed tutor limits. Starting guesses to tune.
 - **Follows the bracket until you move it:** with no `tutors` key in `decks.role_targets`, the target comes from the bracket and changes when the bracket does. Moving the slider saves the number, and it stays put after that; Reset brings back the bracket default. "Save as my defaults" doesn't store a tutors number, so every deck keeps following its own bracket.
 - **In the Cutter:** an ordinary role. Over target, tutors feel saturation pressure (a bracket 2 deck with 5 tutors gets told to cut some); at or under target, they are protected by the below-target rule. The "why" says "Tutors 5 / 1 for bracket 2".
@@ -321,7 +321,7 @@ The C1 check suggested cutting Mystical Tutor and Enlightened Tutor: they fill n
 | `decks.cutter` jsonb, default `{}` | `{ locks: [oracle_id], dismissed: {oracle_id: reason or ""}, archetype: {key, status: auto / confirmed / picked, rejected: [keys]}, curve: {oracle_id: "curve" or "cheat"}, h2h: [[winner, loser], …] (newest 300) }` | Per-deck state, like `suggest_settings`. Read defensively by `readCutterState`; saved half a second after a change, not part of Ctrl+Z (like sliders). Returned by `deck_bundle`; never shown to shared viewers |
 | `profiles.cutter_prefs` jsonb, default `{}` | `{ power: bool, weights: {...}, comboProtect: true, belowTargetWarning: true, cutsToMaybe: false, archetypes: [custom profiles] }` | Per-user settings, set on `/settings` (and the weights inside the Cutter). Returned by `deck_bundle`'s profile |
 | `card_summaries.instant_speed` | Appended to the view: front face is an Instant, or its oracle text has Flash | "Weakest in role" speed. `oracle_text` is in `cards` but not sent to the browser today |
-| `deck_change_log.note` text + `apply_deck_changes(…, p_notes jsonb)` (C2, its own migration) | The function stores `{label, cards: {oracle_id: reason}}` in a transaction-local setting; the change-log trigger copies the label and each card's reason into `note` | The Timeline shows "Smart Cutter" with each cut's reason, with no app changes to other edit paths |
+| `deck_change_log.label` and `note` text + `apply_deck_changes(…, p_notes jsonb)` (**migration 0034, written, not applied yet**) | The function stores `{label, cards: {oracle_id: reason}}` in a transaction-local setting; the change-log trigger copies the label and each card's reason | The Timeline shows "Smart Cutter" with each cut's reason. Until 0034 is applied, Apply still saves (autosave retries without the notes), only the reasons are missing |
 | No new board | `deck_cards.board` check stays as it is | David's choice: the floor lives only on the Cutter screen |
 
 ### Code layout
@@ -341,12 +341,12 @@ The C1 check suggested cutting Mystical Tutor and Enlightened Tutor: they fill n
 Default mode first, power user after. Each step ends usable.
 
 1. **C1 Engine + data (built Nov 7, 2026):** migration 0033 (0031 and 0032 went to other features), config, archetypes, detection, effective curve, keep score, guardrails, `planCuts`, all tested. No UI yet; check the results on Omo and the 10 QA decks with David.
-2. **C1b Tutors role:** `except` on roles, the Tutors role and its bracket defaults, slider follows the bracket until moved, Tutor label and explanation in the editor and card sheet, tests. No migration (targets already live in `decks.role_targets`).
-3. **C2 Cutter screen (default):** overlay, archetype label with the Yes / No flow, shortlist for over 100, "why" pop-up, cutting-room floor (kept across a refresh), Restore, Apply as one `Change` with notes (remove, or to the maybeboard), Discard prompt, lock and dismiss.
-4. **C3 Exactly 100 / under 100 + editor guardrails:** 3 weakest with swaps, fill-the-gaps view linking to Suggest, 🔒 in the card sheet and on rows / tiles, below-target warning on every manual removal path, its setting.
-5. **C4 Power user basics:** Settings toggle, weight sliders, dismiss reasons, combo protection switch, curve overrides, custom archetypes editor.
-6. **C5 Power user tools:** walkthrough, head to head, 2-for-1 swaps, what-if preview.
-7. **C6 Tuning pass:** compare cuts against how David would cut Omo and two QA decks; tune curves and weights; phone check.
+2. **C1b Tutors role (built Nov 7, 2026):** `except` on roles, the Tutors role and its bracket defaults, slider follows the bracket until moved, Tutor label and explanation in the editor and card sheet, tests. No migration (targets already live in `decks.role_targets`).
+3. **C2 Cutter screen (built Nov 7, 2026):** overlay, archetype label with the Yes / No flow, shortlist for over 100, "why" pop-up, cutting-room floor (kept across a refresh), Restore, Apply as one `Change` with notes (remove, or to the maybeboard), Discard prompt, lock and dismiss.
+4. **C3 (built Nov 7, 2026) Exactly 100 / under 100 + editor guardrails:** 3 weakest with swaps, fill-the-gaps view linking to Suggest, 🔒 in the card sheet and on rows / tiles, below-target warning on every manual removal path, its setting.
+5. **C4 Power user basics (built Nov 7, 2026):** Settings toggle, weight sliders, dismiss reasons, combo protection switch, curve overrides, custom archetypes editor.
+6. **C5 Power user tools (built Nov 7, 2026):** walkthrough, head to head, 2-for-1 swaps, what-if preview.
+7. **C6 Tuning pass (first round Nov 7, 2026):** compare cuts against how David would cut Omo and two QA decks; tune curves and weights; phone check.
 
 ### Open questions and risks
 
@@ -356,6 +356,8 @@ Default mode first, power user after. Each step ends usable.
 | Tag gaps for archetypes | No tag for voltron, Equipment or Aura (those are type lines), +1/+1 specifically (`counters-matter` covers every counter type), cascade (a keyword, not a tag), or a solid enchantress tag (`enchantment-engine` has 22 cards). `hate` (4,706) is too broad to signal stax on its own | Mix tags with type-line counts and deck facts (as the table does); a test keeps every slug real; tune with real decks |
 | Curves are guesses | No source data for curve per archetype | Start with the table, tune in C6; power users override |
 | Good-stuff decks | Atraxa, Kenrith, Niv-Mizzet and Tymna detect as Control / stax (counterspells and tax pieces are common in staples) | David, Nov 7, 2026: leave it; the Yes / No question corrects it |
+| Ramp role is very wide | In the QA decks Ramp counts 23-33 cards against a target of 10, because Scryfall's `ramp` tree includes cost reducers, sac outlets and mana fixers (Ashnod's Altar, Thought Vessel, Chromatic Lantern). Most suggested cuts are then ramp cards | Found in the C6 check, Nov 7, 2026. A role definition question for David, not a Cutter change |
+| Same swap offered twice | At exactly 100 the first version offered one card (Solemn Simulacrum) as the swap for all three weakest | Fixed: a card offered once isn't offered again |
 | Overlap of coverage and theme fit | With themes selected, a theme-heavy card scores in both | Accepted by David; coverage counts breadth (how many jobs), theme fit counts centrality (how core the themes are). Watch in C6 |
 | Untagged / new cards | ~200 legal cards have no tags; new cards get tags only after the nightly import | Never suggested, flagged "No tags yet" |
 | Swap pool speed | `suggestion_pool` takes 0.3-0.5 s warm and up to ~8 s on a cold database | Load swaps after the shortlist shows; retry once on timeout (as Suggest does) |

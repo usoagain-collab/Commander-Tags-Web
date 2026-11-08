@@ -23,14 +23,20 @@ export function useAutosave(deckId: string) {
     while (queue.current.length > 0) {
       setStatus({ state: "saving", pending: queue.current.length });
       const next = queue.current[0];
-      const { error } = await supabase.rpc("apply_deck_changes", {
-        p_deck: deckId,
-        p_changes: next.rows,
-        p_categories: next.categories,
-        p_tag_cards: next.tag_cards,
-        p_snapshot_name: next.snapshot_name ?? null,
-        p_printings: next.printings,
-      });
+      const call = (withNotes: boolean) =>
+        supabase.rpc("apply_deck_changes", {
+          p_deck: deckId,
+          p_changes: next.rows,
+          p_categories: next.categories,
+          p_tag_cards: next.tag_cards,
+          p_snapshot_name: next.snapshot_name ?? null,
+          p_printings: next.printings,
+          // Only Smart Cutter edits carry notes (migration 0034); everything else sends the same call as before.
+          ...(withNotes && next.notes ? { p_notes: next.notes } : {}),
+        });
+      let { error } = await call(true);
+      // A database without migration 0034 doesn't know p_notes: save the edit anyway, just without its reasons.
+      if (error && next.notes && /p_notes|could not find the function|does not exist/i.test(error.message)) ({ error } = await call(false));
       if (error) {
         running.current = false;
         failed.current = true;

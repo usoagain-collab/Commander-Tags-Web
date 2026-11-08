@@ -103,6 +103,11 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
           </span>
         )}
         {tutor && <TutorChip />}
+        {item.locked && (
+          <span title="Locked: the Smart Cutter never suggests cutting it" className="shrink-0 text-xs">
+            🔒
+          </span>
+        )}
         {untagged && (
           <span title="Scryfall's Tagger has no tags for this card yet" className="shrink-0 rounded bg-foreground/10 px-1.5 py-0.5 text-xs opacity-70">
             untagged

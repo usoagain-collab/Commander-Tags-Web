@@ -24,6 +24,8 @@ export type DeckRow = {
   target_bracket: number | null;
   cover_oracle_id?: string | null;
   playtest_flags?: Record<string, number> | null;
+  /** Smart Cutter state (migration 0033), owner only. */
+  cutter?: unknown;
 };
 export type CardRow = { oracle_id: string; board: string; quantity: number; category: string | null; printing?: ChosenPrinting | null };
 export type Profile = {
@@ -31,6 +33,7 @@ export type Profile = {
   default_role_targets?: unknown;
   custom_roles?: unknown;
   hidden_tags?: string[] | null;
+  cutter_prefs?: unknown;
 };
 type Bundle = {
   deck: DeckRow;

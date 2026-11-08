@@ -87,7 +87,10 @@ export const STANDARD_ROLES: RoleDef[] = [
     // Follows the deck's target bracket until the slider is moved (buildRoleDefs); this is bracket 3's.
     target: BRACKET_RULES.tutorTargets[3],
     slugs: ["tutor"],
-    except: ["tutor-land"],
+    // Tutor tags come in two kinds: what is fetched (tutor-card, tutor-creature, tutor-land-...) and where it goes
+    // (tutor-to-hand, tutor-to-battlefield...). Land fetchers carry only a land kind plus a destination (Kodama's
+    // Reach, Kura), so both land tutors and destinations stay out; they are Ramp.
+    except: ["tutor-land", "tutor-to"],
     about:
       "Cards that search your library for another card. Land tutors count as Ramp instead. The target follows your target bracket (fewer tutors in low brackets, more in high ones) until you move the slider.",
   },

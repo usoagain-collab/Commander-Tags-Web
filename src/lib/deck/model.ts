@@ -68,7 +68,11 @@ export type Change = {
   printings?: PrintingChange[];
   /** Restoring a version (step 3h): save the current deck as a version with this name before applying. */
   snapshot?: string;
+  /** Smart Cutter (C2): a label for the edit and a reason per card, kept in the change log. */
+  notes?: ChangeNotes;
 };
+/** Shown in History's Timeline: the edit's label and why each card changed (oracle_id -> reason). */
+export type ChangeNotes = { label: string; cards: Record<string, string> };
 /** Manual categories, keyed like entries (`board|oracle_id`). Missing = automatic. */
 export type Categories = Record<string, string>;
 /** My tags on each card: oracle_id -> tag ids. */
@@ -152,6 +156,7 @@ export type SavePayload = {
   tag_cards: { tag_id: string; oracle_id: string; on: boolean }[];
   printings: { oracle_id: string; board: Board; printing: ChosenPrinting | null }[];
   snapshot_name?: string;
+  notes?: ChangeNotes;
 };
 export function toSavePayload(change: Change, direction: "forward" | "back" = "forward"): SavePayload {
   const fwd = direction === "forward";
@@ -161,6 +166,8 @@ export function toSavePayload(change: Change, direction: "forward" | "back" = "f
     tag_cards: (change.tagCards ?? []).map((t) => ({ tag_id: t.tag_id, oracle_id: t.oracle_id, on: fwd ? t.to : t.from })),
     printings: (change.printings ?? []).map((p) => ({ oracle_id: p.oracle_id, board: p.board, printing: fwd ? p.to : p.from })),
     ...(fwd && change.snapshot ? { snapshot_name: change.snapshot } : {}),
+    // Undo shows as the opposite change with no label, like any other undo.
+    ...(fwd && change.notes ? { notes: change.notes } : {}),
   };
 }
 

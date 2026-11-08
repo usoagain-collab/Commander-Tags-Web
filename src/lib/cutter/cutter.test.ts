@@ -10,6 +10,10 @@ import { ARCHETYPES, GENERAL_KEY } from "./archetypes";
 import { DEFAULT_WEIGHTS } from "./config";
 import { belowTargetWarning, keepScores, planCuts, suggestCuts, type CutterContext } from "./score";
 import { DEFAULT_PREFS, DEFAULT_STATE, readCutterPrefs, readCutterState } from "./state";
+import { cutReason, explainCut } from "./explain";
+import { pickSwap, pickTwoForOne, twoForOnePairs } from "./swaps";
+import type { PoolCard } from "@/lib/suggest/score";
+import { toSavePayload } from "@/lib/deck/model";
 
 // A small tree shaped like the real one.
 const payload: TagTreePayload = {
@@ -339,5 +343,84 @@ describe("saved state", () => {
     expect(p.archetypes).toHaveLength(1);
     expect(p.archetypes[0]).toMatchObject({ key: "custom:elves", name: "Elfball", curve: [25, 25, 25, 25, 0, 0, 0], custom: true });
     expect(p.archetypes[0].signals).toHaveLength(1);
+  });
+});
+
+describe("explain", () => {
+  const { roles, make } = deck({ ramp: 2, wipes: 1, draw: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+  const cards = [
+    make(card("Rock 2", 2, "Artifact"), ["mana-rock"]),
+    make(card("Rock 2b", 2, "Artifact"), ["mana-rock"]),
+    make(card("Ramp 3", 3, "Sorcery"), ["land-ramp"]),
+    make(card("Ramp 5", 5, "Sorcery"), ["land-ramp"]),
+  ];
+  const ctx = ctxFor(cards, roles);
+  const s = keepScores(ctx).find((x) => x.entry.card.name === "Ramp 5")!;
+
+  it("gives a one-line reason naming the over-target role and the rank", () => {
+    expect(cutReason(s)).toBe("Ramp 4 / 2 · weakest of 4 in Ramp");
+  });
+
+  it("explains every part in plain words", () => {
+    const e = explainCut(s, ARCHETYPES[0]);
+    expect(e.hits[0]).toEqual({ label: "Ramp", text: "4 / 2: 2 over target" });
+    expect(e.rank).toMatch(/^The weakest of 4 Ramp cards/);
+    expect(e.curve).toMatch(/^5-drops are 25% of your spells; General \(midrange\) expects 12%/);
+    expect(e.parts.map((p) => p.part)).toEqual(["coverage", "saturation", "weakest", "theme", "curve"]);
+    expect(e.parts[1].text).toBe("Every role it fills is over target");
+  });
+
+  it("counts head-to-head picks toward weakest in role", () => {
+    const won = keepScores({ ...ctx, state: { ...DEFAULT_STATE, h2h: [["id-Ramp 5", "id-Rock 2"], ["id-Ramp 5", "id-Rock 2b"]] } });
+    const after = won.find((x) => x.entry.card.name === "Ramp 5")!;
+    expect(after.parts.weakest).toBeCloseTo(0.5 * s.parts.weakest + 0.5);
+  });
+});
+
+describe("swaps", () => {
+  const { roles, make } = deck({ ramp: 1, draw: 1, wipes: 0, removal: 0, protection: 0, recursion: 0, tutors: 0, lands: 0 });
+  const rolesFor = (c: CardSummary, tags: string[]) => rolesOf(c, tags, roles);
+  const pool = (name: string, mv: number, tags: string[], type = "Artifact"): PoolCard => ({ ...card(name, mv, type), tags });
+  const slowRamp = make(card("Slow ramp", 6, "Sorcery"), ["land-ramp"]);
+  const slowDraw = make(card("Slow draw", 6, "Sorcery"), ["pure-draw"]);
+  // Three cards per role so they can be ranked against each other; the tiny deck's curve would swamp the rest.
+  const cards = [
+    make(card("Rock", 2, "Artifact"), ["mana-rock"]),
+    make(card("Rock B", 2, "Artifact"), ["mana-rock"]),
+    slowRamp,
+    make(card("Draw", 2, "Instant"), ["pure-draw"]),
+    make(card("Draw B", 2, "Instant"), ["pure-draw"]),
+    slowDraw,
+  ];
+  const ctx = ctxFor(cards, roles, { prefs: { ...DEFAULT_PREFS, weights: { ...DEFAULT_WEIGHTS, curve: 0 } } });
+  const scores = keepScores(ctx);
+  const of = (name: string) => scores.find((x) => x.entry.card.name === name)!;
+  const opts = { rolesFor, skip: () => false };
+
+  it("swaps a weak card for a better one in the same role", () => {
+    const pick = pickSwap(ctx, of("Slow ramp"), [pool("Signet", 2, ["mana-rock"]), pool("Off-role", 1, ["pure-draw"])], opts);
+    expect(pick?.card.name).toBe("Signet");
+    expect(pick!.keep).toBeGreaterThan(of("Slow ramp").keep);
+  });
+
+  it("skips cards the caller rules out", () => {
+    expect(pickSwap(ctx, of("Slow ramp"), [pool("Signet", 2, ["mana-rock"])], { ...opts, skip: () => true })).toBeNull();
+  });
+
+  it("pairs single-role cards from different roles and finds one card for both", () => {
+    const pairs = twoForOnePairs(scores);
+    expect(pairs[0].roles.sort()).toEqual(["draw", "ramp"]);
+    const both = pool("Growth Spiral", 2, ["land-ramp", "pure-draw"], "Instant");
+    const pick = pickTwoForOne(ctx, pairs[0], [pool("Signet", 2, ["mana-rock"]), both], opts);
+    expect(pick?.card.name).toBe("Growth Spiral");
+    expect(pick?.replaces).toHaveLength(2);
+  });
+});
+
+describe("Apply notes", () => {
+  it("sends the notes with the edit, but not with its undo", () => {
+    const change = { label: "Smart Cutter", rows: [], notes: { label: "Smart Cutter", cards: { a: "Ramp 12 / 10" } } };
+    expect(toSavePayload(change).notes).toEqual(change.notes);
+    expect(toSavePayload(change, "back").notes).toBeUndefined();
   });
 });

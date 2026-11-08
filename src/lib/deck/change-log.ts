@@ -12,6 +12,9 @@ export type LogRow = {
   board: string;
   from_qty: number;
   to_qty: number;
+  /** Migration 0034: the edit's label (e.g. "Smart Cutter") and this card's reason, when the edit sent them. */
+  label?: string | null;
+  note?: string | null;
 };
 
 export type TimelineItem =
@@ -22,6 +25,7 @@ export type TimelineItem =
       board: Board;
       from: number;
       to: number;
+      note?: string;
     }
   | {
       kind: "moved";
@@ -30,6 +34,7 @@ export type TimelineItem =
       board: Board;
       fromBoard: Board;
       qty: number;
+      note?: string;
     };
 
 export type TimelineEdit = {
@@ -38,6 +43,7 @@ export type TimelineEdit = {
   items: TimelineItem[];
   plus: number;
   minus: number;
+  label?: string;
 };
 
 const isBoard = (b: string): b is Board => (BOARDS as string[]).includes(b);
@@ -74,6 +80,7 @@ export function readTimeline(rows: LogRow[]): TimelineEdit[] {
             board: into.board as Board,
             fromBoard: out.board as Board,
             qty: into.to_qty,
+            ...(out.note || into.note ? { note: (out.note || into.note)! } : {}),
           });
           continue;
         }
@@ -86,6 +93,7 @@ export function readTimeline(rows: LogRow[]): TimelineEdit[] {
         board: r.board as Board,
         from: r.from_qty,
         to: r.to_qty,
+        ...(r.note ? { note: r.note } : {}),
       });
     }
     let plus = 0;
@@ -101,6 +109,7 @@ export function readTimeline(rows: LogRow[]): TimelineEdit[] {
       items,
       plus,
       minus,
+      ...(list.find((r) => r.label)?.label ? { label: list.find((r) => r.label)!.label! } : {}),
     });
   }
   return edits.sort((a, b) => (a.at === b.at ? b.id - a.id : b.at.localeCompare(a.at)));
