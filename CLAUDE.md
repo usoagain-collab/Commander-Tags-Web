@@ -171,6 +171,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - Migration 0031: `cards.released_at` (from the printing oracle_cards carries; the nightly import and `/api/cards/import` fill it), SQL `commander_status(cards)` (legal / banned / preview = released after today, paper, not a token or art card / not_legal), `card_summaries.commander_status`, `search_cards(..., p_any_legality)`. Scryfall side (`buildQuery` `withBanned`): `(f:commander or banned:commander or (date>today -st:token -st:memorabilia))`, still `game:paper`.
 - **Order matters on deploy:** apply 0031 before the code goes live, or quick add calls `search_cards` with a parameter it doesn't have yet. `released_at` stays empty, so nothing counts as preview, until the next nightly import after 0031.
 
+## Built by name (v2, built Nov 8, 2026)
+
+- A shared deck's header says "Built by <picture> <name>" to everyone but the owner, and the link preview adds "by <name>". SQL `deck_builder(id)` (migration 0035, security definer: name and picture only, for unlisted / public / own decks) runs beside `deck_bundle` in `loadDeck`; if it fails, the old "A deck shared with you" line shows. Settings → **Your name** edits `profiles.display_name` (starts as the sign-in name; at most 40 characters, checked in 0035).
+
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
 
 - Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).

@@ -101,7 +101,9 @@ import { RAIL_COLLAPSED, RAIL_DEFAULT, railStage, railWidthOf, readPreviewMode, 
 import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
+import { Avatar } from "@/components/avatar";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
+import type { Builder } from "./load-deck";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
 import type { CutterCard } from "@/lib/cutter/archetype";
@@ -196,6 +198,8 @@ type Props = {
   /** Two-card combos in the deck, loaded with the page. */
   initialCombos?: ComboRow[];
   readOnly: boolean;
+  /** Who built the deck, for a deck shared with you (null for your own). */
+  builder?: Builder | null;
   savedTagView: Record<string, unknown>;
   hiddenTags: string[];
   userId: string | null;
@@ -227,6 +231,7 @@ export function DeckEditor({
   initialTags,
   initialCombos,
   readOnly,
+  builder,
   savedTagView,
   hiddenTags,
   userId,
@@ -971,9 +976,18 @@ export function DeckEditor({
         themes={themes.slice(0, 3).map((t) => prettyTag(t.label))}
         onOpenCommander={(i) => openLine(commanders[i])}
         note={
-          readOnly && (
+          readOnly &&
+          (builder?.name ? (
+            <p className="mt-1.5 flex items-center gap-2 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
+              <Avatar url={builder.avatarUrl} name={builder.name} size={24} />
+              <span>
+                <span className="opacity-80">Built by </span>
+                <span className="font-semibold">{builder.name}</span>
+              </span>
+            </p>
+          ) : (
             <p className="mt-1 text-sm opacity-90">A deck shared with you.</p>
-          )
+          ))
         }
         status={
           <>

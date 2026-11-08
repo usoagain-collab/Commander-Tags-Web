@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import { readPreviewMode } from "@/lib/tags/layout-prefs";
 import { AvatarSetting } from "./avatar-setting";
 import { CutterSetting } from "./cutter-setting";
+import { NameSetting } from "./name-setting";
 import { PreviewSetting } from "./preview-setting";
 import { ThemeSetting } from "./theme-setting";
 
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       <h1 className="display text-3xl">Settings</h1>
+      <NameSetting userId={user.id} initial={look.name} />
       <AvatarSetting userId={user.id} name={look.name} initial={look.avatarUrl} />
       <ThemeSetting userId={user.id} initial={look.theme} />
       <PreviewSetting userId={user.id} initial={readPreviewMode((data?.tag_view ?? {}) as Record<string, unknown>)} />
