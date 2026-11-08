@@ -1,5 +1,6 @@
 "use client";
 
+import type { Splits } from "@/lib/deck/splits";
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BOARD_LABELS, BOARDS, type CardSummary, type Change, type Entries, type Printings } from "@/lib/deck/model";
@@ -178,13 +179,14 @@ type ExportProps = {
   entries: Entries;
   printings: Printings;
   cards: Record<string, CardSummary>;
+  splits?: Splits;
   onClose: () => void;
 };
 
-export function ExportPanel({ deckName, entries, printings, cards, onClose }: ExportProps) {
+export function ExportPanel({ deckName, entries, printings, cards, splits, onClose }: ExportProps) {
   const [format, setFormat] = useState<ExportFormat>("moxfield");
   const [copied, setCopied] = useState(false);
-  const text = useMemo(() => exportDeck(entries, cards, format, printings), [entries, cards, format, printings]);
+  const text = useMemo(() => exportDeck(entries, cards, format, printings, splits), [entries, cards, format, printings, splits]);
 
   async function copy() {
     await navigator.clipboard.writeText(text);

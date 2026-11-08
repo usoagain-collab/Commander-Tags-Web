@@ -2,6 +2,7 @@
 // and export to each of those formats. Pure functions, no network: name lookup happens separately.
 // Parsing starts from the prototype's parseDeck and extends it (companions, MTGO layout, SB: lines).
 
+import { expandLines, type Splits } from "./splits";
 import {
   BOARDS,
   entryKey,
@@ -234,9 +235,12 @@ const line = (l: DeckLine) => `${l.quantity} ${l.card.name}`;
 const printed = (l: DeckLine) => (l.printing ? ` (${l.printing.set.toUpperCase()}) ${l.printing.number}${foilMarker(l.printing)}` : "");
 const lineWithPrinting = (l: DeckLine) => line(l) + printed(l);
 
-export function exportDeck(entries: Entries, cards: Record<string, CardSummary>, format: ExportFormat, printings: Printings = {}): string {
+export function exportDeck(entries: Entries, cards: Record<string, CardSummary>, format: ExportFormat, printings: Printings = {}, splits: Splits = {}): string {
+  const named = format === "moxfield" || format === "archidekt" || format === "plain";
   const by = (b: Board) => {
-    const lines = linesFor(entries, cards, b, printings);
+    // Mixed copies (v2): formats that name printings get one line per printing; Arena and MTGO stay one line.
+    const plain = linesFor(entries, cards, b, printings);
+    const lines = named ? expandLines(plain, splits, cards) : plain;
     // Mainboard in the editor's type order; other boards alphabetical.
     return b === "main" ? groupByType(lines).flatMap((g) => g.lines) : lines.sort((x, y) => x.card.name.localeCompare(y.card.name));
   };

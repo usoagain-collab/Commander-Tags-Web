@@ -1,10 +1,11 @@
 "use client";
 
+import type { SplitPart } from "@/lib/deck/splits";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ManaCost } from "@/components/mana-cost";
 import { addCardToDeck } from "@/lib/deck/add-to-deck";
-import { BOARD_LABELS, type Board, type DeckLine } from "@/lib/deck/model";
+import { BOARD_LABELS, type Board, type CardSummary, type DeckLine } from "@/lib/deck/model";
 import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagData } from "@/lib/tags/use-tag-data";
 import { CommanderLegality, LegalityAndRulings, RulesText, useCardDetails } from "./card-details";
@@ -42,6 +43,8 @@ type Props = {
   /** Category picker and My tags (step 3f), shown above the card's roles and tags. */
   extra?: React.ReactNode;
   /** This card's art heads the deck page. */
+  /** Mixed copies (v2): printings for some of this row's copies. Only for rows with more than one copy. */
+  mixed?: { parts: SplitPart[]; onChange: (parts: SplitPart[]) => void };
   isCover: boolean;
   onCover: (on: boolean) => void;
 };
@@ -56,7 +59,7 @@ export function CardSheet(props: Props) {
   const tutor = props.roleKeys.includes(TUTORS_KEY);
   const { card, board, quantity, printing } = line;
   const closeRef = useRef<HTMLButtonElement>(null);
-  const [panel, setPanel] = useState<"main" | "decks" | "printing">("main");
+  const [panel, setPanel] = useState<"main" | "decks" | "printing" | "mixed">("main");
   const [copied, setCopied] = useState(false);
   const [face, setFace] = useState(0);
   const multi = card.max_copies > 1 && (board === "main" || board === "maybe");
@@ -229,6 +232,11 @@ export function CardSheet(props: Props) {
                   </div>
                 )}
                 <ActionButton onClick={() => setPanel("printing")}>Printing &amp; foil…</ActionButton>
+                {props.mixed && line.quantity > 1 && (
+                  <ActionButton onClick={() => setPanel("mixed")}>
+                    Mixed printings…{props.mixed.parts.length > 0 && ` (${props.mixed.parts.reduce((s, p) => s + p.quantity, 0)} set)`}
+                  </ActionButton>
+                )}
                 <ActionButton onClick={() => setPanel("decks")}>Add to another deck…</ActionButton>
                 <ActionButton onClick={copyName}>{copied ? "Copied" : "Copy card name"}</ActionButton>
                 <ActionButton onClick={() => props.onQuantity(0)} danger>
@@ -240,6 +248,18 @@ export function CardSheet(props: Props) {
               <OtherDecks deckId={props.deckId} line={line} onDone={() => setPanel("main")} />
             )}
 
+            {!readOnly && panel === "mixed" && props.mixed && (
+              <MixedPrintings
+                card={card}
+                quantity={line.quantity}
+                base={printing ?? null}
+                parts={props.mixed.parts}
+                onChange={props.mixed.onChange}
+                myDefault={props.myDefault}
+                onSetDefault={props.onSetDefault}
+                onDone={() => setPanel("main")}
+              />
+            )}
             {!readOnly && panel === "printing" && (
               <PrintingPicker
                 card={card}
@@ -380,5 +400,86 @@ function SheetButton({ onClick, label, children }: { onClick: () => void; label:
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Mixed printings (v2): give some copies of this card other printings or foil. Copies not listed use the card's
+ * own printing. Saved directly to the row (not Ctrl+Z).
+ */
+function MixedPrintings({
+  card,
+  quantity,
+  base,
+  parts,
+  onChange,
+  myDefault,
+  onSetDefault,
+  onDone,
+}: {
+  card: CardSummary;
+  quantity: number;
+  base: ChosenPrinting | null;
+  parts: SplitPart[];
+  onChange: (parts: SplitPart[]) => void;
+  myDefault: ChosenPrinting | null;
+  onSetDefault: (to: ChosenPrinting | null) => void;
+  onDone: () => void;
+}) {
+  const [adding, setAdding] = useState(parts.length === 0);
+  const used = parts.reduce((s, p) => s + p.quantity, 0);
+  const rest = Math.max(0, quantity - used);
+  const set = (i: number, q: number) => onChange(q <= 0 ? parts.filter((_, j) => j !== i) : parts.map((p, j) => (j === i ? { ...p, quantity: q } : p)));
+  const label = (p: ChosenPrinting | null) => (p ? `${p.set_name} (${p.set.toUpperCase()}) #${p.number}${p.foil ? " · ✦ Foil" : ""}` : "Default printing");
+  return (
+    <div className="space-y-2 rounded-lg border border-foreground/15 p-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold">Mixed printings</h3>
+        <button type="button" onClick={onDone} className="btn min-h-9">
+          Done
+        </button>
+      </div>
+      <p className="opacity-80">Give some of your {quantity} copies other printings or foil. The rest use {label(base)}.</p>
+      <ul className="divide-y divide-foreground/10">
+        {parts.map((p, i) => (
+          <li key={`${p.printing.id}-${p.printing.foil}`} className="flex min-h-11 items-center gap-2">
+            <img src={printingImage(p.printing.id)} alt="" className="h-12 rounded" />
+            <span className="min-w-0 flex-1 truncate">{label(p.printing)}</span>
+            <button type="button" aria-label="One copy fewer" onClick={() => set(i, p.quantity - 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
+              −
+            </button>
+            <span className="w-5 text-center tabular-nums">{p.quantity}</span>
+            <button type="button" aria-label="One copy more" disabled={rest === 0} onClick={() => set(i, p.quantity + 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
+              +
+            </button>
+          </li>
+        ))}
+        <li className="flex min-h-11 items-center gap-2 opacity-80">
+          <span className="min-w-0 flex-1 truncate">{label(base)}</span>
+          <span className="w-5 text-center tabular-nums">{rest}</span>
+        </li>
+      </ul>
+      {rest > 0 && !adding && (
+        <button type="button" onClick={() => setAdding(true)} className="min-h-10 w-full rounded-md border border-dashed border-foreground/25">
+          + Add another printing
+        </button>
+      )}
+      {adding && rest > 0 && (
+        <PrintingPicker
+          card={card}
+          printing={null}
+          pickedHere={false}
+          myDefault={myDefault}
+          onSetDefault={onSetDefault}
+          onPick={(to) => {
+            if (!to) return;
+            const at = parts.findIndex((p) => p.printing.id === to.id && p.printing.foil === to.foil);
+            onChange(at >= 0 ? parts.map((p, j) => (j === at ? { ...p, quantity: p.quantity + 1 } : p)) : [...parts, { printing: to, quantity: 1 }]);
+            setAdding(false);
+          }}
+          onDone={() => setAdding(false)}
+        />
+      )}
+    </div>
   );
 }

@@ -30,6 +30,8 @@ export type DeckItem = {
   tutor: boolean;
   /** Locked in the Smart Cutter: never suggested as a cut. */
   locked?: boolean;
+  /** Mixed copies (v2): how many different printings the copies show, when more than one. */
+  arts?: number;
 };
 export type ViewSection = {
   key: string;
@@ -417,6 +419,7 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
   return (
     <span className="pointer-events-none absolute right-1.5 top-[7%] flex flex-col items-end gap-1">
       {quantity > 1 && <span className="rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold text-white">×{quantity}</span>}
+      {!!item.arts && <span title={`These copies use ${item.arts} different printings`} className="rounded bg-black/80 px-1.5 py-0.5 text-xs text-white">{item.arts} arts</span>}
       {item.warnings.length > 0 && (
         <span title={item.warnings.join(" · ")} className="rounded bg-amber-500 px-1.5 py-0.5 text-xs font-semibold text-black">
           ⚠

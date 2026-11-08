@@ -25,7 +25,6 @@ import {
   planSetQuantity,
   planTagCards,
   toSavePayload,
-  totalPrice,
   type Board,
   type CardSummary,
   type Categories,
@@ -109,6 +108,7 @@ import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
+import { artCount, totalPriceWithSplits, type SplitPart, type Splits } from "@/lib/deck/splits";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
@@ -197,6 +197,8 @@ type Props = {
   initialEntries: Entries;
   initialCategories: Categories;
   initialPrintings: Printings;
+  /** Mixed copies (v2): printings for some copies of a row, by entry key. */
+  initialSplits?: Splits;
   initialPreferred: PreferredPrintings;
   initialCards: Record<string, CardSummary>;
   /** The deck's tags, loaded with the page (undefined if that failed: the editor then fetches them). */
@@ -232,6 +234,7 @@ export function DeckEditor({
   initialEntries,
   initialCategories,
   initialPrintings,
+  initialSplits,
   initialPreferred,
   initialCards,
   initialTags,
@@ -386,6 +389,28 @@ export function DeckEditor({
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
+  // Mixed copies (v2): saved straight to the row (deck_cards.printing_split), not through Ctrl+Z.
+  const [splits, setSplits] = useState<Splits>(initialSplits ?? {});
+  const saveSplit = async (board: Board, oracleId: string, parts: SplitPart[]) => {
+    const key = entryKey(board, oracleId);
+    const before = splits;
+    setSplits((s) => {
+      const next = { ...s };
+      if (parts.length) next[key] = parts;
+      else delete next[key];
+      return next;
+    });
+    const { error } = await createClient()
+      .from("deck_cards")
+      .update({ printing_split: parts.length ? parts : null })
+      .eq("deck_id", deck.id)
+      .eq("oracle_id", oracleId)
+      .eq("board", board);
+    if (error) {
+      setSplits(before);
+      setNotice(`Couldn't save the printings: ${error.message}`);
+    }
+  };
   const [editingTargets, setEditingTargets] = useState(false);
 
   /** A whole import is one change: one save call, one undo step. */
@@ -584,6 +609,10 @@ export function DeckEditor({
       myTags: showMyTags ? myTagsOfCard(id) : [],
       manual: !!categories[entryKey(line.board, id)],
       selected: selecting ? selected.has(entryKey(line.board, id)) : undefined,
+      arts: (() => {
+        const n = splits[entryKey(line.board, id)] ? artCount(line.quantity, line.printing, splits[entryKey(line.board, id)]) : 0;
+        return n > 1 ? n : undefined;
+      })(),
     };
   };
   // Role subgroups (step 3e): for each role, which subgroup each card that fills it goes in.
@@ -1046,7 +1075,7 @@ export function DeckEditor({
         commanders={commanders.map((l) => l.card)}
         identity={identity}
         size={size}
-        price={totalPrice(entries, cards, undefined, shownPrintings)}
+        price={totalPriceWithSplits(entries, cards, shownPrintings, splits)}
         backLink={!readOnly}
         complete={complete}
         celebrate={celebrate}
@@ -1320,7 +1349,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={shownPrintings} cards={cards} onClose={() => setPanel(null)} />}
+      {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={shownPrintings} cards={cards} splits={splits} onClose={() => setPanel(null)} />}
 
       <div ref={editorGrid} style={{ "--rail": `${railWidth}px` } as React.CSSProperties} className={`mt-6 grid gap-6 ${EDITOR_COLUMNS[previewMode === "docked" ? "docked" : "none"]}`}>
         {/* Wide screens: the role profile gets its own column on the left, as wide as the user drags it. */}
@@ -1558,7 +1587,7 @@ export function DeckEditor({
         />
       )}
 
-      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPrice(entries, cards, undefined, shownPrintings)} />
+      <SummaryBar deckLines={[...commanders, ...mainLines]} size={size} price={totalPriceWithSplits(entries, cards, shownPrintings, splits)} />
 
       {selecting && !readOnly && (
         <>
@@ -1592,6 +1621,10 @@ export function DeckEditor({
           flags={flags[sheetLine.card.oracle_id] ?? 0}
           isCover={coverId === sheetLine.card.oracle_id}
           onCover={(on) => chooseCover(on ? sheetLine.card.oracle_id : null)}
+          mixed={{
+            parts: splits[entryKey(sheetLine.board, sheetLine.card.oracle_id)] ?? [],
+            onChange: (parts) => saveSplit(sheetLine.board, sheetLine.card.oracle_id, parts),
+          }}
           onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (

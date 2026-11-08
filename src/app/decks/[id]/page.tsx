@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { entryKey, type Board, type Categories, type Entries, type Printings } from "@/lib/deck/model";
 import { printingImage } from "@/lib/deck/printing";
+import { readSplit, type Splits } from "@/lib/deck/splits";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets, withoutBracketTargets } from "@/lib/tags/role-settings";
 import { readCutterPrefs, readCutterState } from "@/lib/cutter/state";
@@ -48,10 +49,13 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   const entries: Entries = {};
   const categories: Categories = {};
   const printings: Printings = {};
+  const splits: Splits = {};
   for (const r of rows) {
     entries[entryKey(r.board as Board, r.oracle_id)] = r.quantity;
     if (r.category) categories[entryKey(r.board as Board, r.oracle_id)] = r.category;
     if (r.printing) printings[entryKey(r.board as Board, r.oracle_id)] = r.printing;
+    const split = readSplit(r.split);
+    if (split) splits[entryKey(r.board as Board, r.oracle_id)] = split;
   }
   const cards = Object.fromEntries(summaries.map((c) => [c.oracle_id, c]));
   const owner = deck.owner_id === user?.id;
@@ -62,6 +66,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       initialEntries={entries}
       initialCategories={categories}
       initialPrintings={printings}
+      initialSplits={splits}
       initialPreferred={loaded.preferred}
       initialCards={cards}
       initialTags={initialTags}
