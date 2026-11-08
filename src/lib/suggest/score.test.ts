@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ThemeTag } from "@/lib/tags/themes";
-import { DEFAULT_SUGGEST, popularity, readSuggestSettings, scorePool, type PoolCard, type SuggestSettings } from "./score";
+import { DEFAULT_SUGGEST, pickStaples, popularity, readSuggestSettings, scorePool, type PoolCard, type SuggestSettings } from "./score";
 
 const card = (name: string, tags: string[], rank: number | null, price: number | null = 1): PoolCard => ({
   oracle_id: name,
@@ -93,6 +93,66 @@ describe("scorePool", () => {
   it("leaves out dismissed cards", () => {
     const r = scorePool(pool, ctx({}, { dismissed: new Set(["On-theme staple"]) }));
     expect(r.map((x) => x.card.name)).not.toContain("On-theme staple");
+  });
+});
+
+describe("role mode (💡 on a role)", () => {
+  const mv = (c: PoolCard, mana_value: number) => ({ ...c, mana_value });
+  // Ramp candidates: staples with no themes against on-theme cards, as in the friend-test report (Nov 7, 2026).
+  const ramp = [
+    mv(card("Sol Ring", ["mana-rock"], 1), 1),
+    mv(card("Arcane Signet", ["mana-rock"], 3), 2),
+    mv(card("On-theme dork", ["mana-dork", "sacrifice-outlet", "death-trigger"], 1000), 1),
+    mv(card("On-theme ramp spell", ["land-ramp", "sacrifice-outlet"], 30), 3),
+    mv(card("Obscure on-theme rock", ["mana-rock", "sacrifice-outlet", "death-trigger"], 9000), 4),
+  ];
+  const rampCtx = (role: boolean) => ctx({}, { rolesOf: () => ["ramp"], under: new Set(["ramp"]), role });
+
+  it("without it, staples sink under on-theme cards (the problem)", () => {
+    const names = scorePool(ramp, rampCtx(false)).map((x) => x.card.name);
+    expect(names.indexOf("Sol Ring")).toBeGreaterThan(names.indexOf("On-theme dork"));
+  });
+
+  it("puts Sol Ring first and Arcane Signet in the top 3, with on-theme cards still competing", () => {
+    const names = scorePool(ramp, rampCtx(true)).map((x) => x.card.name);
+    expect(names[0]).toBe("Sol Ring");
+    expect(names.slice(0, 3)).toContain("Arcane Signet");
+    expect(names.slice(0, 3)).toContain("On-theme ramp spell");
+    expect(names.at(-1)).toBe("Obscure on-theme rock");
+  });
+
+  it("Hidden gems for a role needs one shared theme, not two", () => {
+    const names = scorePool(ramp, { ...rampCtx(true), settings: { ...DEFAULT_SUGGEST, style: "gems" } }).map((x) => x.card.name);
+    expect(names).toContain("On-theme ramp spell");
+    expect(names).not.toContain("Sol Ring");
+  });
+});
+
+describe("pickStaples", () => {
+  const rolesOf = (c: PoolCard) => (c.tags.includes("ramp") ? ["ramp"] : c.tags.includes("draw") ? ["draw"] : []);
+  const staplePool = [
+    card("Rhystic Study", ["draw"], 4),
+    card("Sol Ring", ["ramp"], 1),
+    card("Cultivate", ["ramp"], 30),
+    card("Unranked rock", ["ramp"], null),
+    card("Lightning Greaves", ["protection"], 8),
+  ];
+
+  it("keeps the most-played cards for under-target roles, by EDHREC rank", () => {
+    const r = pickStaples(staplePool, { rolesOf, under: new Set(["ramp", "draw"]) });
+    expect(r.map((x) => x.card.name)).toEqual(["Sol Ring", "Rhystic Study", "Cultivate"]);
+    expect(r[0].fills).toEqual(["ramp"]);
+  });
+
+  it("gives each short role a fair share before filling by rank", () => {
+    const rocks = Array.from({ length: 6 }, (_, i) => card(`Rock ${i}`, ["ramp"], i + 1));
+    const r = pickStaples([...rocks, card("Rhystic Study", ["draw"], 50), card("Mystic Remora", ["draw"], 60)], { rolesOf, under: new Set(["ramp", "draw"]) }, 4);
+    expect(r.map((x) => x.card.name)).toEqual(["Rock 0", "Rock 1", "Rhystic Study", "Mystic Remora"]);
+  });
+
+  it("skips roles already at target and dismissed cards, and honors the limit", () => {
+    const r = pickStaples(staplePool, { rolesOf, under: new Set(["ramp"]), dismissed: new Set(["Sol Ring"]) }, 1);
+    expect(r.map((x) => x.card.name)).toEqual(["Cultivate"]);
   });
 });
 
