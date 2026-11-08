@@ -8,6 +8,7 @@ import { roleNameFromLabel, roleStatus, statusText, type CustomRole } from "@/li
 import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagTree } from "@/lib/tags/tree";
 import { roleColor } from "@/lib/tags/pretty";
+import { useDragReorder } from "@/lib/ui/use-drag-reorder";
 
 type Props = {
   roles: ResolvedRole[];
@@ -29,6 +30,11 @@ type Props = {
   onHideRole: (key: string, hidden: boolean) => void;
   /** Hidden when the profile sits inside a section that already has the title (narrow screens). */
   hideTitle?: boolean;
+  /** Edit targets mode (shared with Top tags): sliders, hiding, and dragging rows into your own order. */
+  editing: boolean;
+  onEditing: (on: boolean) => void;
+  onReorder: (keys: string[]) => void;
+  onResetOrder: () => void;
 };
 
 const TEXT: Record<string, string> = {
@@ -45,21 +51,29 @@ export function RoleProfile(props: Props) {
   const { roles, counts, readOnly } = props;
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  // Sliders stay out of the way until asked for; where the panel is opened as "Targets" they show at once.
-  const [adjust, setAdjust] = useState(!!props.hideTitle);
+  // Sliders and dragging stay out of the way until asked for, so a stray drag never moves anything.
+  const adjust = props.editing && !readOnly;
+  const reorder = useDragReorder("role", roles.map((r) => r.key), props.onReorder, adjust);
 
   return (
     <div className="space-y-3">
-      {!props.hideTitle && (
+      {(!props.hideTitle || !readOnly) && (
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="display text-lg">What this deck needs</h2>
+          {!props.hideTitle ? <h2 className="display text-lg">What this deck needs</h2> : <span />}
           {!readOnly && (
-            <button type="button" onClick={() => setAdjust(!adjust)} aria-expanded={adjust} className="min-h-8 shrink-0 text-[13px] underline opacity-80 hover:opacity-100">
-              {adjust ? "Done" : "Adjust targets"}
+            <button
+              type="button"
+              onClick={() => props.onEditing(!adjust)}
+              aria-expanded={adjust}
+              title="Change targets, hide roles, and drag roles and top tags into your own order"
+              className="min-h-8 shrink-0 text-[13px] underline opacity-80 hover:opacity-100"
+            >
+              {adjust ? "Done" : "Edit targets"}
             </button>
           )}
         </div>
       )}
+      {adjust && <p className="text-xs opacity-75">Drag a role or a top tag to move it. Your order is used in all your decks.</p>}
       {roles.length === 0 && <p className="text-sm opacity-60">Loading roles…</p>}
       <ul className="space-y-3">
         {roles.map((r) => {
@@ -68,7 +82,7 @@ export function RoleProfile(props: Props) {
           const max = r.land ? 50 : 30; // David, Oct 19, 2026
           const active = props.highlight === `role:${r.key}`;
           return (
-            <li key={r.key} className="relative">
+            <li key={r.key} {...reorder.rowProps(r.key)} className={`relative rounded ${reorder.dragging === r.key ? "bg-foreground/10 ring-1 ring-gold" : ""}`}>
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span className="flex min-w-0 items-center gap-0.5">
                   <span aria-hidden className="mr-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: roleColor(r.name) }} />
@@ -200,6 +214,9 @@ export function RoleProfile(props: Props) {
               Reset to defaults
             </button>
           </div>
+          <button type="button" onClick={props.onResetOrder} className="min-h-9 w-full rounded-md border border-foreground/20 text-xs" title="Put roles and top tags back in the usual order">
+            Reset the order
+          </button>
           {message && (
             <p aria-live="polite" className="text-xs opacity-70">
               {message}

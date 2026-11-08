@@ -4,6 +4,7 @@ import { prettyTag } from "@/lib/tags/pretty";
 import { useRef, useState } from "react";
 import { AnchoredPopover, useAnchoredPopover } from "@/components/anchored-popover";
 import type { ThemeSettings, ThemeTag, TreeCard } from "@/lib/tags/themes";
+import { useDragReorder } from "@/lib/ui/use-drag-reorder";
 
 type Props = {
   themes: ThemeTag[];
@@ -21,6 +22,9 @@ type Props = {
   /** Phase 4: open suggestions for this tag (oracle tags only; the pool has no art tags). */
   onSuggest?: (tag: ThemeTag) => void;
   hideTitle?: boolean;
+  /** Edit targets mode: rows can be dragged into your own order. */
+  editing?: boolean;
+  onReorder?: (keys: string[]) => void;
 };
 
 /** "o:landfall" -> the highlight value the editor uses ("landfall"), "a:frog" -> "art:frog". */
@@ -34,6 +38,7 @@ export const highlightValue = (tag: { kind: "o" | "a"; slug: string }) => (tag.k
 export function TopTags(props: Props) {
   const { themes, settings, loading, readOnly } = props;
   const [showHidden, setShowHidden] = useState(false);
+  const reorder = useDragReorder("tag", themes.map((t) => t.key), (keys) => props.onReorder?.(keys), !!props.editing && !readOnly && !!props.onReorder);
 
   return (
     <div className="space-y-3">
@@ -91,7 +96,7 @@ export function TopTags(props: Props) {
           )}
           <ul className="space-y-0.5">
           {themes.map((t) => (
-            <TagRow key={t.key} tag={t} {...props} />
+            <TagRow key={t.key} tag={t} {...props} drag={reorder.rowProps(t.key)} dragging={reorder.dragging === t.key} />
           ))}
           </ul>
         </>
@@ -129,7 +134,7 @@ export function TopTags(props: Props) {
 const ROW_ICON =
   "flex h-8 w-8 shrink-0 items-center justify-center opacity-75 hover:opacity-100 [@media(hover:hover)]:hidden [@media(hover:hover)]:group-hover:flex [@media(hover:hover)]:group-focus-within:flex";
 
-function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
+function TagRow({ tag, drag, dragging, ...props }: { tag: ThemeTag; drag: ReturnType<ReturnType<typeof useDragReorder>["rowProps"]>; dragging: boolean } & Props) {
   const row = useRef<HTMLLIElement>(null);
   const { pos, open, show, hide } = useAnchoredPopover(260, 260);
   const active = props.highlight === highlightValue(tag);
@@ -141,7 +146,8 @@ function TagRow({ tag, ...props }: { tag: ThemeTag } & Props) {
       ref={row}
       onPointerEnter={(e) => e.pointerType === "mouse" && show(row.current)}
       onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
-      className={`group flex items-center gap-1 rounded text-sm ${active ? "bg-amber-400/20" : "hover:bg-foreground/5"}`}
+      {...drag}
+      className={`group flex items-center gap-1 rounded text-sm ${dragging ? "bg-foreground/10 ring-1 ring-gold" : active ? "bg-amber-400/20" : "hover:bg-foreground/5"}`}
     >
       <button
         type="button"

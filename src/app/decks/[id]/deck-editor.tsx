@@ -105,6 +105,7 @@ import { Avatar } from "@/components/avatar";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
+import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
 import type { CutterCard } from "@/lib/cutter/archetype";
@@ -381,6 +382,7 @@ export function DeckEditor({
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
+  const [editingTargets, setEditingTargets] = useState(false);
 
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
@@ -746,10 +748,18 @@ export function DeckEditor({
     const fromArt = Object.values(tags.artTags).flat().find(([s]) => aKey(s) === key)?.[1];
     return { key, label: kind === "o" ? (tags.tree?.label(slug) ?? slug) : (artTree?.label(slug) ?? fromArt ?? slug) };
   });
+  // Your own order for the left column (v2), saved in tag_view and used in every deck. Only the left column
+  // follows it; the hero, suggestions and grouping keep their usual order.
+  const roleOrder = readOrder(prefs.roleOrder);
+  const tagOrder = readOrder(prefs.tagOrder);
+  const shownRoles = applyOrder(roles, (r) => r.key, roleOrder);
+  const shownThemes = applyOrder(themes, (t) => t.key, tagOrder);
   const renderTopTags = (hideTitle = false) => (
     <TopTags
       hideTitle={hideTitle}
-      themes={themes}
+      editing={editingTargets}
+      onReorder={(keys) => updatePrefs({ tagOrder: mergeOrder(keys, tagOrder) })}
+      themes={shownThemes}
       settings={themeSettings}
       loading={!tags.tree || (themeSettings.mode === "flavor" && !artTree && themeCards.some((c) => c.art.length > 0))}
       readOnly={readOnly}
@@ -785,8 +795,12 @@ export function DeckEditor({
     <RoleProfile
       hideTitle={hideTitle}
       tree={tags.tree}
-      roles={roles}
+      roles={shownRoles}
       counts={counts}
+      editing={editingTargets}
+      onEditing={setEditingTargets}
+      onReorder={(keys) => updatePrefs({ roleOrder: mergeOrder(keys, roleOrder) })}
+      onResetOrder={() => updatePrefs({ roleOrder: [], tagOrder: [] })}
       readOnly={readOnly}
       highlight={highlight}
       saveError={roleSettings.saveError}
@@ -1250,10 +1264,10 @@ export function DeckEditor({
             <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pb-6 pr-1">
               <RoleRail
                 compact={stage === "compact"}
-                roles={roles}
+                roles={shownRoles}
                 counts={counts}
                 highlight={highlight}
-                tags={themes.slice(0, 6).map((t) => ({ key: t.key, label: prettyTag(t.label), count: t.count, value: highlightValue(t) }))}
+                tags={shownThemes.slice(0, 6).map((t) => ({ key: t.key, label: prettyTag(t.label), count: t.count, value: highlightValue(t) }))}
                 onHighlightRole={(key) => toggleHighlight(`role:${key}`)}
                 onHighlightTag={toggleHighlight}
                 onExpand={() => setRail(RAIL_DEFAULT)}
