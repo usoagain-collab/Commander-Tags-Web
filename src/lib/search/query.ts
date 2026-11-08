@@ -8,7 +8,13 @@ export type SearchFilters = {
   inIdentity: boolean;
   /** Limit to Commander-legal, paper cards. */
   legalOnly: boolean;
+  /** With legalOnly: also cards banned in Commander and cards not released yet (preview). */
+  withBanned?: boolean;
 };
+
+// Scryfall marks a new set not_legal until release day; date>today finds those printings. Tokens and art cards
+// from an upcoming set are left out.
+const LEGAL_BANNED_OR_PREVIEW = "(f:commander or banned:commander or (date>today -st:token -st:memorabilia))";
 
 // If the user already wrote one of these, don't add our own version of it.
 const HAS_IDENTITY = /(^|[\s(])-?(id|identity|ci|commander)(<=|>=|=|:|<|>)/i;
@@ -24,7 +30,7 @@ export function buildQuery(userQuery: string, filters: SearchFilters): string {
     extra.push(`id<=${colors.toLowerCase() || "c"}`);
   }
   if (filters.legalOnly) {
-    if (!HAS_FORMAT.test(q)) extra.push("f:commander");
+    if (!HAS_FORMAT.test(q)) extra.push(filters.withBanned ? LEGAL_BANNED_OR_PREVIEW : "f:commander");
     if (!HAS_GAME.test(q)) extra.push("game:paper");
   }
   if (!q) return extra.join(" ");

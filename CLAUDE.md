@@ -161,6 +161,13 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - History opens on a **Timeline** tab (newest first, grouped by edit: added / removed / copies changed / moved between boards), with the old version list under **Saved versions**. `change-timeline.tsx`, logic in `src/lib/deck/change-log.ts` (`readTimeline`, tested).
 - Migration 0030: table `deck_change_log`, written by a `deck_cards` trigger (insert, delete, quantity change), so every edit path lands there without app changes; `edit_id` = transaction id groups one edit. Keeps the newest 150 rows per deck; owner-only. Undo shows as the opposite change. Card names are stored at log time.
 
+## Banned and preview cards (David, Nov 7, 2026)
+
+- **Include banned and preview cards**: one remembered switch (`profiles.tag_view.allowBanned`), shown in the Search panel (under "Commander-legal paper cards") and in the "Who leads this deck?" commander picker. Quick add follows it too. Results carry a **Banned** (red) or **Preview** (blue) label (`StatusBadge` in `card-search.tsx`), and such cards in the deck get a ⚠ ("Banned in Commander" / "Not released yet").
+- Why: Scryfall marks a new set `not_legal` in Commander until release day (Star Trek, Nov 13, 2026), so every legal-only search hid it even though the cards were loaded.
+- Migration 0031: `cards.released_at` (from the printing oracle_cards carries; the nightly import and `/api/cards/import` fill it), SQL `commander_status(cards)` (legal / banned / preview = released after today, paper, not a token or art card / not_legal), `card_summaries.commander_status`, `search_cards(..., p_any_legality)`. Scryfall side (`buildQuery` `withBanned`): `(f:commander or banned:commander or (date>today -st:token -st:memorabilia))`, still `game:paper`.
+- **Order matters on deploy:** apply 0031 before the code goes live, or quick add calls `search_cards` with a parameter it doesn't have yet. `released_at` stays empty, so nothing counts as preview, until the next nightly import after 0031.
+
 ## Stack (decided)
 
 - **Next.js + TypeScript**, hosted on **Vercel** (free tier).

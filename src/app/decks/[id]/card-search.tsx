@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { entryKey, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
+import { entryKey, statusLabel, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
 import { importCard } from "@/lib/scryfall/import-card";
 import {
   buildQuery,
@@ -43,11 +43,14 @@ type Props = {
   /** "Hide cards in deck" (remembered with the other view settings). */
   hideInDeck: boolean;
   onHideInDeck: (hide: boolean) => void;
+  /** "Include banned and preview cards" (remembered; the commander picker shares it). */
+  withBanned: boolean;
+  onWithBanned: (on: boolean) => void;
   /** Text handed over from quick add's "See all results": filled in and searched on opening. */
   initialText?: string;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, initialText }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -131,7 +134,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   }
 
   function search() {
-    const q = buildQuery(text, { identity, inIdentity, legalOnly });
+    const q = buildQuery(text, { identity, inIdentity, legalOnly, withBanned });
     if (!text.trim()) return;
     setSentQuery(q);
     setToken(null);
@@ -283,6 +286,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           <input type="checkbox" checked={legalOnly} onChange={(e) => setLegalOnly(e.target.checked)} />
           Commander-legal paper cards
         </label>
+        {legalOnly && (
+          <label className="flex items-center gap-1.5" title="Also show cards banned in Commander, and new cards that aren't released yet">
+            <input type="checkbox" checked={withBanned} onChange={(e) => onWithBanned(e.target.checked)} />
+            Include banned and preview cards
+          </label>
+        )}
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={hideInDeck} onChange={(e) => onHideInDeck(e.target.checked)} />
           Hide cards in deck
@@ -344,6 +353,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                       In deck{have > 1 ? ` ×${have}` : ""}
                     </span>
                   )}
+                  {card && statusLabel(card) && <StatusBadge card={card} className="absolute bottom-1.5 left-1.5" />}
                 </div>
                 {card ? (
                   <div className="flex flex-wrap items-center gap-1 text-xs">
@@ -431,5 +441,19 @@ function FetchNewCard({ scryfallId, onFetched }: { scryfallId: string; onFetched
       </button>
       {state !== "idle" && state !== "busy" && <p className="mt-1 text-red-400">{state}</p>}
     </div>
+  );
+}
+
+/** "Banned" or "Preview" on a card that isn't Commander-legal (yet). */
+export function StatusBadge({ card, className = "" }: { card: CardSummary; className?: string }) {
+  const label = statusLabel(card);
+  if (!label) return null;
+  return (
+    <span
+      title={label === "Banned" ? "Banned in Commander" : "Not released yet: legal in Commander from its release day"}
+      className={`rounded px-1.5 py-0.5 text-xs font-semibold ${label === "Banned" ? "bg-red-700 text-white" : "bg-sky-600 text-white"} ${className}`}
+    >
+      {label}
+    </span>
   );
 }

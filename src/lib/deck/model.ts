@@ -15,6 +15,13 @@ export const BOARD_LABELS: Record<Board, string> = {
   maybe: "Maybeboard",
 };
 
+export type CommanderStatus = "legal" | "banned" | "preview" | "not_legal";
+
+/** A short label for cards that searches only show with "Include banned and preview cards" on; null otherwise. */
+export function statusLabel(card: Pick<CardSummary, "commander_status">): string | null {
+  return card.commander_status === "banned" ? "Banned" : card.commander_status === "preview" ? "Preview" : null;
+}
+
 export type CardSummary = {
   oracle_id: string;
   name: string;
@@ -27,6 +34,8 @@ export type CardSummary = {
   price_usd: number | null;
   edhrec_rank: number | null;
   commander_legal: boolean;
+  /** legal, banned, preview (not released yet) or not_legal (tokens, Un-cards...). Missing on rows saved before 0031. */
+  commander_status?: CommanderStatus;
   game_changer: boolean;
   max_copies: number;
   can_be_commander: boolean;
