@@ -183,6 +183,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - `src/app/settings/roles-setting.tsx`: every standard role (slider, Hide / Show) plus custom roles (slider, Remove, + Add a role from a tag, reusing the exported `AddRole` from `role-profile.tsx`). Saves `profiles.default_role_targets` and `custom_roles` on **Save defaults**, the same values a deck's "Save as my defaults" writes; Tutors has no slider (follows each deck's bracket). Only new decks use them.
 
+## Reorder the left column (v2, built Nov 8, 2026)
+
+- **Edit targets** (was "Adjust targets", now shared state in the editor) turns on sliders, Hide and dragging for roles and top tags. Drag = `src/lib/ui/use-drag-reorder.ts` (pointer events, whole row is the handle, 6 px before a drag starts, live reorder by `elementFromPoint` over `data-reorder` rows, sliders and `data-no-drag` keep their gestures, the click after a drag is swallowed). Order in `tag_view.roleOrder` / `tagOrder` (`src/lib/tags/order.ts`: `applyOrder`, `moveKey`, `mergeOrder` keeps keys from other decks, capped at 200), used by the role profile, top tags and the narrow rail only; hero, suggestions and Group by Role keep their usual order. **Testing note:** with an emulated viewport the browser tool's drag lands off target (it moved a slider once); test with dispatched PointerEvents, rows scrolled into view.
+
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
 
 - Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).
