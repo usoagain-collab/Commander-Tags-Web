@@ -349,6 +349,10 @@ async function main() {
       "update public.import_runs set status = 'succeeded', finished_at = now(), counts = $2 where id = $1",
       [runId, JSON.stringify(counts)],
     );
+    // Every cards row was just rewritten. Until a vacuum marks the pages clean, suggestion_pool cannot answer
+    // from its covering index (0043) and reads the 122 MB table instead, which times out on a cold database.
+    // Autovacuum got there hours later, so do it now. A failure here doesn't fail the import.
+    await client.query("vacuum (analyze) public.cards").catch((err) => log(`vacuum cards skipped: ${err instanceof Error ? err.message : err}`));
     log("Done.");
     console.log(JSON.stringify(counts, null, 2));
   } catch (err) {
