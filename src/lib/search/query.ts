@@ -38,27 +38,38 @@ export function buildQuery(userQuery: string, filters: SearchFilters): string {
   return extra.length ? `(${q}) ${extra.join(" ")}` : q;
 }
 
-export function scryfallSearchUrl(query: string, order = "edhrec") {
+export function scryfallSearchUrl(query: string, order = "edhrec", dir: "auto" | "asc" | "desc" = "auto") {
   const params = new URLSearchParams({ q: query, order, unique: "cards" });
+  if (dir !== "auto") params.set("dir", dir);
   return `https://api.scryfall.com/cards/search?${params}`;
 }
 
 // ---------- tag autocomplete ----------
 
 export type TagKind = "oracle" | "art";
+/** What a word is asking for: tags from our database, or (v2) types, keywords and sets from Scryfall's catalogs. */
+export type TokenKind = TagKind | "type" | "keyword" | "set";
 
-/** Scryfall's keywords for oracle (function) tags and art tags. */
-const TAG_KEYWORDS: Record<string, TagKind> = {
+/** Scryfall's keywords for oracle (function) tags, art tags, types, keywords and sets. */
+const TAG_KEYWORDS: Record<string, TokenKind> = {
   otag: "oracle",
   oracletag: "oracle",
   function: "oracle",
   art: "art",
   atag: "art",
   arttag: "art",
+  t: "type",
+  type: "type",
+  kw: "keyword",
+  keyword: "keyword",
+  s: "set",
+  set: "set",
+  e: "set",
+  edition: "set",
 };
 
 export type TagToken = {
-  kind: TagKind;
+  kind: TokenKind;
   /** What's typed after the colon so far (lowercase, may be empty). */
   partial: string;
   /** Where the slug part starts and ends in the text, so a pick can replace it. */
@@ -75,7 +86,7 @@ export function tagTokenAt(text: string, caret: number): TagToken | null {
   while (wordEnd < text.length && !/[\s)]/.test(text[wordEnd])) wordEnd++;
   const word = text.slice(wordStart, wordEnd);
 
-  const m = word.match(/^-?([a-z]+)[:=]([a-z0-9-]*)$/i);
+  const m = word.match(/^-?([a-z]+)[:=]([a-z0-9'-]*)$/i);
   if (!m) return null;
   const kind = TAG_KEYWORDS[m[1].toLowerCase()];
   if (!kind) return null;

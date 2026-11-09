@@ -12,6 +12,21 @@ import {
   tagTokenAt,
   type TagToken,
 } from "@/lib/search/query";
+import {
+  appendSyntax,
+  CHEAT_SHEET,
+  EMPTY_FILTERS,
+  EXAMPLES,
+  filterSyntax,
+  quote,
+  SORTS,
+  sortNote,
+  type FilterForm,
+  type SearchOrder,
+  type SortDir,
+} from "@/lib/search/filters";
+import { loadCatalog, matchCatalog } from "@/lib/scryfall/catalog";
+import { FilterFields } from "./filter-fields";
 
 /** The few fields we use from a Scryfall card object. */
 type ScryfallCard = {
@@ -28,6 +43,7 @@ type ScryfallList = {
   total_cards: number;
   warnings?: string[]; // e.g. "Invalid expression “foo:bar” was ignored."
 };
+/** An autocomplete choice: a tag from our data, or (size 0) a type, keyword or set from Scryfall's catalogs. */
 type Tag = { slug: string; label: string; size: number; description: string | null };
 
 const oracleIdOf = (c: ScryfallCard) => c.oracle_id ?? c.card_faces?.[0]?.oracle_id;
@@ -69,6 +85,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const [matching, setMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  // v2 (Nov 8, 2026): sort order, and the Filters drawer that writes syntax into the box.
+  const [order, setOrder] = useState<SearchOrder>("edhrec");
+  const [dir, setDir] = useState<SortDir>("auto");
+  const [sentOrder, setSentOrder] = useState<{ order: SearchOrder; dir: SortDir }>({ order: "edhrec", dir: "auto" });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterForm>(EMPTY_FILTERS);
 
   // Tag autocomplete state
   const [token, setToken] = useState<TagToken | null>(null);
@@ -137,12 +159,34 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     setSummaries((prev) => ({ ...prev, ...found }));
   }
 
-  function search() {
-    const q = buildQuery(text, { identity, inIdentity, legalOnly, withBanned });
-    if (!text.trim()) return;
+  function search(typed = text, sort = { order, dir }) {
+    const q = buildQuery(typed, { identity, inIdentity, legalOnly, withBanned });
+    if (!typed.trim()) return;
     setSentQuery(q);
+    setSentOrder(sort);
     setToken(null);
-    void fetchPage(scryfallSearchUrl(q), false);
+    void fetchPage(scryfallSearchUrl(q, sort.order, sort.dir), false);
+  }
+
+  /** A new sort re-runs the last search straight away. */
+  function changeSort(next: { order: SearchOrder; dir: SortDir }) {
+    setOrder(next.order);
+    setDir(next.dir);
+    if (sentQuery && text.trim()) search(text, next);
+  }
+
+  /** Filters drawer: put the built syntax after what's typed, and search. */
+  function addFilters() {
+    const next = appendSyntax(text, filterSyntax(filters));
+    setText(next);
+    setFilters(EMPTY_FILTERS);
+    setFiltersOpen(false);
+    search(next);
+  }
+
+  function runExample(query: string) {
+    setText(query);
+    search(query);
   }
 
   // ---------- tag autocomplete ----------
@@ -160,6 +204,13 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     }
     const id = ++tagRequest.current;
     const timer = setTimeout(async () => {
+      if (token.kind === "type" || token.kind === "keyword" || token.kind === "set") {
+        const items = await loadCatalog(token.kind).catch(() => []);
+        if (id !== tagRequest.current) return;
+        setTags(matchCatalog(items, token.partial).map((it) => ({ slug: it.value, label: it.value, size: 0, description: it.hint ?? null })));
+        setActiveTag(0);
+        return;
+      }
       let query = supabase.from("tags").select("slug, label, size, description").eq("kind", token.kind);
       if (token.partial) query = query.ilike("slug", `%${token.partial}%`);
       const { data } = await query.order("size", { ascending: false }).limit(40);
@@ -172,7 +223,9 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
 
   function pickTag(tag: Tag) {
     if (!token) return;
-    const { text: next, caret } = insertTag(text, token, tag.slug);
+    // Types and keywords with spaces need quotes (t:"time lord"); set codes and tag slugs go in as they are.
+    const value = token.kind === "type" || token.kind === "keyword" ? quote(tag.slug) : tag.slug;
+    const { text: next, caret } = insertTag(text, token, value);
     setText(next);
     setToken(null);
     requestAnimationFrame(() => {
@@ -245,7 +298,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-foreground/20 bg-transparent px-3"
         />
         <button
-          onClick={search}
+          onClick={() => search()}
           disabled={loading || !text.trim()}
           className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink disabled:opacity-50"
         >
@@ -255,7 +308,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         {token && tags.length > 0 && (
           <ul
             role="listbox"
-            aria-label={token.kind === "oracle" ? "Oracle tags" : "Art tags"}
+            aria-label={{ oracle: "Oracle tags", art: "Art tags", type: "Card types", keyword: "Keywords", set: "Sets" }[token.kind]}
             className="absolute left-0 top-full z-20 mt-1 max-h-80 w-full max-w-xl overflow-auto rounded-md border border-foreground/15 bg-background text-sm shadow-lg"
           >
             {tags.map((t, i) => (
@@ -277,12 +330,102 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                   <span className="font-mono">{t.slug}</span>
                   {t.description && <span className="ml-2 text-xs opacity-60">{t.description}</span>}
                 </span>
-                <span className="shrink-0 text-xs tabular-nums opacity-60">{t.size.toLocaleString()} cards</span>
+                {t.size > 0 && <span className="shrink-0 text-xs tabular-nums opacity-60">{t.size.toLocaleString()} cards</span>}
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        <label className="flex items-center gap-2">
+          <span className="opacity-70">Sort</span>
+          <select
+            value={order}
+            onChange={(e) => changeSort({ order: e.target.value as SearchOrder, dir })}
+            aria-label="Sort results by"
+            className="min-h-11 rounded-lg border border-foreground/20 bg-background px-2"
+          >
+            {SORTS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => changeSort({ order, dir: dir === "auto" ? "desc" : dir === "desc" ? "asc" : "auto" })}
+          title="Change the direction"
+          className="min-h-11 rounded-lg border border-foreground/20 px-3 hover:bg-foreground/10"
+        >
+          ⇅ {sortNote(order, dir)}
+        </button>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          aria-expanded={filtersOpen}
+          className={`min-h-11 rounded-lg border px-3 ${filtersOpen ? "border-gold text-gold" : "border-foreground/20 hover:bg-foreground/10"}`}
+        >
+          Filters {filtersOpen ? "▴" : "▾"}
+        </button>
+        <details className="relative">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-foreground/20 px-3 hover:bg-foreground/10" title="Search syntax cheat sheet">
+            ? Syntax
+          </summary>
+          <div className="absolute right-0 top-full z-20 mt-1 w-[min(26rem,calc(100vw-3rem))] rounded-lg border border-foreground/15 bg-background p-3 text-xs shadow-lg sm:left-0 sm:right-auto">
+            <table className="w-full">
+              <tbody>
+                {CHEAT_SHEET.map((r) => (
+                  <tr key={r.syntax} className="align-top">
+                    <td className="whitespace-nowrap py-1 pr-3 font-mono">{r.syntax}</td>
+                    <td className="py-1 opacity-80">{r.means}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline opacity-80">
+              Full syntax guide on Scryfall
+            </a>
+          </div>
+        </details>
+      </div>
+
+      {filtersOpen && (
+        <div className="mt-3 rounded-lg border border-foreground/15 p-3">
+          <FilterFields
+            value={filters}
+            onChange={(next) => setFilters(next)}
+            fields={["types", "colors", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={addFilters} disabled={!filterSyntax(filters)} className="btn btn-gold min-h-11 px-4 disabled:opacity-50">
+              Add to search
+            </button>
+            <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="min-h-11 rounded-lg px-3 text-sm opacity-70 hover:opacity-100">
+              Clear
+            </button>
+            {filterSyntax(filters) && <code className="min-w-0 break-all font-mono text-xs opacity-70">{filterSyntax(filters)}</code>}
+          </div>
+        </div>
+      )}
+
+      {!sentQuery && !text.trim() && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-xs opacity-60">Try:</span>
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex.query}
+              type="button"
+              onClick={() => runExample(ex.query)}
+              title={ex.query}
+              className="min-h-11 rounded-full border border-foreground/20 px-3 hover:bg-foreground/10"
+            >
+              {ex.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-80">
         {identity && (
@@ -312,7 +455,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           </label>
         )}
         <span className="opacity-70">
-          Type <code>otag:</code> or <code>art:</code> for tag suggestions ·{" "}
+          Type <code>otag:</code>, <code>art:</code>, <code>t:</code>, <code>kw:</code> or <code>s:</code> for suggestions ·{" "}
           <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="underline">
             syntax guide
           </a>
@@ -323,7 +466,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         <p className="mt-3 text-xs opacity-60">
           Searched <code className="font-mono">{sentQuery}</code>
           {total !== null &&
-            ` · ${total.toLocaleString()} ${total === 1 ? "card" : "cards"}${total > 1 ? ", most played first" : ""}`}
+            ` · ${total.toLocaleString()} ${total === 1 ? "card" : "cards"}${total > 1 ? `, ${sortNote(sentOrder.order, sentOrder.dir)}` : ""}`}
         </p>
       )}
       {warnings.map((w) => (

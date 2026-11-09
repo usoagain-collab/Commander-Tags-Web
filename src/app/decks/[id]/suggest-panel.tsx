@@ -21,6 +21,10 @@ import { candidateIssues, type ComboRow, type EvaluateInput, type Finding } from
 import type { BracketNumber } from "@/lib/brackets/rules";
 import { cardFlag } from "./bracket-panel";
 import { Panel } from "./deck-text-panel";
+import { FilterFields } from "./filter-fields";
+import { appendSyntax, EMPTY_FILTERS, filterSyntax, type FilterForm } from "@/lib/search/filters";
+import { buildQuery } from "@/lib/search/query";
+import { scryfallOracleIds } from "@/lib/scryfall/oracle-ids";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
 export type SuggestSource = {
@@ -73,7 +77,13 @@ export function SuggestPanel(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [combos, setCombos] = useState<ComboRow[] | null>(null);
   const [showAbove, setShowAbove] = useState(false);
-  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${identity.join("")}`;
+  // Scryfall filters (v2, Nov 8, 2026): the pool is narrowed to the cards a Scryfall search finds. Kept for the visit.
+  const [filterDraft, setFilterDraft] = useState<FilterForm>(EMPTY_FILTERS);
+  const [ownDraft, setOwnDraft] = useState("");
+  const [filter, setFilter] = useState("");
+  const [filterInfo, setFilterInfo] = useState<{ total: number; used: number; warnings: string[] } | null>(null);
+  const applyFilter = (form = filterDraft, own = ownDraft) => setFilter(appendSyntax(filterSyntax(form), own));
+  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${identity.join("")}|${filter}`;
 
   useEffect(() => {
     let live = true;
@@ -82,9 +92,28 @@ export function SuggestPanel(props: Props) {
     setLandPool([]);
     setCombos(null);
     setError(null);
+    setFilterInfo(null);
     (async () => {
+      let only: string[] | undefined;
+      if (filter) {
+        try {
+          const found = await scryfallOracleIds(buildQuery(filter, { identity: new Set(identity), inIdentity: true, legalOnly: true }));
+          if (!live) return;
+          setFilterInfo({ total: found.total, used: found.ids.length, warnings: found.warnings });
+          if (!found.ids.length) {
+            setCombos([]);
+            setPool([]);
+            return;
+          }
+          only = found.ids;
+        } catch (e) {
+          if (live) setError(`Couldn't run the filter on Scryfall: ${e instanceof Error ? e.message : String(e)}`);
+          return;
+        }
+      }
       const ask = async (slugs: string[], lands: boolean, tail: number) => {
-        const call = () => supabase.rpc("suggestion_pool", { p_slugs: slugs, p_identity: identity, p_exclude: deckIds, p_lands: lands, p_tail: tail });
+        const call = () =>
+          supabase.rpc("suggestion_pool", { p_slugs: slugs, p_identity: identity, p_exclude: deckIds, p_lands: lands, p_tail: tail, ...(only ? { p_only: only } : {}) });
         let res = await call();
         // The first call after a quiet spell can hit the database's time limit while it loads the tag tables
         // into memory; the second try runs warm.
@@ -98,6 +127,9 @@ export function SuggestPanel(props: Props) {
         source.landsShort ? ask([], true, 60) : Promise.resolve({ data: [], error: null }),
       ]);
       if (!live) return;
+      // Filters need migration 0044 (suggestion_pool with p_only); before it runs, the database doesn't know p_only.
+      if (main.error && only && /p_only|suggestion_pool/i.test(main.error.message))
+        return setError("Filters aren't available yet: the database needs an update. Clear the filters to see suggestions.");
       if (main.error) return setError(`Couldn't load suggestions: ${main.error.message}`);
       const found = (main.data ?? []) as PoolCard[];
       const foundStaples = staples.error ? [] : ((staples.data ?? []) as PoolCard[]);
@@ -181,6 +213,23 @@ export function SuggestPanel(props: Props) {
   return (
     <Panel title={`Suggestions: ${prettyTag(source.label)}`} onClose={onClose}>
       <StyleControls settings={score.settings} onChange={props.onSettings} />
+      <SuggestFilters
+        draft={filterDraft}
+        own={ownDraft}
+        applied={filter}
+        info={filterInfo}
+        onDraft={(next, immediate) => {
+          setFilterDraft(next);
+          if (immediate) applyFilter(next);
+        }}
+        onOwn={setOwnDraft}
+        onApply={() => applyFilter()}
+        onClear={() => {
+          setFilterDraft(EMPTY_FILTERS);
+          setOwnDraft("");
+          setFilter("");
+        }}
+      />
       {props.saveError && <p className="mt-1 text-sm text-red-400">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
       {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
@@ -225,7 +274,9 @@ export function SuggestPanel(props: Props) {
       )}
       {pool !== null && combos !== null && rows.length === 0 && !staples.length && !lands.length && (
         <p className="mt-3 text-sm opacity-60">
-          {pool.length && score.settings.style === "budget"
+          {filter && !pool.length
+            ? "No cards in your colors match these filters and this deck's themes. Try loosening a filter."
+            : pool.length && score.settings.style === "budget"
             ? "Nothing under this price cap. Try raising it."
             : pool.length && score.settings.style === "gems"
               ? "No lesser-played cards share this deck's themes. Try Best fit."
@@ -362,6 +413,81 @@ function SuggestionCard({
         </button>
       </div>
     </li>
+  );
+}
+
+/** The filter toggles: guided fields plus your own Scryfall syntax; buttons apply at once, typing on Enter. */
+function SuggestFilters(props: {
+  draft: FilterForm;
+  own: string;
+  applied: string;
+  info: { total: number; used: number; warnings: string[] } | null;
+  onDraft: (next: FilterForm, immediate: boolean) => void;
+  onOwn: (own: string) => void;
+  onApply: () => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const pending = appendSyntax(filterSyntax(props.draft), props.own) !== props.applied;
+  return (
+    <div className="mt-3 rounded-lg border border-foreground/15">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm">
+        <span>
+          <span className="font-medium">Filters</span>
+          <span className="ml-2 opacity-60">{props.applied ? "on" : "narrow the picks with Scryfall search"}</span>
+        </span>
+        <span aria-hidden>{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <form
+          className="border-t border-foreground/10 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            props.onApply();
+          }}
+        >
+          <FilterFields value={props.draft} onChange={props.onDraft} fields={["types", "mv", "text", "since", "instantSpeed", "noReserved"]} />
+          <label className="mt-3 grid gap-1 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+            <span className="text-xs font-medium opacity-70 sm:text-sm">Your own filter</span>
+            <input
+              value={props.own}
+              onChange={(e) => props.onOwn(e.target.value)}
+              placeholder="any Scryfall syntax, e.g. kw:ward t:equipment"
+              aria-label="Your own Scryfall filter"
+              spellCheck={false}
+              className="min-h-11 min-w-0 rounded-lg border border-foreground/20 bg-transparent px-3 font-mono text-sm"
+            />
+          </label>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="submit" disabled={!pending} className="btn btn-gold min-h-11 px-4 disabled:opacity-50">
+              Apply filters
+            </button>
+            {(props.applied || pending) && (
+              <button type="button" onClick={props.onClear} className="min-h-11 rounded-lg px-3 text-sm opacity-70 hover:opacity-100">
+                Clear
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+      {props.applied && (
+        <div className="border-t border-foreground/10 px-3 py-2 text-xs">
+          <p>
+            <span className="opacity-60">Scryfall filter </span>
+            <code className="break-all font-mono">{props.applied}</code>
+            {props.info &&
+              ` · ${props.info.total.toLocaleString()} ${props.info.total === 1 ? "card matches" : "cards match"}${
+                props.info.total > props.info.used ? `, using the ${props.info.used.toLocaleString()} most played` : ""
+              }`}
+          </p>
+          {props.info?.warnings.map((w) => (
+            <p key={w} className="mt-1 text-amber-700 dark:text-amber-400">
+              Scryfall: {w}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
