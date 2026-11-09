@@ -726,8 +726,11 @@ export function DeckEditor({
 
   // ---------- suggestions (Phase 4) ----------
   // Scored against the deck's top 15 GAMEPLAY themes (pool cards have oracle tags only), Specific or Broad as set.
+  // Only standard role tags are left out: a custom role is made from a theme (Lifegain, Pridemate), and dropping its
+  // tags left a life gain deck scored on +1/+1 counters alone (David, Nov 8, 2026: Cosmogrand Zenith, Herald of War).
+  const suggestRoleTags = new Set(roles.flatMap((r) => (r.tagSet && !r.custom ? [...r.tagSet] : [])));
   const suggestThemes: ThemeTag[] = trees
-    ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: roleTagSet, hidden }).slice(0, 15)
+    ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: suggestRoleTags, hidden }).slice(0, 15)
     : [];
   // Refined bracket estimate (v2): how the deck plays, on top of the rules floor. Shown on the Bracket screen.
   const power =
