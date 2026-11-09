@@ -18,14 +18,25 @@ const PRECON_EMAIL = "precons@commander-tags.test";
 const RECENT_DAYS = 90;
 const all = process.argv.includes("--all");
 
-type Info = { set: string; set_name: string; number: string; illustration_id: string | null; finishes: string[]; usd: number | null; usd_foil: number | null; usd_etched: number | null };
+type Info = {
+  set: string;
+  set_name: string;
+  number: string;
+  illustration_id: string | null;
+  finishes: string[];
+  usd: number | null;
+  usd_foil: number | null;
+  usd_etched: number | null;
+  image_v: string | null;
+};
 type ScryfallCard = {
   id: string;
   set: string;
   set_name: string;
   collector_number: string;
   illustration_id?: string;
-  card_faces?: { illustration_id?: string }[];
+  card_faces?: { illustration_id?: string; image_uris?: Record<string, string> }[];
+  image_uris?: Record<string, string>;
   finishes?: string[];
   prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null };
 };
@@ -64,6 +75,7 @@ async function printingInfo(ids: string[]) {
         usd: num(c.prices?.usd),
         usd_foil: num(c.prices?.usd_foil),
         usd_etched: num(c.prices?.usd_etched),
+        image_v: (c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal)?.match(/\?(\d+)/)?.[1] ?? null,
       });
   }
   return out;
@@ -155,7 +167,7 @@ try {
           quantity: r.quantity,
           printing_id: own ? r.printing_id : null,
           foil: own ? r.foil : false,
-          printing_info: own ? { set: own.set, set_name: own.set_name, number: own.number, illustration_id: own.illustration_id, finishes: own.finishes, usd: own.usd, usd_foil: own.usd_foil, usd_etched: own.usd_etched } : null,
+          printing_info: own ? { set: own.set, set_name: own.set_name, number: own.number, illustration_id: own.illustration_id, finishes: own.finishes, usd: own.usd, usd_foil: own.usd_foil, usd_etched: own.usd_etched, image_v: own.image_v } : null,
           printing_split: split.length ? split : null,
         };
       });

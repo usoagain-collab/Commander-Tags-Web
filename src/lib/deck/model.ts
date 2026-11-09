@@ -406,8 +406,8 @@ export function withPrinting(card: CardSummary, printing: ChosenPrinting | undef
   if (!printing) return card;
   return {
     ...card,
-    image_normal: printingImage(printing.id),
-    image_art_crop: printingImage(printing.id, "art_crop"),
+    image_normal: printingImage(printing.id, "normal", "front", printing.image_v),
+    image_art_crop: printingImage(printing.id, "art_crop", "front", printing.image_v),
     price_usd: printingPrice(printing) ?? card.price_usd,
   };
 }

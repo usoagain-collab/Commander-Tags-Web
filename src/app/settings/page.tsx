@@ -9,6 +9,8 @@ import { AvatarSetting } from "./avatar-setting";
 import { CutterSetting } from "./cutter-setting";
 import { NameSetting } from "./name-setting";
 import { PreviewSetting } from "./preview-setting";
+import { CardLanguageSetting } from "./card-language-setting";
+import { readCardLang } from "@/lib/deck/card-language";
 import { RolesSetting } from "./roles-setting";
 import { ThemeSetting } from "./theme-setting";
 
@@ -27,6 +29,7 @@ export default async function SettingsPage() {
       <AvatarSetting userId={user.id} name={look.name} initial={look.avatarUrl} />
       <ThemeSetting userId={user.id} initial={look.theme} />
       <PreviewSetting userId={user.id} initial={readPreviewMode((data?.tag_view ?? {}) as Record<string, unknown>)} />
+      <CardLanguageSetting userId={user.id} initial={readCardLang((data?.tag_view ?? {}) as Record<string, unknown>)} />
       <RolesSetting
         userId={user.id}
         initialTargets={withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...readTargets(data?.default_role_targets) })}

@@ -12,8 +12,13 @@ export type ScryfallPrint = {
   illustration_id?: string;
   finishes?: string[];
   prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null };
-  card_faces?: { oracle_id?: string; illustration_id?: string }[];
+  card_faces?: { oracle_id?: string; illustration_id?: string; image_uris?: Record<string, string> }[];
+  image_uris?: Record<string, string>;
 };
+
+/** Scryfall's image version stamp (the number after "?" in an image address). */
+export const imageVersionOf = (c: Pick<ScryfallPrint, "image_uris" | "card_faces">) =>
+  (c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal)?.match(/\?(\d+)/)?.[1] ?? null;
 
 const price = (s: string | null | undefined) => (s ? Number(s) : null);
 
@@ -31,6 +36,7 @@ export function toPrinting(c: ScryfallPrint, foil: boolean): ChosenPrinting {
     usd_foil: price(c.prices?.usd_foil),
     usd_etched: price(c.prices?.usd_etched),
     foil: foilFor(finishes, foil),
+    image_v: imageVersionOf(c),
   };
 }
 

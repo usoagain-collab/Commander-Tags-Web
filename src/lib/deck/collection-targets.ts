@@ -18,6 +18,7 @@ export const infoOf = (p: ChosenPrinting): PrintingInfo => ({
   usd: p.usd,
   usd_foil: p.usd_foil,
   usd_etched: p.usd_etched,
+  image_v: p.image_v ?? null,
 });
 
 /**
