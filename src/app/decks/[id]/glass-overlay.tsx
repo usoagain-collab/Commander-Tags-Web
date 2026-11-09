@@ -32,15 +32,20 @@ export function GlassOverlay({
     };
   }, [paused, onClose, onEscape]);
 
+  // The blur sits on its own layer, not on the scrolling pane: an element with backdrop-filter becomes the
+  // containing block for position: fixed children, so sheets and bars inside would scroll away with the content.
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 z-50 overflow-y-auto bg-background/70 p-4 backdrop-blur-xl sm:p-8"
-    >
-      {children}
-    </div>
+    <>
+      <div aria-hidden className="pointer-events-none fixed inset-0 z-50 bg-background/70 backdrop-blur-xl" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+        className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-8"
+      >
+        {children}
+      </div>
+    </>
   );
 }
