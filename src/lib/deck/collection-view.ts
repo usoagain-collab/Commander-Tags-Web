@@ -44,7 +44,7 @@ export type CollectionItem = {
 };
 
 const setLabel = (r: OwnedRow) => (r.printing_info ? `${r.printing_info.set.toUpperCase()} #${r.printing_info.number}` : "Printing unknown");
-const rowImage = (r: OwnedRow, card: CardSummary) => (r.printing_id ? printingImage(r.printing_id) : card.image_normal);
+const rowImage = (r: OwnedRow, card: CardSummary) => (r.printing_id ? printingImage(r.printing_id, "normal", "front", r.printing_info?.image_v) : card.image_normal);
 
 /** Items to show: one per owned row, or one per card (its most-owned printing on top). Rows of unknown cards are left out. */
 export function collectionItems(rows: OwnedRow[], cards: Record<string, CardSummary>, perCard: boolean, filter: CollectionFilter = "all"): CollectionItem[] {

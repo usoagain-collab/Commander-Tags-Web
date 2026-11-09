@@ -13,11 +13,16 @@ export type ChosenPrinting = {
   usd_foil: number | null;
   usd_etched: number | null;
   foil: boolean;
+  /** Scryfall's image version stamp; changes when Scryfall replaces the picture (a preview scan, say). */
+  image_v?: string | null;
 };
 
-/** Scryfall CDN image for a printing id: /<size>/<side>/<1st char>/<2nd char>/<id>.jpg */
-export const printingImage = (id: string, size: "normal" | "art_crop" = "normal", side: "front" | "back" = "front") =>
-  `https://cards.scryfall.io/${size}/${side}/${id[0]}/${id[1]}/${id}.jpg`;
+/**
+ * Scryfall CDN image for a printing id: /<size>/<side>/<1st char>/<2nd char>/<id>.jpg, plus Scryfall's version stamp
+ * when known, so a browser fetches the new picture once Scryfall replaces it.
+ */
+export const printingImage = (id: string, size: "normal" | "art_crop" = "normal", side: "front" | "back" = "front", version?: string | null) =>
+  `https://cards.scryfall.io/${size}/${side}/${id[0]}/${id[1]}/${id}.jpg${version ? `?${version}` : ""}`;
 
 /** The printing a default card image shows, read from its URL. */
 export const printingIdFromImage = (url: string | null) =>

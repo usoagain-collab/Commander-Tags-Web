@@ -23,7 +23,10 @@ import {
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
 import { VIEW_LABELS, type ViewMode } from "@/lib/deck/grouping";
 import type { CardSummary } from "@/lib/deck/model";
+import { readCardLang } from "@/lib/deck/card-language";
+import { printingIdFromImage } from "@/lib/deck/printing";
 import { useCollection, type OwnedTarget } from "@/lib/deck/use-collection";
+import { useLocalized } from "@/lib/deck/use-localized";
 import { createClient } from "@/lib/supabase/client";
 import { CollectionSheet } from "./collection-sheet";
 import { resolveImport } from "./import-collection";
@@ -64,7 +67,11 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
     if (failed) setMessage(failed);
   };
 
-  const items = collectionItems(collection.rows, cards, prefs.perCard, filter).filter((it) => matchesQuery(it, query));
+  const listed = collectionItems(collection.rows, cards, prefs.perCard, filter).filter((it) => matchesQuery(it, query));
+  // Card language (v2): pictures in your language where that printing exists in it.
+  const cardLang = readCardLang(tagView);
+  const localize = useLocalized(cardLang, listed.slice(0, limit).map((it) => printingIdFromImage(it.image)));
+  const items = cardLang === "en" ? listed : listed.map((it) => ({ ...it, image: localize({ ...it.card, image_normal: it.image }).image_normal }));
   const sections = collectionSections(items, prefs.group, prefs.sort);
   const known = collection.rows.filter((r) => cards[r.oracle_id]);
   const copies = known.reduce((s, r) => s + r.quantity, 0);

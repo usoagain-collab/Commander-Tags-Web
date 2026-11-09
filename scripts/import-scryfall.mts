@@ -52,7 +52,9 @@ async function downloadRecords<T>(entry: BulkEntry): Promise<T[]> {
   return text.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line) as T);
 }
 
-type PrintingPrices = { usd: number | null; usd_foil: number | null; usd_etched: number | null };
+type PrintingPrices = { usd: number | null; usd_foil: number | null; usd_etched: number | null; image_v: string | null };
+/** Scryfall's version stamp on an image address (the number after "?"): it changes when the picture is replaced. */
+const imageVersion = (c: ScryfallCard) => (c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal)?.match(/\?(\d+)/)?.[1] ?? null;
 
 /**
  * The cheapest USD price per card across every printing. oracle_cards carries one printing, which is often a promo
@@ -80,7 +82,7 @@ async function cheapestPrices(entry: BulkEntry, inDecks: Set<string>, printingPr
     const card = JSON.parse(line) as ScryfallCard;
     if (card.id && inDecks.has(card.id)) {
       const n = (p: string | null | undefined) => (p ? Number(p) : null);
-      printingPrices.set(card.id, { usd: n(card.prices?.usd), usd_foil: n(card.prices?.usd_foil), usd_etched: n(card.prices?.usd_etched) });
+      printingPrices.set(card.id, { usd: n(card.prices?.usd), usd_foil: n(card.prices?.usd_foil), usd_etched: n(card.prices?.usd_etched), image_v: imageVersion(card) });
     }
     if (!card.oracle_id) continue;
     keepLowest(regular, card.oracle_id, card.prices?.usd);
@@ -187,7 +189,7 @@ async function main() {
     const cards = (await downloadRecords<ScryfallCard>(entry("oracle_cards"))).filter((c) => c.oracle_id);
     log(`  ${cards.length} cards`);
     log("Downloading default_cards for prices ...");
-    const inDecks = await client.query<{ printing_id: string }>("select printing_id from public.deck_cards where printing_id is not null union select printing_id from public.preferred_printings");
+    const inDecks = await client.query<{ printing_id: string }>("select printing_id from public.deck_cards where printing_id is not null union select printing_id from public.preferred_printings union select printing_id from public.collection_cards where printing_id is not null");
     const printingPrices = new Map<string, PrintingPrices>();
     const cheapest = await cheapestPrices(entry("default_cards"), new Set(inDecks.rows.map((r) => r.printing_id)), printingPrices).catch((e) => {
       log(`  Couldn't read default_cards, using oracle_cards prices: ${e}`);
@@ -297,23 +299,31 @@ async function main() {
         await client.query("alter table public.deck_cards disable trigger deck_cards_touch");
         const updated = await client.query(
           `update public.deck_cards c
-           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)
-           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric)
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text)
            where c.printing_id = p.id
-             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)`,
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)`,
           [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
         );
         await client.query("alter table public.deck_cards enable trigger deck_cards_touch");
         const defaults = await client.query(
           `update public.preferred_printings c
-           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)
-           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric)
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text)
            where c.printing_id = p.id
-             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched)`,
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)`,
+          [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
+        );
+        const owned = await client.query(
+          `update public.collection_cards c
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text)
+           where c.printing_id = p.id and c.printing_info is not null
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)`,
           [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
         );
         await client.query("commit");
-        log(`  ${updated.rowCount} chosen printings and ${defaults.rowCount} default printings repriced`);
+        log(`  ${updated.rowCount} chosen printings, ${defaults.rowCount} default printings and ${owned.rowCount} owned printings repriced`);
       } catch (e) {
         await client.query("rollback").catch(() => {});
         log(`  Couldn't refresh chosen printing prices: ${e}`);

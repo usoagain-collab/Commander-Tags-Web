@@ -58,7 +58,7 @@ import { useTagData, type InitialTags } from "@/lib/tags/use-tag-data";
 import { useArtTree } from "@/lib/tags/use-art-tree";
 import { usePreferredPrintings } from "@/lib/deck/use-preferred-printings";
 import { useChosenArtTags } from "@/lib/tags/use-chosen-art-tags";
-import type { ChosenPrinting } from "@/lib/deck/printing";
+import { printingIdFromImage, type ChosenPrinting } from "@/lib/deck/printing";
 import {
   aKey,
   deckKeyCounts,
@@ -115,6 +115,8 @@ import { useWishlist } from "@/lib/deck/use-wishlist";
 import { isFoilFinish, ownedCopies, ownedMatch, unownedPrice } from "@/lib/deck/collection";
 import { markOwnedChanges, shownParts, targetFor } from "@/lib/deck/collection-targets";
 import { useCollection } from "@/lib/deck/use-collection";
+import { readCardLang } from "@/lib/deck/card-language";
+import { useLocalized } from "@/lib/deck/use-localized";
 import { artCount, totalPriceWithSplits, type SplitPart, type Splits } from "@/lib/deck/splits";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
@@ -578,10 +580,12 @@ export function DeckEditor({
   const identity = deckIdentity(entries, cards);
   const size = deckSize(entries);
   const countedCards = useMemo(() => applyManaValues(cards, manaValues), [cards, manaValues]);
-  const commanders = linesFor(entries, countedCards, "commander", shownPrintings);
-  const companions = linesFor(entries, countedCards, "companion", shownPrintings);
-  const mainLines = linesFor(entries, countedCards, "main", shownPrintings);
-  const maybeLines = linesFor(entries, countedCards, "maybe", shownPrintings);
+  const rawLines = (["commander", "companion", "main", "maybe"] as Board[]).map((b) => linesFor(entries, countedCards, b, shownPrintings));
+  // Card language (v2): pictures in your language where that printing exists in it.
+  // Your setting, also on decks shared with you and precons (prefs are the viewer's own).
+  const cardLang = readCardLang(prefs);
+  const localize = useLocalized(cardLang, rawLines.flat().map((l) => printingIdFromImage(l.card.image_normal)));
+  const [commanders, companions, mainLines, maybeLines] = rawLines.map((ls) => (cardLang === "en" ? ls : ls.map((l) => ({ ...l, card: localize(l.card) }))));
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
   // The deck as the bracket check sees it (also used to screen suggestions, 5c).
