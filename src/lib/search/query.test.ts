@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildQuery, insertTag, rankTags, scryfallSearchUrl, tagTokenAt } from "./query";
+import { appendSyntax, EMPTY_FILTERS, filterSyntax, quote, sortNote } from "./filters";
 
 const bg = { identity: new Set(["B", "G"]), inIdentity: true, legalOnly: true };
 
@@ -53,8 +54,14 @@ describe("tag autocomplete", () => {
   });
 
   it("ignores other keywords and a cursor inside the keyword", () => {
-    expect(tagTokenAt("t:elf", 5)).toBeNull();
+    expect(tagTokenAt("c:wu", 4)).toBeNull();
     expect(tagTokenAt("otag:ramp", 2)).toBeNull();
+  });
+
+  it("knows types, keywords and sets (v2)", () => {
+    expect(tagTokenAt("t:elf", 5)).toMatchObject({ kind: "type", partial: "elf" });
+    expect(tagTokenAt("o:ward -kw:fly", 14)).toMatchObject({ kind: "keyword", partial: "fly" });
+    expect(tagTokenAt("set:ds", 6)).toMatchObject({ kind: "set", partial: "ds" });
   });
 
   it("offers suggestions right after the colon", () => {
@@ -85,5 +92,41 @@ describe("tag autocomplete", () => {
       { slug: "sacrifice-outlet", size: 12 },
     ];
     expect(rankTags(tags, "sacrifice-outlet")[0].slug).toBe("sacrifice-outlet");
+  });
+});
+
+describe("search sort (v2)", () => {
+  it("adds a direction only when one is chosen", () => {
+    expect(scryfallSearchUrl("t:elf", "usd")).not.toContain("dir=");
+    expect(scryfallSearchUrl("t:elf", "usd", "desc")).toContain("order=usd&unique=cards&dir=desc");
+    expect(sortNote("edhrec", "desc")).toBe("least played first");
+  });
+});
+
+describe("filterSyntax (v2)", () => {
+  it("is empty for an empty form", () => {
+    expect(filterSyntax(EMPTY_FILTERS)).toBe("");
+  });
+
+  it("writes each field as Scryfall syntax", () => {
+    const q = filterSyntax({
+      ...EMPTY_FILTERS,
+      colors: ["W", "G"],
+      types: ["Equipment", "Aura"],
+      text: "ward",
+      mvMax: 3,
+      priceMax: 5,
+      sinceYear: 2022,
+      noReserved: true,
+    });
+    expect(q).toBe("c>=wg (t:equipment or t:aura) o:ward mv<=3 usd<=5 is:firstprint year>=2022 -is:reserved");
+  });
+
+  it("quotes phrases and handles colorless, exact mana value and instant speed", () => {
+    expect(filterSyntax({ ...EMPTY_FILTERS, colors: ["C"], mvMin: 2, mvMax: 2, text: "~ deals", instantSpeed: true })).toBe(
+      'c=c (t:instant or kw:flash) o:"~ deals" mv=2',
+    );
+    expect(quote('Time "Lord"')).toBe('"Time Lord"');
+    expect(appendSyntax("  otag:ramp ", "mv<=2")).toBe("otag:ramp mv<=2");
   });
 });

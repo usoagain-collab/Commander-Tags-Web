@@ -92,7 +92,7 @@ import { HistoryPanel } from "./history-panel";
 import { SharePanel } from "./share-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
-import { type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
+import { themeGroups, type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
 import { useSuggestSettings } from "@/lib/suggest/use-suggest-settings";
 import { useDismissed } from "@/lib/suggest/use-dismissed";
 import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags-ui";
@@ -732,6 +732,14 @@ export function DeckEditor({
   const suggestThemes: ThemeTag[] = trees
     ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: suggestRoleTags, hidden }).slice(0, 15)
     : [];
+  // Themes that mark mostly the same deck cards count once in a suggestion's fit (themeGroups in score.ts).
+  const suggestGroups = (() => {
+    if (!trees || !suggestThemes.length) return undefined;
+    const lineKeys = [...commanders, ...mainLines]
+      .filter((l) => !isLand(l.card.type_line))
+      .map((l) => ({ id: l.card.oracle_id, keys: new Set(cardKeys({ oracle: tags.oracleTags[l.card.oracle_id] ?? [], art: [], commander: false, land: false }, themeSettings.specific, trees)) }));
+    return themeGroups(suggestThemes, (key) => new Set(lineKeys.filter((l) => l.keys.has(key)).map((l) => l.id)));
+  })();
   // Refined bracket estimate (v2): how the deck plays, on top of the rules floor. Shown on the Bracket screen.
   const power =
     estimate && trees && tags.tree
@@ -1284,6 +1292,7 @@ export function DeckEditor({
               rolesOf: (c: PoolCard) => visibleRoleKeys(c, c.tags),
               under: new Set(roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key)),
               settings: suggestStyle.settings,
+              groups: suggestGroups,
             }}
             onSettings={suggestStyle.setSettings}
             saveError={suggestStyle.saveError ?? dismissed.saveError}

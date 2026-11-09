@@ -6,6 +6,9 @@
 // Role mode (the 💡 on a role row; David, Nov 7, 2026): the question is "the best card for this job", so staples like
 // Sol Ring can't sink for sharing no themes. Fit = 5/9 theme fit + 4/9 cheap to cast, popularity on a log scale
 // (rank 1 and rank 1,000 are far apart, not 0.05 apart), and Best fit = 0.45 fit + 0.55 popularity.
+// Theme groups (David, Nov 8, 2026): two theme tags that sit on mostly the same deck cards are one idea under two
+// names (gains-pp-counters and repeatable-pp-counters), so a card sharing both counts only the bigger one. Without
+// this, a counters-only card outscored a life gain card in a life gain deck whose commander adds counters.
 import type { CardSummary } from "@/lib/deck/model";
 import type { TagKey, ThemeTag } from "@/lib/tags/themes";
 
@@ -52,7 +55,47 @@ export type ScoreContext = {
   limit?: number;
   /** Suggesting for one role: every candidate already does the job, so rank by how well (see the top). */
   role?: boolean;
+  /** Theme key -> group number (themeGroups); themes in one group count once, at their best score. */
+  groups?: Map<TagKey, number>;
 };
+
+/** Theme tags whose deck cards overlap this much (shared cards / cards with either) are one group. */
+export const GROUP_OVERLAP = 0.5;
+
+/**
+ * Groups theme tags that mark the same deck cards. Themes go strongest first; each joins the first group whose
+ * leader (its strongest theme) shares at least GROUP_OVERLAP of their cards, else starts its own group.
+ */
+export function themeGroups(themes: ThemeTag[], cardsOf: (key: TagKey) => Set<string>, overlap = GROUP_OVERLAP): Map<TagKey, number> {
+  const leaders: { group: number; cards: Set<string> }[] = [];
+  const out = new Map<TagKey, number>();
+  for (const t of [...themes].sort((a, b) => b.score - a.score)) {
+    const cards = cardsOf(t.key);
+    const home = leaders.find((l) => {
+      let both = 0;
+      for (const c of cards) if (l.cards.has(c)) both++;
+      const either = l.cards.size + cards.size - both;
+      return either > 0 && both / either >= overlap;
+    });
+    if (home) out.set(t.key, home.group);
+    else {
+      leaders.push({ group: leaders.length, cards });
+      out.set(t.key, leaders.length - 1);
+    }
+  }
+  return out;
+}
+
+/** Shared theme weight, counting each group once at its best score (every theme its own group without groups). */
+function groupedWeight(shared: ThemeTag[], groups?: Map<TagKey, number>): number {
+  if (!groups) return shared.reduce((n, t) => n + t.score, 0);
+  const best = new Map<string, number>();
+  for (const t of shared) {
+    const g = groups.has(t.key) ? `g${groups.get(t.key)}` : t.key;
+    best.set(g, Math.max(best.get(g) ?? 0, t.score));
+  }
+  return [...best.values()].reduce((n, v) => n + v, 0);
+}
 
 export const popularity = (rank: number | null) => (rank ? 1 - Math.min(rank, 20000) / 20000 : 0);
 /** Popularity on a log scale: rank 1 = 1, rank 100 ≈ 0.54, rank 1,000 ≈ 0.30, 20,000+ = 0 (unranked = 0). */
@@ -63,7 +106,7 @@ export const cheapToCast = (mv: number) => 1 - Math.min(Math.max(mv, 0), 6) / 6;
 export function scorePool(pool: PoolCard[], ctx: ScoreContext): Scored[] {
   const { themes, settings } = ctx;
   const weight = new Map(themes.map((t) => [t.key, t]));
-  const totalW = themes.reduce((n, t) => n + t.score, 0) || 1;
+  const totalW = groupedWeight(themes, ctx.groups) || 1;
 
   const rows = pool
     .filter((c) => !ctx.dismissed?.has(c.oracle_id))
@@ -72,7 +115,7 @@ export function scorePool(pool: PoolCard[], ctx: ScoreContext): Scored[] {
         .keysOf(card)
         .flatMap((k) => (weight.has(k) ? [weight.get(k)!] : []))
         .sort((a, b) => b.score - a.score);
-      const fitRaw = shared.reduce((n, t) => n + t.score, 0) / totalW;
+      const fitRaw = groupedWeight(shared, ctx.groups) / totalW;
       const fills = ctx.rolesOf(card).filter((k) => ctx.under.has(k));
       const price = card.price_usd == null ? null : Number(card.price_usd);
       const pop = ctx.role ? logPopularity(card.edhrec_rank) : popularity(card.edhrec_rank);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ThemeTag } from "@/lib/tags/themes";
-import { DEFAULT_SUGGEST, pickStaples, popularity, readSuggestSettings, scorePool, type PoolCard, type SuggestSettings } from "./score";
+import { DEFAULT_SUGGEST, pickStaples, popularity, readSuggestSettings, scorePool, themeGroups, type PoolCard, type SuggestSettings } from "./score";
 
 const card = (name: string, tags: string[], rank: number | null, price: number | null = 1): PoolCard => ({
   oracle_id: name,
@@ -93,6 +93,33 @@ describe("scorePool", () => {
   it("leaves out dismissed cards", () => {
     const r = scorePool(pool, ctx({}, { dismissed: new Set(["On-theme staple"]) }));
     expect(r.map((x) => x.card.name)).not.toContain("On-theme staple");
+  });
+});
+
+describe("theme groups", () => {
+  // The healz case: two counter tags on mostly the same deck cards, life gain on others.
+  const lifeThemes = [theme("pridemate", 8), theme("repeatable-pp-counters", 5), theme("gains-pp-counters", 4), theme("repeatable-lifegain", 4)];
+  const deckCards: Record<string, string[]> = {
+    pridemate: ["a", "b", "c"],
+    "repeatable-pp-counters": ["d", "e", "f", "g"],
+    "gains-pp-counters": ["d", "e", "f", "h"],
+    "repeatable-lifegain": ["i", "j"],
+  };
+  const groups = themeGroups(lifeThemes, (k) => new Set(deckCards[k.slice(2)]));
+
+  it("puts tags on mostly the same cards in one group, strongest first", () => {
+    expect(groups.get("o:repeatable-pp-counters")).toBe(groups.get("o:gains-pp-counters"));
+    expect(groups.get("o:pridemate")).not.toBe(groups.get("o:repeatable-pp-counters"));
+    expect(groups.get("o:repeatable-lifegain")).not.toBe(groups.get("o:gains-pp-counters"));
+  });
+
+  it("counts a group once, so a counters-only card no longer beats a life gain card", () => {
+    const cards = [card("Counters only", ["repeatable-pp-counters", "gains-pp-counters"], 100), card("Life gain", ["repeatable-lifegain", "gains-pp-counters"], 100)];
+    const base = { ...ctx(), themes: lifeThemes };
+    expect(scorePool(cards, base).map((r) => r.card.name)).toEqual(["Counters only", "Life gain"]);
+    expect(scorePool(cards, { ...base, groups }).map((r) => r.card.name)).toEqual(["Life gain", "Counters only"]);
+    // Both shared tags still show as reasons.
+    expect(scorePool(cards, { ...base, groups }).find((r) => r.card.name === "Counters only")!.shared).toHaveLength(2);
   });
 });
 
