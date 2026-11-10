@@ -110,3 +110,21 @@ export function rankTags<T extends { slug: string; size: number }>(tags: T[], pa
     slug === partial ? -1 : slug.startsWith(partial) ? 0 : slug.split("-").some((w) => w.startsWith(partial)) ? 1 : 2;
   return [...tags].sort((a, b) => score(a.slug) - score(b.slug) || b.size - a.size || a.slug.localeCompare(b.slug));
 }
+
+// ---------- plain words ----------
+
+/** Typed text with no Scryfall syntax at all: just words, like "proliferate" or "draw cards". */
+export function isPlainWords(q: string): boolean {
+  const t = q.trim();
+  return !!t && !/[:<>=!"'()\[\]{}\/]|(^|\s)[-+~]|\b(or|and)\b/i.test(t);
+}
+
+/**
+ * Plain words search names only on Scryfall, so "proliferate" found nothing (stress test, Nov 2026). They now
+ * match a card's name or its rules text: "draw cards" becomes ((draw cards) or (o:draw o:cards)).
+ */
+export function widenPlainWords(q: string): string {
+  if (!isPlainWords(q)) return q;
+  const words = q.trim().split(/\s+/);
+  return `((${words.join(" ")}) or (${words.map((w) => `o:${w}`).join(" ")}))`;
+}

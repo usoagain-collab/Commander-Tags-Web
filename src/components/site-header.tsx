@@ -16,7 +16,10 @@ export async function SiteHeader() {
           </svg>
           <span className="sr-only sm:not-sr-only">Deck Genome</span>
         </Link>
-        <nav className="flex items-center gap-1 text-sm sm:gap-2">
+        <nav aria-label="Main" className="flex items-center gap-1 text-sm sm:gap-2">
+          <Link href="/precons" className="flex min-h-11 items-center px-2 hover:text-gold" title="Every Commander precon">
+            Precons
+          </Link>
           {user ? (
             <>
               <Link href="/decks" className="flex min-h-11 items-center px-2 font-medium hover:text-gold">

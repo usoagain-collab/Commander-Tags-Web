@@ -9,19 +9,27 @@ import type { DeckLine } from "@/lib/deck/model";
 import { GlassOverlay } from "./glass-overlay";
 import type { PowerEstimate } from "@/lib/brackets/power";
 
+/** Below this many cards, "on target" says more than the cards can prove (stress test, Nov 2026). */
+export const BRACKET_VERDICT_MIN = 60;
+
 /** "Bracket 3 · cards 4+": target and estimate; amber when the cards go above the target. */
 export function BracketBadge({
   target,
   estimate,
+  size,
   active,
   onClick,
 }: {
   target: BracketNumber;
   estimate: BracketEstimate | null;
+  /** Cards in the deck (commander + mainboard). */
+  size: number;
   active: boolean;
   onClick: () => void;
 }) {
   const over = estimate ? estimate.floor > target : false;
+  // Going over the target is news at any size; being on it only means something once most of the deck is in.
+  const verdict = !estimate ? "" : over ? `cards fit ${estimateLabel(estimate.floor)}` : size < BRACKET_VERDICT_MIN ? "too early to tell" : "on target";
   const reasons = estimate ? overTarget(estimate, target).map((f) => f.label) : [];
   return (
     <button
@@ -38,7 +46,7 @@ export function BracketBadge({
       }`}
     >
       Bracket {target}
-      <span className="opacity-80">{!estimate ? "" : " · "}{!estimate ? "" : over ? `cards fit ${estimateLabel(estimate.floor)}` : "on target"}</span>
+      <span className="opacity-80">{verdict && ` · ${verdict}`}</span>
       {over && <span aria-label="above target"> ⚠</span>}
     </button>
   );

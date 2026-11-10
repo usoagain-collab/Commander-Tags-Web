@@ -101,7 +101,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
                 ? `Couldn't load your collection: ${collection.error}`
                 : "Loading…"
               : known.length === 0
-                ? "Track what you own: decks then mark your cards and price only what you still need."
+                ? "Track the cards you own. Your decks then mark which ones you have, and price only what you still need."
                 : `${distinct} different cards · ${copies} copies · about ${money(value)}`}
           </p>
           {unknownCopies > 0 && (

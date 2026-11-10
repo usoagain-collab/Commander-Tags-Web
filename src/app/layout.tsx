@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cinzel, Fraunces, Inter } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { getProfileLook } from "@/lib/supabase/profile";
@@ -30,7 +31,14 @@ export default async function RootLayout({
           <a className="underline" href="https://scryfall.com" target="_blank" rel="noopener noreferrer">
             Scryfall
           </a>
-          . Not affiliated with Wizards of the Coast.
+          . Not affiliated with Wizards of the Coast. ·{" "}
+          <Link className="underline" href="/privacy">
+            Privacy
+          </Link>{" "}
+          ·{" "}
+          <Link className="underline" href="/terms">
+            Terms
+          </Link>
         </footer>
       </body>
     </html>

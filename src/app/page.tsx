@@ -17,7 +17,8 @@ const FEATURES = [
   },
 ];
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
   // The most-played commanders make the backdrop, so it changes as the format does.
   const { data } = await supabase
@@ -32,6 +33,11 @@ export default async function Home() {
 
   return (
     <main>
+      {deleted && (
+        <p role="status" className="border-b border-gold/30 bg-gold/10 px-4 py-3 text-center text-sm">
+          Your account and everything in it have been deleted. Thanks for building with us.
+        </p>
+      )}
       <section className="relative overflow-hidden">
         <div aria-hidden className="absolute inset-0 grid grid-cols-2 opacity-60 md:grid-cols-4">
           {art.map((c) => (
@@ -41,13 +47,14 @@ export default async function Home() {
         <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/80 to-background" />
         <div className="relative mx-auto max-w-3xl px-6 py-20 text-center sm:py-28">
           <p className="eyebrow">A Commander deck builder</p>
-          <h1 className="display mt-3 text-4xl leading-tight sm:text-6xl">Build your next deck around what cards do.</h1>
+          <h1 className="display mt-3 text-balance text-4xl leading-tight sm:text-6xl">Build your next deck around what cards do.</h1>
           <p className="mx-auto mt-5 max-w-xl text-lg opacity-85">
             New set out? Find every card that fits your commander, keep the deck balanced, and share something worth
             bragging about.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/decks" className="btn btn-gold min-h-12 px-6 text-base">
+            {/* Signed out, go straight to sign-in rather than through the /decks redirect, which left the button looking dead. */}
+            <Link href={user ? "/decks" : "/login?next=/decks&mode=signup"} className="btn btn-gold min-h-12 px-6 text-base">
               {user ? "Go to my decks" : "Start building"}
             </Link>
             <Link href="/precons" className="btn min-h-12 px-6 text-base">

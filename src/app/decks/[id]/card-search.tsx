@@ -6,6 +6,8 @@ import { entryKey, statusLabel, type Board, type CardSummary, type Entries } fro
 import { importCard } from "@/lib/scryfall/import-card";
 import {
   buildQuery,
+  isPlainWords,
+  widenPlainWords,
   insertTag,
   rankTags,
   scryfallSearchUrl,
@@ -81,6 +83,8 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const [total, setTotal] = useState<number | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [sentQuery, setSentQuery] = useState<string | null>(null);
+  // Plain words were widened to names or rules text: say that in words rather than showing the syntax.
+  const [sentPlain, setSentPlain] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [matching, setMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,9 +164,10 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   }
 
   function search(typed = text, sort = { order, dir }) {
-    const q = buildQuery(typed, { identity, inIdentity, legalOnly, withBanned });
+    const q = buildQuery(widenPlainWords(typed), { identity, inIdentity, legalOnly, withBanned });
     if (!typed.trim()) return;
     setSentQuery(q);
+    setSentPlain(isPlainWords(typed) ? typed.trim() : null);
     setSentOrder(sort);
     setToken(null);
     void fetchPage(scryfallSearchUrl(q, sort.order, sort.dir), false);
@@ -464,7 +469,13 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
 
       {sentQuery && (
         <p className="mt-3 text-xs opacity-60">
-          Searched <code className="font-mono">{sentQuery}</code>
+          {sentPlain ? (
+            <span title={sentQuery}>Cards whose name or rules text has “{sentPlain}”</span>
+          ) : (
+            <>
+              Searched <code className="font-mono">{sentQuery}</code>
+            </>
+          )}
           {total !== null &&
             ` · ${total.toLocaleString()} ${total === 1 ? "card" : "cards"}${total > 1 ? `, ${sortNote(sentOrder.order, sentOrder.dir)}` : ""}`}
         </p>

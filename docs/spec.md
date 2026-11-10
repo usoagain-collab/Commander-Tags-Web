@@ -185,6 +185,9 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Default roles in the profile | Edit your default roles (standard and custom, their tags, hidden ones) and target numbers on the Settings page, without opening a deck. Today defaults can only be saved from a deck's role profile ("Save as my defaults"). **Built Nov 8, 2026**: Settings → Default roles (sliders, Hide / Show, custom roles from a tag, Save defaults, Use the app's defaults; Tutors follows each deck's bracket) | Nov 7, 2026 |
 | Lands in overall Suggest | Overall Suggest never shows lands today (the Staples row covers only non-land roles, and the main list leaves lands out). When the deck is under its Lands target, include lands in the suggestions, ranked like other picks, so a short land count gets filled from the same screen. Once the target is met, lands stay out as now. **Built Nov 8, 2026**: a **Lands: you're N short** row (up to 8, scored like a role's picks: themes, cheapness, popularity; bracket filter, dismissals and Budget's price cap apply) above Staples; a hidden Lands role asks for none | Nov 8, 2026 |
 | Precon decks | Every Commander precon as a deck players can open, playtest and start their own deck from (David, Nov 8, 2026). **Built Nov 8, 2026** (migration 0041): imported nightly from MTGJSON (Scryfall has no decklists) as public decks owned by a Deck Genome Precons account, with exact printings and foils; Collector's Editions as their own decks; **Explore precons** on the landing page opens `/precons`; a precon's page says Precon · set · date and offers **Start a deck from this** | Nov 8, 2026 |
+| Email and password accounts | An account on Deck Genome itself for people who use neither Discord nor Google (stress test, Nov 9, 2026; David chose this over a magic link). **Built Nov 9, 2026**: email + password on the sign-in screen (create account with a name, sign in, Forgot password → emailed link → **Set a password** page), **Add / Change password** in Settings. Supabase confirms the email first. Real users need a mail service set as Supabase's SMTP sender; the built-in one only mails the project team | Nov 9, 2026 |
+| Account controls | Settings → **Your account**: **Download my data** (one plain text file, David's choice over JSON: every deck as an importable list, my tags, wish list, collection) and **Delete my account** (type DELETE; removes the sign-in, which cascades to everything, plus uploaded pictures). **Built Nov 9, 2026** | Nov 9, 2026 |
+| Privacy and terms pages | Plain-language drafts at /privacy and /terms, linked in the footer and on the sign-in screen (Google asks public apps for a privacy link). **Drafted Nov 9, 2026**, for David to review | Nov 9, 2026 |
 | Card language | Card pictures in your language (David, Nov 8, 2026, after seeing Japanese preview scans in the Star Trek precons). **Built Nov 8, 2026** (migration 0042): Settings → Card language (English, Japanese, German, French, Spanish, Italian); images only, falling back to English when a printing wasn't made in that language; looked up once on Scryfall and shared. Also: printing images now carry Scryfall's version stamp so replaced preview scans refresh | Nov 8, 2026 |
 
 ## v2 proposals waiting on David (Nov 8, 2026)
@@ -229,6 +232,14 @@ Everything else on the v2 backlog is built. These need a schema OK or a directio
 - **EDHREC suggestions:** EDHREC's permission (their terms bar automated queries and republishing).
 - **Link sign-in methods:** turn on manual identity linking in Supabase (Authentication → Providers settings).
 - **Pricing details (per store):** an API key from a price source (TCGplayer's API is closed to new developers; JustTCG or Scryfall's own USD/EUR/TIX are options).
+
+## v3 backlog
+
+After v2. Recorded so they aren't lost; nothing here is scheduled.
+
+| Feature | What it means | Added |
+| --- | --- | --- |
+| Try the builder before signing in | Stress test (Nov 9, 2026): visitors hit the sign-in screen before seeing the builder. Guests would build one deck kept in the browser, and sign-in would be asked only on Save or Share, moving the deck into the new account. Until then, precon pages show the builder read-only to signed-out visitors | Nov 9, 2026 |
 
 ## Not intended
 

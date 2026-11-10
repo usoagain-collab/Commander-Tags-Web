@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildQuery, insertTag, rankTags, scryfallSearchUrl, tagTokenAt } from "./query";
+import { buildQuery, insertTag, isPlainWords, rankTags, scryfallSearchUrl, tagTokenAt, widenPlainWords } from "./query";
 import { appendSyntax, EMPTY_FILTERS, filterSyntax, quote, sortNote } from "./filters";
 
 const bg = { identity: new Set(["B", "G"]), inIdentity: true, legalOnly: true };
@@ -128,5 +128,22 @@ describe("filterSyntax (v2)", () => {
     );
     expect(quote('Time "Lord"')).toBe('"Time Lord"');
     expect(appendSyntax("  otag:ramp ", "mv<=2")).toBe("otag:ramp mv<=2");
+  });
+});
+
+describe("plain words", () => {
+  it("knows plain words from syntax", () => {
+    expect(isPlainWords("proliferate")).toBe(true);
+    expect(isPlainWords("draw cards")).toBe(true);
+    expect(isPlainWords("o:proliferate")).toBe(false);
+    expect(isPlainWords("t:elf or t:goblin")).toBe(false);
+    expect(isPlainWords("-t:land")).toBe(false);
+    expect(isPlainWords('"sol ring"')).toBe(false);
+    expect(isPlainWords("  ")).toBe(false);
+  });
+  it("searches names or rules text", () => {
+    expect(widenPlainWords("proliferate")).toBe("((proliferate) or (o:proliferate))");
+    expect(widenPlainWords("draw cards")).toBe("((draw cards) or (o:draw o:cards))");
+    expect(widenPlainWords("cmc<=2")).toBe("cmc<=2");
   });
 });
