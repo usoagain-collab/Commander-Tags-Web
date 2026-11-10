@@ -1277,7 +1277,7 @@ export function DeckEditor({
         />
         </div>
       )}
-      {panel === "import" && !readOnly && <ImportPanel entries={entries} printings={printings} onApply={applyImport} onClose={() => setPanel(null)} />}
+      {panel === "import" && !readOnly && <ImportPanel entries={entries} printings={printings} deckCards={cards} onApply={applyImport} onClose={() => setPanel(null)} />}
       {panel === "suggest" && suggestFor && !readOnly && (
         <div id="suggest-panel" className="drawer scroll-mt-4">
           <SuggestPanel
@@ -1502,7 +1502,15 @@ export function DeckEditor({
           )}
           {/* Narrower screens: roles stay in view as a strip; targets and tags sit behind one row of tabs. */}
           {roles.length > 0 && (
-            <ul className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
+            <div className="mb-1.5 flex items-baseline justify-between gap-2 xl:hidden">
+              <h2 className="display text-lg">What this deck needs</h2>
+              <span className="text-[13px] opacity-75">
+                {roles.filter((r) => (counts[r.key] ?? 0) >= r.target).length} of {roles.length} roles met
+              </span>
+            </div>
+          )}
+          {roles.length > 0 && (
+            <ul aria-label="Roles" className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
               {roles.map((r) => {
                 const n = counts[r.key] ?? 0;
                 return (
@@ -1531,7 +1539,7 @@ export function DeckEditor({
           )}
           <div className="mb-3 flex gap-2 xl:hidden">
             <FoldTab active={fold === "roles"} onClick={() => setFold(fold === "roles" ? null : "roles")}>
-              Targets
+              Roles
             </FoldTab>
             <FoldTab active={fold === "tags"} onClick={() => setFold(fold === "tags" ? null : "tags")}>
               Top tags

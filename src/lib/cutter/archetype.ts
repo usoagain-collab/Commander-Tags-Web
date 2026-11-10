@@ -29,7 +29,7 @@ const creatureTypes = (c: CardSummary) => (isCreature(c) ? (front(c.type_line).s
 
 // ---------- detection ----------
 
-export type SignalResult = { label: string; strength: number; count: number };
+export type SignalResult = { label: string; strength: number; count: number; /** count with the commander weighted */ weighted?: number };
 export type DetectedArchetype = { archetype: Archetype; score: number; evidence: SignalResult[]; typalType?: string };
 
 export type DetectInput = {
@@ -72,13 +72,15 @@ export function detectArchetypes(input: DetectInput): DetectedArchetype[] {
     let share = 0;
     let count = 0;
     let label = "";
+    let weighted: number | undefined;
     if (s.kind === "tags" || s.kind === "type" || s.kind === "role") {
       const set = s.kind === "tags" ? subtree(s.slugs) : null;
       const hit = (c: CutterCard) =>
         s.kind === "tags" ? c.tags.some((t) => set!.has(t)) : s.kind === "type" ? hasType(c.card, s.type) : c.roles.includes(s.role);
       const hits = nonland.filter(hit);
       count = hits.reduce((n, c) => n + c.quantity, 0);
-      share = hits.reduce((n, c) => n + weightOf(c), 0) / total;
+      weighted = hits.reduce((n, c) => n + weightOf(c), 0);
+      share = weighted / total;
       label = s.kind === "tags" ? s.slugs.map((x) => tree.label(x)).join(" / ") : s.kind === "type" ? s.type : s.role;
     } else if (s.fact === "instantsSorceries") {
       count = nonland.filter((c) => !isPermanent(c.card)).reduce((n, c) => n + c.quantity, 0);
@@ -98,13 +100,16 @@ export function detectArchetypes(input: DetectInput): DetectedArchetype[] {
       label = topType ? `${topType} creatures` : "one creature type";
     }
     const from = s.from ?? 0;
-    return { label, count, strength: Math.max(0, Math.min(1, (share - from) / (full - from))) };
+    return { label, count, weighted, strength: Math.max(0, Math.min(1, (share - from) / (full - from))) };
   };
 
   const out = list.map((archetype): DetectedArchetype => {
     const evidence = archetype.signals.map(measure);
     const weights = archetype.signals.reduce((n, s) => n + s.weight, 0);
-    const score = weights ? archetype.signals.reduce((n, s, i) => n + s.weight * evidence[i].strength, 0) / weights : 0;
+    const behind = Math.max(0, ...archetype.signals.map((s, i) => (s.kind === "fact" && s.fact === "combos" ? 0 : (evidence[i].weighted ?? evidence[i].count))));
+    const hasCardSignals = archetype.signals.some((s) => !(s.kind === "fact" && s.fact === "combos"));
+    const raw = weights ? archetype.signals.reduce((n, s, i) => n + s.weight * evidence[i].strength, 0) / weights : 0;
+    const score = hasCardSignals && behind < CUTTER.archetypeMinCards ? 0 : raw;
     const typalType = archetype.signals.some((s) => s.kind === "fact" && s.fact === "typal") && topType ? topType : undefined;
     return { archetype, score, evidence: evidence.filter((e) => e.count > 0).sort((a, b) => b.strength - a.strength), typalType };
   });

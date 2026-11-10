@@ -26,7 +26,7 @@ export default function PrivacyPage() {
               settings, and a profile picture if you upload one.
             </li>
             <li>
-              <strong>Feedback</strong> you send with the Feedback button, with the page you sent it from.
+              <strong>Feedback:</strong> what you send with the Feedback button, with the page you sent it from.
             </li>
           </ul>
         </Section>
@@ -70,7 +70,10 @@ export default function PrivacyPage() {
           </p>
         </Section>
         <Section title="Questions">
-          <p>Use the Feedback button at the top of any page while signed in, and we&apos;ll get back to you.</p>
+          <p>
+            Email <a href="mailto:usoagain@gmail.com" className="underline">usoagain@gmail.com</a>, or use the Feedback button at the top of any
+            page while signed in. You don&apos;t need an account to ask, including after you delete one.
+          </p>
         </Section>
       </div>
     </main>

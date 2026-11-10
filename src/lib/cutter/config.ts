@@ -53,6 +53,11 @@ export const CUTTER = {
   shortlist: 3,
   /** Archetype detection: the best archetype must score at least this, otherwise General. */
   archetypeFloor: 0.3,
+  /**
+   * Archetype detection: an archetype needs at least this many cards behind one of its signals (combos aside).
+   * Stress test round 2 (Nov 10, 2026): a half-built deck was asked "Landfall?" because of one card.
+   */
+  archetypeMinCards: 4,
   /** Archetype detection: the commander counts as this many cards for tag and type signals. */
   commanderWeight: 3,
   /** After this many "No" answers, ask whether to pick from the list. */

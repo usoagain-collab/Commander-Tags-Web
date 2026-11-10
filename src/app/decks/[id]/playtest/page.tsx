@@ -1,4 +1,5 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { DeckUnavailable } from "@/components/deck-unavailable";
 import type { DeckCard } from "@/lib/playtest/game";
 import { readCardLang, type Localized } from "@/lib/deck/card-language";
 import { printingIdFromImage, printingImage } from "@/lib/deck/printing";
@@ -23,7 +24,7 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
   const [loaded, look] = await Promise.all([loadDeck(id, "playtest"), getProfileLook()]);
   const { user, deck } = loaded;
   if (!deck) {
-    if (!user) redirect(`/login?next=${encodeURIComponent(`/decks/${id}/playtest`)}`);
+    if (!user) return <DeckUnavailable next={`/decks/${id}/playtest`} />;
     notFound();
   }
   const byId = new Map(loaded.cards.map((c) => [c.oracle_id, c]));
