@@ -147,6 +147,12 @@ describe("detectArchetypes", () => {
     const score = (cards: CutterCard[]) => detectArchetypes({ cards, tree, combos: 0 }).find((d) => d.archetype.key === "landfall")!.score;
     expect(score(withCommander)).toBeGreaterThan(score(without));
   });
+
+  it("doesn't guess an archetype from one or two cards", () => {
+    const filler = Array.from({ length: 20 }, (_, i) => make(card(`Bear ${i}`, 2), []));
+    const cards = [make(card("Commander", 4), [], { commander: true }), make(card("Landfall 0", 3), ["landfall"]), ...filler.slice(0, 2)];
+    expect(detectArchetypes({ cards, tree, combos: 0 }).find((d) => d.archetype.key === "landfall")!.score).toBe(0);
+  });
 });
 
 describe("chooseArchetype", () => {

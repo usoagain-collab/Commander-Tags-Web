@@ -30,7 +30,9 @@ const forest = card("Forest", { type_line: "Basic Land — Forest", max_copies: 
 const fireIce = card("Fire // Ice", { type_line: "Instant // Instant", mana_value: 4 });
 const lurrus = card("Lurrus of the Dream-Den", { type_line: "Legendary Creature — Cat Nightmare", can_be_commander: true });
 const fog = card("Fog", { type_line: "Instant" });
-const all = [meren, solRing, forest, fireIce, lurrus, fog];
+const bolt = card("Lightning Bolt", { type_line: "Instant", color_identity: ["R"] });
+const meren2 = { ...meren, color_identity: ["B", "G"] };
+const all = [meren, solRing, forest, fireIce, lurrus, fog, bolt];
 
 /** Fake name lookup: same matching as the SQL (full name or front face, case-insensitive). */
 function lookup(names: string[]) {
@@ -89,6 +91,21 @@ describe("parsing real-world lists", () => {
     const { entries, report } = importText("2 Sol Ring\n");
     expect(entries[k("main", solRing.oracle_id)]).toBe(1);
     expect(report.trimmed).toEqual([{ name: "Sol Ring", wanted: 2, kept: 1, board: "main" }]);
+  });
+
+  it("says cards already in the deck are already there, once each, instead of 'kept 0 of 1'", () => {
+    const current = { [k("commander", meren.oracle_id)]: 1, [k("main", solRing.oracle_id)]: 1 };
+    const { report } = importText("Commander\n1 Meren of Clan Nel Toth\n\nDeck\n1 Sol Ring\n1 Sol Ring\n1 Fog\n", current, "add");
+    expect(report.alreadyIn).toEqual(["Meren of Clan Nel Toth", "Sol Ring"]);
+    expect(report.trimmed).toEqual([]);
+  });
+
+  it("lists cards outside the commander's colors before they are added", () => {
+    const { lines } = parseDeckText("Commander\n1 Meren of Clan Nel Toth\n\nDeck\n1 Lightning Bolt\n1 Sol Ring\n");
+    const found = lookup(lines.map((l) => l.name));
+    found["meren of clan nel toth"] = meren2;
+    const { report } = planImport({}, lines, found, "replace");
+    expect(report.offColor).toEqual(["Lightning Bolt"]);
   });
 
   it("reads companion sections", () => {

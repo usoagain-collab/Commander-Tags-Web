@@ -1,4 +1,5 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { DeckUnavailable } from "@/components/deck-unavailable";
 import { entryKey, type Board, type Categories, type Entries, type Printings } from "@/lib/deck/model";
 import { printingImage } from "@/lib/deck/printing";
 import { readManaValues } from "@/lib/deck/mana-values";
@@ -42,7 +43,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   const loaded = await loadDeck(id, "editor");
   const { user, deck } = loaded;
   if (!deck) {
-    if (!user) redirect(`/login?next=${encodeURIComponent(`/decks/${id}`)}`);
+    if (!user) return <DeckUnavailable next={`/decks/${id}`} />;
     notFound();
   }
   const { rows, cards: summaries, tags: initialTags, combos: initialCombos, profile } = loaded;

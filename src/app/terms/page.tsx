@@ -28,8 +28,12 @@ export default function TermsPage() {
             sources and can be wrong or out of date, so check before a tournament or a purchase. Keep your own copy of decks that matter to you.
           </li>
           <li>
-            <strong>Not affiliated with Wizards of the Coast.</strong> Magic: The Gathering and its card names, art and symbols belong to Wizards
-            of the Coast. Card data and images come from Scryfall, and precon lists from MTGJSON.
+            <strong>Fan Content.</strong> Deck Genome is unofficial Fan Content permitted under the{" "}
+            <a href="https://company.wizards.com/en/legal/fancontentpolicy" className="underline" target="_blank" rel="noopener noreferrer">
+              Fan Content Policy
+            </a>
+            . Not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast
+            LLC. Card data and images come from Scryfall, and precon lists from MTGJSON. The site is free to use.
           </li>
           <li>
             <strong>Changes.</strong> We may change these terms or the site. We&apos;ll update the date above when the terms change.

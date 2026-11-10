@@ -140,6 +140,10 @@ export type ImportReport = {
   counts: Record<Board, number>;
   notFound: ParsedLine[];
   trimmed: { name: string; wanted: number; kept: number; board: Board }[];
+  /** Lines that added nothing because the card is already in the deck (each name once). */
+  alreadyIn: string[];
+  /** Cards outside the commanders' colors (each name once); they're still added, with the deck's usual warning. */
+  offColor: string[];
   commanderFromLayout: boolean;
 };
 
@@ -153,13 +157,20 @@ export function planImport(
   found: Record<string, CardSummary>, // keyed by lowercased parsed name
   mode: "add" | "replace",
   /** Printings the list named, and the ones the deck has now. */
-  chosen: { printingOf?: (line: ParsedLine, card: CardSummary) => ChosenPrinting | null; current?: Printings } = {},
+  chosen: {
+    printingOf?: (line: ParsedLine, card: CardSummary) => ChosenPrinting | null;
+    current?: Printings;
+    /** Cards already in the deck, so a commander that stays is known even when the list doesn't name it. */
+    cards?: Record<string, CardSummary>;
+  } = {},
 ): { change: Change; report: ImportReport } {
   const target: Entries = mode === "replace" ? {} : { ...current };
   const report: ImportReport = {
     counts: { commander: 0, main: 0, companion: 0, maybe: 0 },
     notFound: [],
     trimmed: [],
+    alreadyIn: [],
+    offColor: [],
     commanderFromLayout: false,
   };
 
@@ -187,7 +198,17 @@ export function planImport(
     else cap = card.max_copies;
     const wanted = have + line.quantity;
     const kept = Math.max(have, Math.min(wanted, cap));
-    if (kept < wanted) report.trimmed.push({ name: card.name, wanted: line.quantity, kept: kept - have, board });
+    // Nothing added and the card was already there (this board, or another one for singleton cards): not an error.
+    const already = kept === have && (have > 0 || (board === "main" && deckCopies(card.oracle_id) > 0));
+    if (already) {
+      if (!report.alreadyIn.includes(card.name)) report.alreadyIn.push(card.name);
+    } else if (kept < wanted) {
+      const prev = report.trimmed.find((t) => t.name === card.name && t.board === board);
+      if (prev) {
+        prev.wanted += line.quantity;
+        prev.kept += kept - have;
+      } else report.trimmed.push({ name: card.name, wanted: line.quantity, kept: kept - have, board });
+    }
     if (kept > 0) {
       target[entryKey(board, card.oracle_id)] = kept;
       const printing = chosen.printingOf?.(line, card);
@@ -202,6 +223,18 @@ export function planImport(
     if (from !== to) rows.push({ ...parseKey(k), from, to });
   }
   for (const [k, n] of Object.entries(target)) report.counts[parseKey(k).board] += n;
+
+  // Cards outside the colors of the commanders the deck will have (current ones included).
+  const byId = new Map<string, CardSummary>(Object.values(found).map((c) => [c.oracle_id, c]));
+  const commanders = Object.keys(target).map(parseKey).filter((k) => k.board === "commander").map((k) => byId.get(k.oracle_id) ?? chosen.cards?.[k.oracle_id]);
+  if (commanders.length && commanders.every(Boolean)) {
+    const identity = new Set(commanders.flatMap((c) => c!.color_identity));
+    for (const k of Object.keys(target).map(parseKey)) {
+      if (k.board === "maybe" || k.board === "commander") continue;
+      const c = byId.get(k.oracle_id);
+      if (c && c.color_identity.some((x) => !identity.has(x)) && !report.offColor.includes(c.name)) report.offColor.push(c.name);
+    }
+  }
 
   const total = Object.values(report.counts).reduce((a, b) => a + b, 0);
   const printings: PrintingChange[] = [...named]

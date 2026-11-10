@@ -15,11 +15,13 @@ import {
   type ExportFormat,
   type IgnoredLine,
   type ImportReport,
+  type ParsedLine,
 } from "@/lib/deck/text-format";
 
 type ImportProps = {
   entries: Entries;
   printings: Printings;
+  deckCards: Record<string, CardSummary>;
   onApply: (change: Change, cards: CardSummary[]) => void;
   onClose: () => void;
 };
@@ -32,12 +34,23 @@ type Preview = {
   printingsFailed: boolean;
 };
 
-export function ImportPanel({ entries, printings, onApply, onClose }: ImportProps) {
+/** What one lookup found, kept so accepting a "Did you mean" re-plans without asking the database again. */
+type Lookup = {
+  lines: ParsedLine[];
+  ignored: IgnoredLine[];
+  found: Record<string, CardSummary>;
+  prints: Awaited<ReturnType<typeof fetchPrintingsByRef>> | null;
+  printingsFailed: boolean;
+  /** Close spellings for names that weren't found (stress test round 2: "Cultivatee" was just skipped). */
+  guesses: Record<string, CardSummary>;
+};
+
+export function ImportPanel({ entries, printings, deckCards, onApply, onClose }: ImportProps) {
   const supabase = useMemo(() => createClient(), []);
   const deckHasCards = Object.keys(entries).length > 0;
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"add" | "replace">(deckHasCards ? "add" : "replace");
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [lookup, setLookup] = useState<Lookup | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,22 +65,49 @@ export function ImportPanel({ entries, printings, onApply, onClose }: ImportProp
       setError(`Couldn't look up the cards: ${error.message}`);
       return;
     }
-    // Printings named in the list. If Scryfall can't answer, the cards still import with their default printing.
-    const named = lines.flatMap((l) => (l.set && l.number ? [{ set: l.set, number: l.number }] : []));
-    const prints = named.length ? await fetchPrintingsByRef(named).catch(() => null) : new Map();
-    setBusy(false);
     const found: Record<string, CardSummary> = {};
     for (const { input, card } of (data ?? []) as { input: string; card: CardSummary }[]) found[input.toLowerCase()] = card;
+    // Printings named in the list. If Scryfall can't answer, the cards still import with their default printing.
+    const named = lines.flatMap((l) => (l.set && l.number ? [{ set: l.set, number: l.number }] : []));
+    const missing = names.filter((n) => !found[n.toLowerCase()]).slice(0, 25);
+    const [prints, guessed] = await Promise.all([
+      named.length ? fetchPrintingsByRef(named).catch(() => null) : Promise.resolve(new Map()),
+      Promise.all(
+        missing.map(async (n) => {
+          const { data } = await supabase.rpc("fuzzy_card_names", { q: n, lim: 1, p_identity: null, p_any_legality: true, p_commanders_only: false });
+          const hit = ((data ?? []) as CardSummary[])[0];
+          return hit ? ([n.toLowerCase(), hit] as const) : null;
+        }),
+      ),
+    ]);
+    setBusy(false);
+    setLookup({ lines, ignored, found, prints, printingsFailed: named.length > 0 && !prints, guesses: Object.fromEntries(guessed.filter((g) => g !== null)) });
+  }
+
+  /** "Use Cultivate": treat the misspelled line as that card. */
+  function accept(name: string) {
+    if (!lookup) return;
+    const card = lookup.guesses[name];
+    const guesses = { ...lookup.guesses };
+    delete guesses[name];
+    setLookup({ ...lookup, found: { ...lookup.found, [name]: card }, guesses });
+  }
+
+  const preview: Preview | null = useMemo(() => {
+    if (!lookup) return null;
+    const { lines, ignored, found, prints, printingsFailed } = lookup;
     const { change, report } = planImport(entries, lines, found, mode, {
       current: printings,
+      cards: deckCards,
       printingOf: (l, card) => {
         const hit = l.set && l.number ? prints?.get(printingRef(l.set, l.number)) : undefined;
         if (!hit || hit.oracleId !== card.oracle_id) return null;
         return { ...hit.printing, foil: foilFor(hit.printing.finishes, !!l.foil) };
       },
     });
-    setPreview({ change, report, ignored, cards: Object.values(found), printingsFailed: named.length > 0 && !prints });
-  }
+    return { change, report, ignored, cards: Object.values(found), printingsFailed };
+  }, [lookup, entries, mode, printings, deckCards]);
+  const setPreview = (p: null) => setLookup(p);
 
   const total = preview ? Object.values(preview.report.counts).reduce((a, b) => a + b, 0) : 0;
 
@@ -120,10 +160,30 @@ export function ImportPanel({ entries, printings, onApply, onClose }: ImportProp
           )}
           {preview.report.notFound.length > 0 && (
             <Problem title={`Not found (${preview.report.notFound.length}), will be skipped`}>
-              {preview.report.notFound.map((l) => (
-                <li key={l.lineNo}>
-                  Line {l.lineNo}: {l.name}
-                </li>
+              {preview.report.notFound.map((l) => {
+                const guess = lookup?.guesses[l.name.toLowerCase()];
+                return (
+                  <li key={l.lineNo}>
+                    Line {l.lineNo}: {l.name}
+                    {guess && (
+                      <>
+                        {" "}
+                        · Did you mean{" "}
+                        <button type="button" onClick={() => accept(l.name.toLowerCase())} className="min-h-8 font-medium text-gold underline">
+                          {guess.name}
+                        </button>
+                        ?
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </Problem>
+          )}
+          {preview.report.offColor.length > 0 && (
+            <Problem title={`Outside your commander's colors (${preview.report.offColor.length}), will be added with a ⚠`}>
+              {preview.report.offColor.map((name) => (
+                <li key={name}>{name}</li>
               ))}
             </Problem>
           )}
@@ -135,6 +195,11 @@ export function ImportPanel({ entries, printings, onApply, onClose }: ImportProp
                 </li>
               ))}
             </Problem>
+          )}
+          {preview.report.alreadyIn.length > 0 && (
+            <p className="mt-3 opacity-75">
+              Already in the deck, so not added again: {preview.report.alreadyIn.join(", ")}.
+            </p>
           )}
           {preview.ignored.length > 0 && (
             <Problem title="Lines that couldn't be read">

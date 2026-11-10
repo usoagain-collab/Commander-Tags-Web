@@ -23,6 +23,22 @@ const PRICE_CAPS: [string, number | null][] = [
   ["Up to $1", 1],
 ];
 
+// Stress test round 2 (Nov 10, 2026): "Any price" picked $178 of lands ($35 fetches). Start at $5 and remember the
+// last choice on this device.
+const PRICE_KEY = "landBase:maxPrice";
+const DEFAULT_CAP = 5;
+function savedCap(): number | null {
+  try {
+    const v = localStorage.getItem(PRICE_KEY);
+    if (v === null) return DEFAULT_CAP;
+    if (v === "any") return null;
+    const n = Number(v);
+    return PRICE_CAPS.some(([, cap]) => cap === n) ? n : DEFAULT_CAP;
+  } catch {
+    return DEFAULT_CAP;
+  }
+}
+
 type Props = {
   identity: Color[] | null;
   target: number;
@@ -41,7 +57,13 @@ export function LandBasePanel(props: Props) {
   const [pool, setPool] = useState<LandCandidate[] | null>(null);
   const [basics, setBasics] = useState<Record<string, CardSummary>>({});
   const [error, setError] = useState<string | null>(null);
-  const [maxPrice, setMaxPrice] = useState<number | null>(null);
+  const [maxPrice, setMaxPriceState] = useState<number | null>(savedCap);
+  const setMaxPrice = (cap: number | null) => {
+    setMaxPriceState(cap);
+    try {
+      localStorage.setItem(PRICE_KEY, cap === null ? "any" : String(cap));
+    } catch {}
+  };
   const idKey = identity?.join("") ?? "";
 
   useEffect(() => {

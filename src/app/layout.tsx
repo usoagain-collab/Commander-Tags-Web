@@ -31,7 +31,7 @@ export default async function RootLayout({
           <a className="underline" href="https://scryfall.com" target="_blank" rel="noopener noreferrer">
             Scryfall
           </a>
-          . Not affiliated with Wizards of the Coast. ·{" "}
+          . Unofficial Fan Content permitted under the Fan Content Policy. Not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. ·{" "}
           <Link className="underline" href="/privacy">
             Privacy
           </Link>{" "}
