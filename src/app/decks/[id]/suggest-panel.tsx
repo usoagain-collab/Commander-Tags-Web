@@ -196,11 +196,23 @@ export function SuggestPanel(props: Props) {
     props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ??
     "a card in your deck";
   const flagsOf = (id: string) => (issues.get(id) ?? []).map((f) => cardFlag(f, id, nameOf));
-  const cardFor = (r: Scored, best: boolean) => (
+  // Said on a card with no role filled and no shared theme, so it never just reads "matches the tag".
+  const why = (kind: "land" | "staple" | "main") =>
+    kind === "land"
+      ? "A popular land in your colors"
+      : kind === "staple"
+        ? "Popular in your colors"
+        : source.lands
+          ? "A popular land in your colors"
+          : source.roleKey
+            ? `A popular ${prettyTag(source.label).toLowerCase()} card in your colors`
+            : `Has the ${prettyTag(source.label).toLowerCase()} tag, but none of your other themes`;
+  const cardFor = (r: Scored, best: boolean, kind: "land" | "staple" | "main" = "main") => (
     <SuggestionCard
       key={r.card.oracle_id}
       best={best}
       row={r}
+      why={why(kind)}
       roleNames={roleNames}
       above={flagsOf(r.card.oracle_id)}
       target={target}
@@ -257,7 +269,7 @@ export function SuggestPanel(props: Props) {
           </h3>
           <p className="text-[13px] opacity-70">Ranked like the other picks: your themes, then how widely played. More → Auto build land base fills them all at once.</p>
           <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
-            {lands.map((r) => cardFor(r, false))}
+            {lands.map((r) => cardFor(r, false, "land"))}
           </ul>
           {!staples.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
@@ -267,7 +279,7 @@ export function SuggestPanel(props: Props) {
           <h3 className="eyebrow">Staples for roles you&apos;re short on</h3>
           <p className="text-[13px] opacity-70">The most-played cards in your colors that fill them, themes or not.</p>
           <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
-            {staples.map((r) => cardFor(r, false))}
+            {staples.map((r) => cardFor(r, false, "staple"))}
           </ul>
           {rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
@@ -343,9 +355,11 @@ function SuggestionCard({
   onDismiss,
   above,
   target,
+  why,
 }: {
   best: boolean;
   row: Scored;
+  why: string;
   above: string[];
   target: BracketNumber;
   roleNames: Record<string, string>;
@@ -393,7 +407,7 @@ function SuggestionCard({
               {prettyTag(t.label)}
             </span>
           ))}
-          {!row.fills.length && !row.shared.length && <span className="text-[11px] opacity-60">matches the tag, no shared themes</span>}
+          {!row.fills.length && !row.shared.length && <span className="text-xs opacity-70">{why}</span>}
         </div>
       </div>
       <div className="mt-auto grid grid-cols-2 gap-2">

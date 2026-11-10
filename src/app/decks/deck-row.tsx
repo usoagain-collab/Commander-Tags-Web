@@ -32,6 +32,7 @@ const WUBRG = ["W", "U", "B", "R", "G"];
 
 export function DeckRow({ deck }: { deck: DeckTile }) {
   const [mode, setMode] = useState<"view" | "rename" | "confirm-delete">("view");
+  const [renameNote, setRenameNote] = useState<string | null>(null);
   const drop = useDeckDrop(deck.id);
   const pips = WUBRG.filter((c) => deck.identity.includes(c));
 
@@ -55,7 +56,8 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
         </span>
       </Link>
 
-      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-2 text-sm">
+      {/* One line on every tile: the time shortens rather than pushing Rename and Delete onto a second line. */}
+      <div className="flex min-h-11 items-center gap-x-3 px-4 pb-2 text-sm">
         {pips.length > 0 && (
           <span className="inline-flex gap-0.5">
             {pips.map((c) => (
@@ -63,12 +65,12 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
             ))}
           </span>
         )}
-        <span className={deck.card_count === 100 ? "font-semibold text-green-400" : "font-medium"}>{deck.card_count} / 100</span>
-        <span className="opacity-70" suppressHydrationWarning>
+        <span className={`shrink-0 ${deck.card_count === 100 ? "font-semibold text-green-400" : "font-medium"}`}>{deck.card_count} / 100</span>
+        <span className="min-w-0 truncate opacity-70" suppressHydrationWarning>
           {ago(deck.updated_at)}
         </span>
         {mode === "view" && (
-          <span className="ml-auto flex gap-1">
+          <span className="ml-auto flex shrink-0 gap-1">
             <button onClick={() => setMode("rename")} className="min-h-9 px-1.5 opacity-75 hover:opacity-100">
               Rename
             </button>
@@ -93,7 +95,21 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
       )}
 
       {mode === "rename" && (
-        <form action={renameDeck} onSubmit={() => setMode("view")} className="flex gap-2 px-4 pb-3">
+        <form
+          action={renameDeck}
+          onSubmit={(e) => {
+            // An empty name would quietly keep the old one: say so instead of closing.
+            const name = new FormData(e.currentTarget).get("name");
+            if (typeof name !== "string" || !name.trim()) {
+              e.preventDefault();
+              setRenameNote("A deck needs a name. Type one, or Cancel to keep the current name.");
+              return;
+            }
+            setRenameNote(null);
+            setMode("view");
+          }}
+          className="flex flex-wrap gap-2 px-4 pb-3"
+        >
           <input type="hidden" name="id" value={deck.id} />
           <input
             name="name"
@@ -104,9 +120,10 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
             className="min-h-10 min-w-0 flex-1 rounded-lg border border-foreground/20 bg-transparent px-2"
           />
           <button className="btn btn-gold">Save</button>
-          <button type="button" onClick={() => setMode("view")} className="px-1 text-sm opacity-75">
+          <button type="button" onClick={() => { setMode("view"); setRenameNote(null); }} className="px-1 text-sm opacity-75">
             Cancel
           </button>
+          {renameNote && <p role="alert" className="basis-full text-sm text-amber-400">{renameNote}</p>}
         </form>
       )}
 

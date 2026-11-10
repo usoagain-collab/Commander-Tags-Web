@@ -23,7 +23,7 @@ type Props = {
  */
 export function FloatingPreview({ side, card, ...rest }: Omit<Props, "onOpen" | "onTag" | "card"> & { side: "left" | "right"; card: CardSummary }) {
   return (
-    <div aria-hidden className={`panel pointer-events-none fixed top-4 z-30 hidden max-h-[calc(100vh-2rem)] w-[270px] space-y-2 overflow-hidden p-2.5 shadow-2xl lg:block ${side === "left" ? "left-4" : "right-4"}`}>
+    <div aria-hidden className={`panel pointer-events-none fixed top-4 z-[45] hidden max-h-[calc(100vh-2rem)] w-[270px] space-y-2 overflow-hidden p-2.5 shadow-2xl lg:block ${side === "left" ? "left-4" : "right-4"}`}>
       {card.image_normal && <img src={card.image_normal} alt="" width={250} height={349} className="w-full rounded-[4.75%/3.5%]" />}
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{card.name}</span>

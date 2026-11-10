@@ -3,7 +3,8 @@
 // Precons (v2): every Commander precon, newest first and grouped by set, with search. Each one is a public deck
 // (imported nightly from MTGJSON), so a tap opens the ordinary deck page, where "Start a deck from this" copies it.
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 import { ManaSymbol } from "@/components/mana-cost";
 import { printingImage } from "@/lib/deck/printing";
 
@@ -19,11 +20,28 @@ export type PreconTile = {
 
 const COLOR_ORDER = "WUBRG";
 const year = (d: string | null) => (d ? d.slice(0, 4) : "");
+// "Counter Blitz Collector's Edition (FINAL FANTASY X)": the tile already carries a Collector's Edition badge.
+const plainName = (name: string) => name.replace(/\s*Collector['’]?s Edition/i, "").trim();
+const COLLECTOR_KEY = "precons:collector";
 const dateLabel = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "");
 
-export function PreconsView({ precons, error }: { precons: PreconTile[]; error: string | null }) {
+export function PreconsView({ precons, failed }: { precons: PreconTile[]; failed: boolean }) {
+  const router = useRouter();
+  const [retrying, startRetry] = useTransition();
   const [query, setQuery] = useState("");
-  const [collector, setCollector] = useState(true);
+  const [collector, setCollectorState] = useState(true);
+  // Remembered on this browser (per-viewer convenience, so local storage rather than the profile).
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(COLLECTOR_KEY) === "0") setCollectorState(false);
+    } catch {}
+  }, []);
+  function setCollector(on: boolean) {
+    setCollectorState(on);
+    try {
+      localStorage.setItem(COLLECTOR_KEY, on ? "1" : "0");
+    } catch {}
+  }
   const q = query.trim().toLowerCase();
   const shown = precons.filter(
     (p) =>
@@ -57,8 +75,15 @@ export function PreconsView({ precons, error }: { precons: PreconTile[]; error: 
         </label>
         <span className="text-sm opacity-70">{shown.length} decks</span>
       </div>
-      {error && <p className="mt-4 text-red-400">Couldn&apos;t load the precons: {error}</p>}
-      {!error && shown.length === 0 && <p className="mt-6 opacity-70">No precon matches “{query}”.</p>}
+      {failed && (
+        <div role="alert" className="panel mt-5 flex flex-wrap items-center gap-3 p-4">
+          <p className="flex-1">The precon list is taking longer than usual to load. It usually works on a second try.</p>
+          <button type="button" className="btn btn-gold min-h-11" disabled={retrying} onClick={() => startRetry(() => router.refresh())}>
+            {retrying ? "Loading…" : "Try again"}
+          </button>
+        </div>
+      )}
+      {!failed && shown.length === 0 && <p className="mt-6 opacity-70">No precon matches “{query}”.</p>}
 
       <div className="mt-6 space-y-8">
         {[...sets].map(([setName, decks]) => (
@@ -101,9 +126,14 @@ function Tile({ precon: p }: { precon: PreconTile }) {
       <span className="relative block aspect-[626/457] overflow-hidden bg-foreground/10">
         {art && <img src={art} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />}
         {p.precon.collector && <span className="absolute left-2 top-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold text-gold">✦ Collector&apos;s Edition</span>}
+        {p.precon.type === "MTGO Commander Deck" && (
+          <span className="absolute right-2 top-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold text-white" title="Sold on Magic Online only, never in paper">
+            Magic Online only
+          </span>
+        )}
       </span>
       <span className="block p-3">
-        <span className="display block truncate text-lg">{p.name.replace(/\s*Collector['’]?s Edition$/i, "")}</span>
+        <span className="display block truncate text-lg">{plainName(p.name)}</span>
         <span className="block truncate text-sm opacity-80">{p.commanders.map((c) => c.name).join(" & ")}</span>
         <span className="mt-2 flex items-center justify-between gap-2 text-sm">
           <span className="flex items-center gap-0.5">

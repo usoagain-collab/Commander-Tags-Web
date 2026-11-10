@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import { readPreviewMode } from "@/lib/tags/layout-prefs";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets, withoutBracketTargets } from "@/lib/tags/role-settings";
+import { AccountSetting } from "./account-setting";
 import { AvatarSetting } from "./avatar-setting";
 import { CutterSetting } from "./cutter-setting";
 import { NameSetting } from "./name-setting";
@@ -20,7 +21,12 @@ export default async function SettingsPage() {
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
   if (!user) redirect("/login?next=/settings");
 
-  const [{ data }, look] = await Promise.all([supabase.from("profiles").select("tag_view, cutter_prefs, default_role_targets, custom_roles").eq("id", user.id).single(), getProfileLook()]);
+  const [{ data }, look, { data: auth }] = await Promise.all([
+    supabase.from("profiles").select("tag_view, cutter_prefs, default_role_targets, custom_roles").eq("id", user.id).single(),
+    getProfileLook(),
+    supabase.auth.getUser(),
+  ]);
+  const hasPassword = (auth.user?.identities ?? []).some((i) => i.provider === "email");
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
@@ -36,6 +42,7 @@ export default async function SettingsPage() {
         initialCustom={readCustomRoles(data?.custom_roles)}
       />
       <CutterSetting userId={user.id} initial={data?.cutter_prefs} />
+      <AccountSetting hasPassword={hasPassword} />
     </main>
   );
 }

@@ -12,7 +12,8 @@ export type QuickAddHandle = { focus: () => void };
 const COMMANDER_PAGE = 20;
 
 type Props = {
-  onAdd: (card: CardSummary, board: Board) => void;
+  /** Returns why the card wasn't added (already in the deck, a third commander…), shown under the box. */
+  onAdd: (card: CardSummary, board: Board) => string | void;
   onPreview: (card: CardSummary | null) => void;
   /** Picking a commander: only cards that can lead a deck are offered, shown with their art. */
   commanderOnly?: boolean;
@@ -42,6 +43,15 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
   const [hasMore, setHasMore] = useState(false);
   const loadingMore = useRef(false);
   const listRef = useRef<HTMLUListElement>(null);
+  // The results are close spellings (typo, missing apostrophe or accent), not names containing the text.
+  const [fuzzy, setFuzzy] = useState(false);
+  // Why the last pick wasn't added, next to the box where you're looking (the toast sits at the bottom).
+  const [refusal, setRefusal] = useState<string | null>(null);
+  useEffect(() => {
+    if (!refusal) return;
+    const t = window.setTimeout(() => setRefusal(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [refusal]);
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }));
 
@@ -58,9 +68,15 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
     }
     const id = ++latest.current;
     const timer = setTimeout(async () => {
-      const usable = await fetchPage(q, 0);
+      let usable = await fetchPage(q, 0);
+      let close = false;
+      if (!usable.length && q.length >= 3) {
+        usable = await fetchFuzzy(q);
+        close = usable.length > 0;
+      }
       if (id !== latest.current) return;
-      setHasMore(!!commanderOnly && usable.length === COMMANDER_PAGE);
+      setFuzzy(close);
+      setHasMore(!close && !!commanderOnly && usable.length === COMMANDER_PAGE);
       answered.current = q;
       const waiting = pendingBoard.current;
       pendingBoard.current = null;
@@ -85,6 +101,18 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       p_offset: offset,
     });
     return (data ?? []) as CardSummary[];
+  }
+
+  /** Nothing contains the text: names spelled close to it (Supabase migration 0047; empty before it is applied). */
+  async function fetchFuzzy(q: string) {
+    const { data, error } = await supabase.rpc("fuzzy_card_names", {
+      q,
+      lim: 8,
+      p_identity: colors === null ? null : colors.split(""),
+      p_any_legality: withBanned,
+      p_commanders_only: !!commanderOnly,
+    });
+    return error ? [] : ((data ?? []) as CardSummary[]);
   }
 
   /** Commander box: the list scrolled near its end, so fetch the next page and add it below. */
@@ -123,7 +151,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
 
   function choose(card: CardSummary | undefined, board: Board) {
     if (!card) return;
-    onAdd(card, board);
+    setRefusal(onAdd(card, board) || null);
     setText("");
     setResults([]);
     setOpen(false);
@@ -143,6 +171,8 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       e.preventDefault();
       const board: Board = commanderOnly || e.ctrlKey || e.metaKey ? "commander" : e.shiftKey ? "maybe" : "main";
       if (answered.current === text.trim()) {
+        // With no cards found, Enter keeps the "no card" note on screen; See all stays one click away.
+        if (!results.length) return;
         if (active === seeAllAt) seeAll();
         else choose(results[active], board);
       }
@@ -157,7 +187,10 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
       <input
         ref={inputRef}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setRefusal(null);
+        }}
         onKeyDown={onKeyDown}
         onFocus={() => results.length && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -168,6 +201,11 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
         aria-controls="quick-add-results"
         className="min-h-12 w-full rounded-lg border border-foreground/25 bg-background/60 px-3 text-base"
       />
+      {refusal && (
+        <p role="status" className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+          {refusal}
+        </p>
+      )}
       {onWithBanned && (
         <label className="mt-2 flex min-h-9 items-center justify-center gap-2 text-sm opacity-85" title="Also show cards banned in Commander, and new cards that aren't released yet">
           <input type="checkbox" checked={withBanned} onChange={(e) => onWithBanned(e.target.checked)} className="h-4 w-4" />
@@ -190,6 +228,11 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
           }}
           className="absolute z-30 mt-1 max-h-96 w-full overflow-auto rounded-lg border border-foreground/15 bg-panel-raised text-left shadow-2xl"
         >
+          {fuzzy && (
+            <li role="presentation" className="px-3 pt-2 pb-1 text-[13px] opacity-75">
+              Nothing is named “{text.trim()}”. Did you mean:
+            </li>
+          )}
           {results.map((card, i) => (
             <li
               key={card.oracle_id}

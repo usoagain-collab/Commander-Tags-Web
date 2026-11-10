@@ -107,6 +107,12 @@ describe("roles", () => {
     expect(rolesOf(card("Sorcery"), ["consult-onto-battlefield"], roles)).toEqual(["draw"]);
   });
 
+  it("doesn't count removal that ramps the opponent (Path to Exile) as Ramp", () => {
+    expect(rolesOf(card("Instant"), ["spot-removal", "land-ramp", "donate-rampant-growth"], roles)).toEqual(["removal"]);
+    // Symmetric ramp (Collective Voyage) carries the same tag but is no removal, so it stays Ramp.
+    expect(rolesOf(card("Sorcery"), ["land-ramp", "donate-rampant-growth"], roles)).toEqual(["ramp"]);
+  });
+
   it("returns no roles for an untagged card", () => {
     expect(rolesOf(card("Creature — Bear"), undefined, roles)).toEqual([]);
   });

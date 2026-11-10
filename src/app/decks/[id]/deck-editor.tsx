@@ -1184,6 +1184,7 @@ export function DeckEditor({
             <BracketBadge
               target={bracket.target}
               estimate={estimate}
+              size={size}
               active={panel === "bracket"}
               onClick={() => setPanel(panel === "bracket" ? null : "bracket")}
             />
@@ -1482,7 +1483,9 @@ export function DeckEditor({
                   withBanned={prefs.allowBanned === true}
                   onWithBanned={(on) => updatePrefs({ allowBanned: on })}
                   onAdd={(card) => {
-                    if (run(planAdd(entries, card, "commander"), card)) say(`${card.name} leads this deck.`, true);
+                    const plan = planAdd(entries, card, "commander");
+                    if (run(plan, card)) say(`${card.name} leads this deck.`, true);
+                    else if (!plan.ok) return plan.reason;
                   }}
                   onPreview={setPreview}
                 />
@@ -1551,10 +1554,11 @@ export function DeckEditor({
               ref={quickAdd}
               withBanned={prefs.allowBanned === true}
               onAdd={(card, board) => {
-                if (run(planAdd(entries, card, board), card)) {
+                const plan = planAdd(entries, card, board);
+                if (run(plan, card)) {
                   flash(card.oracle_id);
                   say(`Added ${card.name} to the ${BOARD_LABELS[board].toLowerCase()}.`, true);
-                }
+                } else if (!plan.ok) return plan.reason;
               }}
               onPreview={setPreview}
               identity={identity}

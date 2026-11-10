@@ -330,7 +330,7 @@ function TableMenu({
       className="flex min-h-9 w-full items-center justify-between gap-4 px-3 text-left text-sm hover:bg-foreground/10 disabled:opacity-40"
     >
       {label}
-      {hint && <kbd className="rounded border border-current/30 px-1 text-[11px] font-normal opacity-75">{hint}</kbd>}
+      {hint && <kbd aria-hidden className="rounded border border-current/30 px-1 text-[11px] font-normal opacity-75">{hint}</kbd>}
     </button>
   );
   return (
@@ -376,17 +376,20 @@ function BarButton({
   primary?: boolean;
   children: React.ReactNode;
 }) {
+  // A text button names itself; the shortcut key is announced as a shortcut, not as part of the name.
+  const name = label ?? (typeof children === "string" ? children : undefined);
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={label}
-      title={hint ? `${label ?? ""} (${hint})`.trim() : label}
+      aria-label={name}
+      aria-keyshortcuts={hint}
+      title={hint ? `${name ?? ""} (${hint})`.trim() : name}
       className={`btn ${primary ? "btn-gold" : ""}`}
     >
       {children}
-      {hint && <kbd className="rounded border border-current/30 px-1 text-[11px] font-normal opacity-75">{hint}</kbd>}
+      {hint && <kbd aria-hidden className="rounded border border-current/30 px-1 text-[11px] font-normal opacity-75">{hint}</kbd>}
     </button>
   );
 }

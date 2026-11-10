@@ -22,6 +22,12 @@ export type RoleDef = {
    * count as Ramp only, while ramp cards that really draw still count for both (David, Oct 19, 2026).
    */
   notVia?: { role: string; slugs: string[] };
+  /**
+   * A card with `tag` that also fills one of `roles` doesn't count here. Path to Exile is tagged land-ramp, but the
+   * land goes to the opponent (donate-rampant-growth), so it is removal, not Ramp (stress test, Nov 2026).
+   * Symmetric ramp like Collective Voyage carries the tag too, but fills no removal role, so it stays Ramp.
+   */
+  notIf?: { tag: string; roles: string[] };
   /** Plain-language explanation for the role's info icon. */
   about?: string;
   custom?: boolean;
@@ -41,6 +47,7 @@ export const STANDARD_ROLES: RoleDef[] = [
     name: "Ramp",
     target: DEFAULT_ROLE_TARGETS.ramp,
     slugs: ["ramp", "mana-rock", "mana-dork", "land-ramp"],
+    notIf: { tag: "donate-rampant-growth", roles: ["removal", "wipes"] },
     about: "Cards that get you extra mana or extra lands. Lands themselves count under Lands, not here.",
   },
   {
@@ -138,6 +145,7 @@ export function rolesOf(card: RoleCard, slugs: string[] | undefined, roles: Reso
     if (r.tagSet && tags.some((t) => r.tagSet!.has(t))) filled.add(r.key);
   }
   for (const r of roles) if (r.exclude && filled.has(r.exclude)) filled.delete(r.key);
+  for (const r of roles) if (r.notIf && tags.includes(r.notIf.tag) && r.notIf.roles.some((k) => filled.has(k))) filled.delete(r.key);
   // notVia: when the card also fills that other role, the listed tags alone don't qualify it for this one.
   for (const r of roles) {
     if (!r.notVia || !r.notViaSet || !filled.has(r.key) || !filled.has(r.notVia.role)) continue;

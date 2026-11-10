@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { createDeck } from "./actions";
-import { DeckRow, type DeckTile } from "./deck-row";
+import type { DeckTile } from "./deck-row";
+import { DeckList } from "./deck-list";
 import { DropHint } from "./drop-hint";
 import { BRACKETS } from "@/lib/brackets/rules";
 import { printingImage } from "@/lib/deck/printing";
@@ -98,11 +99,7 @@ export default async function DecksPage() {
             <h2 className="display text-xl">My decks</h2>
             <DropHint />
           </div>
-          <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((d) => (
-              <DeckRow key={d.id} deck={d} />
-            ))}
-          </ul>
+          <DeckList decks={rows} />
         </>
       )}
     </main>
