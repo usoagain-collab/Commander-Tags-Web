@@ -843,6 +843,8 @@ export function DeckEditor({
       staples: short.flatMap((r) => [...r.tagSet!]),
       // Under the Lands target, lands join the suggestions (v2); a hidden Lands role asks for none.
       landsShort: Math.max(0, (landsRole ? landsRole.target - (counts[landsRole.key] ?? 0) : 0)) || undefined,
+      // Wording matches (v2): the commander's wording and what feeds it, once its text has loaded.
+      wording: commanderWording.plan?.phrases.length ? commanderWording.plan : undefined,
     });
   };
   const keyCounts = deckKeyCounts(themeCards);
@@ -1274,7 +1276,7 @@ export function DeckEditor({
           withBanned={prefs.allowBanned === true}
           onWithBanned={(on) => updatePrefs({ allowBanned: on })}
           initialText={searchSeed}
-          wording={commanderWording}
+          wording={commanderWording.phrases}
           wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
           ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
         />

@@ -90,6 +90,19 @@ describe("scorePool", () => {
     expect(r[0].card.name).toBe("On-theme gem");
   });
 
+  it("wording: each phrase a card says adds 0.1 fit, two at most; in Hidden gems it counts as one shared theme", () => {
+    const wording = new Map([
+      ["Popular off-theme", ["a", "b", "c"]],
+      ["Half fit", ["a"]],
+    ]);
+    const r = scorePool(pool, ctx({}, { wording }));
+    const off = r.find((x) => x.card.name === "Popular off-theme")!;
+    expect(off.says).toEqual(["a", "b", "c"]);
+    expect(off.fit).toBeCloseTo(0.2);
+    expect(r.find((x) => x.card.name === "On-theme staple")!.says).toEqual([]);
+    expect(scorePool(pool, ctx({ style: "gems" }, { wording })).map((x) => x.card.name)).toContain("Half fit");
+  });
+
   it("leaves out dismissed cards", () => {
     const r = scorePool(pool, ctx({}, { dismissed: new Set(["On-theme staple"]) }));
     expect(r.map((x) => x.card.name)).not.toContain("On-theme staple");
