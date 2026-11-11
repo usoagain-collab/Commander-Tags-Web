@@ -58,8 +58,13 @@ type Props = {
   onCover: (on: boolean) => void;
   /** Change mana cost (v2): the card's own mana value, this deck's override (null = none), and a setter. */
   manaValue?: { own: number; counted: number | null; onChange: (value: number | null) => void };
-  /** Search by wording (v2): opens the Search panel with a rules-text search. */
-  onSearchWording?: (query: string) => void;
+  /** Search by wording (v2): opens the Search tab with a rules-text search, and what it is in words. */
+  onSearchWording?: (query: string, label: string) => void;
+  /**
+   * Find cards (Nov 11, 2026): the sheet for a search result or suggestion, not a deck row. `context` names the list
+   * Prev / Next step through, `status` says whether the deck already has it, `actions` are its add buttons.
+   */
+  candidate?: { context: string; status: string; actions: React.ReactNode };
 };
 
 /**
@@ -136,6 +141,7 @@ export function CardSheet(props: Props) {
               Next ›
             </SheetButton>
             <span className="self-center text-xs opacity-60">
+              {props.candidate && `${props.candidate.context} `}
               {index + 1} / {total}
             </span>
           </div>
@@ -189,8 +195,7 @@ export function CardSheet(props: Props) {
               </div>
               <p className="text-sm opacity-70">{card.type_line}</p>
               <p className="mt-1 text-sm">
-                {quantity > 1 ? `${quantity} copies · ` : ""}
-                {BOARD_LABELS[board]}
+                {props.candidate ? props.candidate.status : <>{quantity > 1 ? `${quantity} copies · ` : ""}{BOARD_LABELS[board]}</>}
                 {card.price_usd != null && <> · ${Number(card.price_usd).toFixed(2)} each</>}
                 {printing && printingPrice(printing) == null && card.price_usd != null && (
                   <span title="Scryfall has no price for this printing, so this is the card's cheapest price"> (est.)</span>
@@ -204,7 +209,7 @@ export function CardSheet(props: Props) {
                 </p>
               )}
               <CommanderLegality details={details} />
-              {!readOnly && card.image_art_crop && (
+              {!readOnly && !props.candidate && card.image_art_crop && (
                 <button type="button" onClick={() => props.onCover(!props.isCover)} className="mt-1 block min-h-9 text-[13px] underline opacity-80 hover:opacity-100">
                   {props.isCover ? "✓ Deck image · Back to the commander's art" : "Use as deck image"}
                 </button>
@@ -241,7 +246,14 @@ export function CardSheet(props: Props) {
               ))}
             </div>
 
-            {!readOnly && panel === "main" && (
+            {!readOnly && panel === "main" && props.candidate && (
+              <div className="grid grid-cols-2 gap-2">
+                {props.candidate.actions}
+                <ActionButton onClick={() => setPanel("decks")}>Add to another deck…</ActionButton>
+                <ActionButton onClick={copyName}>{copied ? "Copied" : "Copy card name"}</ActionButton>
+              </div>
+            )}
+            {!readOnly && panel === "main" && !props.candidate && (
               <div className="grid grid-cols-2 gap-2">
                 {board !== "commander" && card.can_be_commander && (
                   <ActionButton onClick={() => props.onMove("commander")}>♛ Make commander</ActionButton>
@@ -395,14 +407,17 @@ function OtherDecks({ deckId, line, onDone }: { deckId: string; line: DeckLine; 
   );
 }
 
-function ActionButton({
+export function ActionButton({
   onClick,
   danger,
+  gold,
   label,
   children,
 }: {
   onClick: () => void;
   danger?: boolean;
+  /** The one main action. */
+  gold?: boolean;
   label?: string;
   children: React.ReactNode;
 }) {
@@ -412,7 +427,11 @@ function ActionButton({
       onClick={onClick}
       aria-label={label}
       className={`min-h-11 rounded-lg border px-3 text-sm font-medium ${
-        danger ? "border-red-400/50 text-red-400 hover:bg-red-600/10" : "border-foreground/20 hover:bg-foreground/10"
+        danger
+          ? "border-red-400/50 text-red-400 hover:bg-red-600/10"
+          : gold
+            ? "btn-gold border-transparent"
+            : "border-foreground/20 hover:bg-foreground/10"
       }`}
     >
       {children}

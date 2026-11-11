@@ -8,6 +8,7 @@ import {
   applyPrintings,
   applyTagCards,
   BOARD_LABELS,
+  statusLabel,
   dropTagFromChanges,
   effectivePrintings,
   entryKey,
@@ -78,7 +79,8 @@ import { useMyTags } from "@/lib/tags/use-my-tags";
 import { createClient } from "@/lib/supabase/client";
 import { CardPanel, FloatingPreview } from "./card-panel";
 import { CardSearch } from "./card-search";
-import { CardSheet } from "./card-sheet";
+import { ActionButton, CardSheet } from "./card-sheet";
+import { FindCards, type FindTab } from "./find-cards";
 import { useCommanderWording } from "./wording-ui";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
 import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
@@ -114,7 +116,7 @@ import { estimatePower } from "@/lib/brackets/power";
 import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
 import { useWishlist } from "@/lib/deck/use-wishlist";
 import { isFoilFinish, ownedCopies, ownedMatch, unownedPrice } from "@/lib/deck/collection";
-import { markOwnedChanges, shownParts, targetFor } from "@/lib/deck/collection-targets";
+import { markOwnedChanges, shownParts, targetFor, type ShownPart } from "@/lib/deck/collection-targets";
 import { useCollection } from "@/lib/deck/use-collection";
 import { readCardLang } from "@/lib/deck/card-language";
 import { useLocalized } from "@/lib/deck/use-localized";
@@ -406,9 +408,20 @@ export function DeckEditor({
     [save, say, state.categories, state.printings],
   );
 
-  // Text from quick add's "See all results", for the Search panel to open with.
-  const [searchSeed, setSearchSeed] = useState<string | undefined>(undefined);
+  // What the Search tab opens with (quick add's "See all results", a phrase chip, an angle). `n` restarts it.
+  const [searchSeed, setSearchSeed] = useState<{ text: string; label?: string; n: number } | undefined>(undefined);
+  // Find cards (Nov 11, 2026): a search result or suggestion open in the card sheet, and the list it steps through.
+  const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
+  // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
+  const [suggestShown, setSuggestShown] = useState(false);
   const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | null>(null);
+  useEffect(() => {
+    // Closing the drawer starts it fresh next time.
+    if (panel !== "search" && panel !== "suggest") {
+      setSuggestShown(false);
+      setSearchSeed(undefined);
+    }
+  }, [panel]);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
   const wishlist = useWishlist(userId);
@@ -488,7 +501,7 @@ export function DeckEditor({
       const mod = e.ctrlKey || e.metaKey;
       // An empty box has no typing to undo (quick add keeps focus after adding), so the shortcut means the deck.
       const blank = el instanceof HTMLInputElement && el.value === "";
-      if (e.key === "Escape" && (panel === "search" || panel === "suggest") && !sheet) {
+      if (e.key === "Escape" && (panel === "search" || panel === "suggest") && !sheet && !found) {
         setPanel(null);
       } else if (e.key === "Escape" && selecting && !typing) {
         stopSelecting();
@@ -506,7 +519,7 @@ export function DeckEditor({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [readOnly, undo, redo, selecting, stopSelecting, panel, sheet]);
+  }, [readOnly, undo, redo, selecting, stopSelecting, panel, sheet, found]);
 
   const { entries, cards, categories, tagCards, printings } = state;
   // What each row shows: its own pick, else your default. Edits and undo work on the picks alone.
@@ -528,8 +541,8 @@ export function DeckEditor({
   // ---------- tags and roles ----------
   // Tags for every card we know about, plus whatever is being previewed (a search result, say).
   const tagIds = useMemo(
-    () => [...new Set([...Object.keys(cards), ...(preview ? [preview.oracle_id] : [])])],
-    [cards, preview],
+    () => [...new Set([...Object.keys(cards), ...(preview ? [preview.oracle_id] : []), ...(found ? [found.list[found.index].oracle_id] : [])])],
+    [cards, preview, found],
   );
   const tags = useChosenArtTags(useTagData(tagIds, initialTags), shownPrintings);
 
@@ -816,6 +829,7 @@ export function DeckEditor({
   };
   const openSuggest = (source: SuggestSource) => {
     setSuggestFor(source);
+    setSuggestShown(true);
     setPanel("suggest");
     requestAnimationFrame(() => document.getElementById("suggest-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
@@ -823,6 +837,12 @@ export function DeckEditor({
     const r = roles.find((x) => x.key === key);
     if (!r) return;
     openSuggest({ label: r.name, slugs: r.tagSet ? [...r.tagSet] : [], lands: !!r.land, roleKey: r.key });
+  };
+  /** The Search tab, with a query to run (and what it is in words), or as it was. */
+  const openSearch = (text?: string, label?: string) => {
+    if (text !== undefined) setSearchSeed((s) => ({ text, label, n: (s?.n ?? 0) + 1 }));
+    setPanel("search");
+    requestAnimationFrame(() => document.getElementById("suggest-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
   const suggestForTag = (t: ThemeTag) => {
     if (!tags.tree || t.kind !== "o") return;
@@ -988,6 +1008,122 @@ export function DeckEditor({
   const shownLine = shown ? [...commanders, ...companions, ...mainLines].find((l) => l.card.oracle_id === shown.oracle_id) : undefined;
   const closePanel = useCallback(() => setPanel(null), []);
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
+
+  /** The card sheet's collection box for one printing of a card (a deck row's, or a search result's default). */
+  const collectionBox = (id: string, part: ShownPart) => {
+    if (!userId || !collection.loaded) return undefined;
+    const mine = collection.owned.get(id) ?? [];
+    const isShown = (r: (typeof mine)[number]) => !!part.printingId && r.printing_id === part.printingId && isFoilFinish(r.finish) === part.foil;
+    const p = part.printing;
+    return {
+      exact: mine.filter(isShown).reduce((n, r) => n + r.quantity, 0),
+      total: ownedCopies(collection.owned, id),
+      shownLabel: (() => {
+        const info = p ?? mine.find(isShown)?.printing_info;
+        return info ? `${info.set_name} #${info.number}${part.foil ? ", foil" : ""}` : "The printing shown";
+      })(),
+      others: mine
+        .filter((r) => !isShown(r))
+        .map((r) => ({
+          quantity: r.quantity,
+          label: `${r.printing_info ? `${r.printing_info.set.toUpperCase()} #${r.printing_info.number}` : "printing unknown"}${r.finish === "nonfoil" ? "" : ` ${r.finish}`}`,
+        })),
+      onAdd: async (delta: number) => {
+        try {
+          const target = await targetFor(id, part);
+          if (!target) return say("Couldn't tell which printing this is.");
+          const failed = await collection.add(target, delta);
+          if (failed) say(failed);
+        } catch (e) {
+          say(`Couldn't look up this printing on Scryfall: ${(e as Error).message}`);
+        }
+      },
+    };
+  };
+
+  /**
+   * Find cards: a search result or suggestion in the card sheet. Same sheet as a deck card (both faces, rules text,
+   * tags), with add buttons in place of the deck-row ones. Prev / Next step through the list it came from.
+   */
+  const renderFoundSheet = (f: NonNullable<typeof found>) => {
+    const card = f.list[f.index];
+    if (!card) return null;
+    const id = card.oracle_id;
+    const n = (b: Board) => entries[entryKey(b, id)] ?? 0;
+    const status =
+      n("commander") > 0
+        ? "Your commander"
+        : n("main") > 0
+          ? `In your mainboard${n("main") > 1 ? ` ×${n("main")}` : ""}${n("maybe") ? ", and on your maybeboard" : ""}`
+          : n("maybe") > 0
+            ? "On your maybeboard"
+            : "Not in this deck yet";
+    const move = (by: number) => setFound({ ...f, index: (f.index + by + f.list.length) % f.list.length });
+    return (
+      <CardSheet
+        deckId={deck.id}
+        line={{ board: "main", quantity: 0, card }}
+        index={f.index}
+        total={f.list.length}
+        warnings={statusLabel(card) === "Banned" ? ["Banned in Commander"] : statusLabel(card) === "Preview" ? ["Not released yet"] : []}
+        roleKeys={roleKeysOf(card)}
+        roles={roles}
+        tags={tags}
+        highlight={null}
+        readOnly={false}
+        onTag={(slug) => {
+          // A tag on a card you're browsing: the picks with that tag, in the Suggested tab.
+          if (!tags.tree) return;
+          setFound(null);
+          openSuggest({ label: tags.tree.label(slug), slugs: [...tags.tree.descendants([slug])] });
+        }}
+        onMove={() => undefined}
+        onQuantity={() => undefined}
+        onPrinting={() => undefined}
+        pickedHere={false}
+        myDefault={preferred[id] ?? null}
+        onSetDefault={() => undefined}
+        isCover={false}
+        onCover={() => undefined}
+        onPrev={() => move(-1)}
+        onNext={() => move(1)}
+        onClose={() => setFound(null)}
+        wish={userId ? { on: wishlist.has(id), onToggle: async () => say(await wishlist.toggle(id)) } : undefined}
+        collection={collectionBox(id, { printingId: printingIdFromImage(card.image_normal), foil: false, quantity: 1 })}
+        onSearchWording={(query, label) => {
+          setFound(null);
+          openSearch(query, label);
+        }}
+        candidate={{
+          context: f.from === "search" ? "Search result" : "Suggestion",
+          status,
+          actions: (
+            <>
+              <ActionButton gold onClick={() => addWithNotice(card, "main")}>
+                + Add to mainboard
+              </ActionButton>
+              <ActionButton onClick={() => addWithNotice(card, "maybe")}>+ Add to maybeboard</ActionButton>
+              {card.can_be_commander && n("commander") === 0 && (
+                <ActionButton onClick={() => addWithNotice(card, "commander")}>♛ Make commander</ActionButton>
+              )}
+              {f.from === "suggest" && (
+                <ActionButton
+                  onClick={() => {
+                    dismissed.dismiss(id);
+                    say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
+                    const list = f.list.filter((c) => c.oracle_id !== id);
+                    setFound(list.length ? { ...f, list, index: Math.min(f.index, list.length - 1) } : null);
+                  }}
+                >
+                  Not for this deck
+                </ActionButton>
+              )}
+            </>
+          ),
+        }}
+      />
+    );
+  };
   /**
    * A click on a card. While selecting (or with Ctrl/Cmd) it toggles the card; Shift selects everything between
    * the last clicked card and this one, in screen order. Otherwise it opens the card sheet.
@@ -1221,12 +1357,10 @@ export function DeckEditor({
             {!readOnly && (
               <HeaderButton
                 active={panel === "search"}
-                onClick={() => {
-                  setSearchSeed(undefined);
-                  setPanel(panel === "search" ? null : "search");
-                }}
+                title="Search every Commander card by name, rules text or Scryfall syntax"
+                onClick={() => (panel === "search" ? setPanel(null) : openSearch())}
               >
-                Search
+                ⌕ Search
               </HeaderButton>
             )}
             <Link
@@ -1262,63 +1396,73 @@ export function DeckEditor({
       />
       <div className={`mx-auto ${previewMode === "docked" ? "max-w-[1500px]" : ""} px-4 sm:px-6`}>
 
-      {panel === "search" && !readOnly && (
-        <div className="drawer">
-        <CardSearch
-          // A new "See all results" while Search is already open starts it over with that text.
-          key={searchSeed ?? ""}
-          entries={entries}
-          identity={identity}
-          commanderName={commanders.length === 1 ? commanders[0].card.name : commanders.length ? "your commanders" : null}
-          onAdd={addWithNotice}
-          onPreview={setPreview}
-          onClose={() => setPanel(null)}
-          hideInDeck={prefs.searchHideInDeck === true}
-          onHideInDeck={(hide) => updatePrefs({ searchHideInDeck: hide })}
-          withBanned={prefs.allowBanned === true}
-          onWithBanned={(on) => updatePrefs({ allowBanned: on })}
-          initialText={searchSeed}
-          wording={commanderWording.phrases}
-          angles={commanderWording.plan?.angles}
-          angleWhy={commanderWording.plan?.why}
-          wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
-          ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
-        />
+      {(panel === "search" || panel === "suggest") && !readOnly && (
+        <div id="suggest-panel" className="drawer scroll-mt-4">
+          <FindCards
+            tab={panel}
+            onTab={(t) => (t === "search" ? openSearch() : suggestFor && suggestShown ? setPanel("suggest") : suggestOverall())}
+            onClose={() => setPanel(null)}
+          >
+            <div hidden={panel !== "search"}>
+          <CardSearch
+            // A new "See all results" while Search is already open starts it over with that text.
+            key={searchSeed?.n ?? 0}
+            entries={entries}
+            identity={identity}
+            commanderName={commanders.length === 1 ? commanders[0].card.name : commanders.length ? "your commanders" : null}
+            onAdd={addWithNotice}
+            onPreview={setPreview}
+            onOpen={(list, index) => setFound({ list, index, from: "search" })}
+            hideInDeck={prefs.searchHideInDeck === true}
+            onHideInDeck={(hide) => updatePrefs({ searchHideInDeck: hide })}
+            withBanned={prefs.allowBanned === true}
+            onWithBanned={(on) => updatePrefs({ allowBanned: on })}
+            initialText={searchSeed?.text}
+            initialLabel={searchSeed?.label}
+            wording={commanderWording.phrases}
+            wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
+            ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
+          />
+            </div>
+            {suggestFor && suggestShown && (
+              <div hidden={panel !== "suggest"}>
+              <SuggestPanel
+                source={suggestFor}
+                identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
+                deckIds={[...new Set(Object.keys(entries).map((k) => k.split("|")[1]))]}
+                isInDeck={(id) => Object.keys(entries).some((k) => k.endsWith(`|${id}`))}
+                hasCommander={commanders.length > 0}
+                roleNames={Object.fromEntries(roles.map((r) => [r.key, r.name]))}
+                score={{
+                  themes: suggestThemes,
+                  keysOf: (c: PoolCard) => (trees ? cardKeys({ oracle: c.tags, art: [], commander: false, land: false }, themeSettings.specific, trees) : []),
+                  rolesOf: (c: PoolCard) => visibleRoleKeys(c, c.tags),
+                  under: new Set(roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key)),
+                  settings: suggestStyle.settings,
+                  groups: suggestGroups,
+                }}
+                onSettings={suggestStyle.setSettings}
+                saveError={suggestStyle.saveError ?? dismissed.saveError}
+                dismissed={dismissed.dismissed}
+                onDismiss={(card) => {
+                  dismissed.dismiss(card.oracle_id);
+                  say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
+                }}
+                onRestore={dismissed.restore}
+                bracket={{ target: bracket.target, deck: bracketDeck, deckIds: deckCardIds }}
+                onAdd={addWithNotice}
+                onPreview={setPreview}
+                onOpen={(list, index) => setFound({ list, index, from: "suggest" })}
+                onOverall={suggestFor && !(suggestFor.staples && !suggestFor.roleKey && !suggestFor.lands) ? suggestOverall : undefined}
+                onSearch={openSearch}
+                wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
+              />
+              </div>
+            )}
+          </FindCards>
         </div>
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} printings={printings} deckCards={cards} onApply={applyImport} onClose={() => setPanel(null)} />}
-      {panel === "suggest" && suggestFor && !readOnly && (
-        <div id="suggest-panel" className="drawer scroll-mt-4">
-          <SuggestPanel
-            source={suggestFor}
-            identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
-            deckIds={[...new Set(Object.keys(entries).map((k) => k.split("|")[1]))]}
-            isInDeck={(id) => Object.keys(entries).some((k) => k.endsWith(`|${id}`))}
-            hasCommander={commanders.length > 0}
-            roleNames={Object.fromEntries(roles.map((r) => [r.key, r.name]))}
-            score={{
-              themes: suggestThemes,
-              keysOf: (c: PoolCard) => (trees ? cardKeys({ oracle: c.tags, art: [], commander: false, land: false }, themeSettings.specific, trees) : []),
-              rolesOf: (c: PoolCard) => visibleRoleKeys(c, c.tags),
-              under: new Set(roles.filter((r) => !r.land && (counts[r.key] ?? 0) < r.target).map((r) => r.key)),
-              settings: suggestStyle.settings,
-              groups: suggestGroups,
-            }}
-            onSettings={suggestStyle.setSettings}
-            saveError={suggestStyle.saveError ?? dismissed.saveError}
-            dismissed={dismissed.dismissed}
-            onDismiss={(card) => {
-              dismissed.dismiss(card.oracle_id);
-              say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
-            }}
-            onRestore={dismissed.restore}
-            bracket={{ target: bracket.target, deck: bracketDeck, deckIds: deckCardIds }}
-            onAdd={addWithNotice}
-            onPreview={setPreview}
-            onClose={() => setPanel(null)}
-          />
-        </div>
-      )}
       {panel === "share" && !readOnly && (
         <SharePanel
           deckId={deck.id}
@@ -1579,10 +1723,7 @@ export function DeckEditor({
               }}
               onPreview={setPreview}
               identity={identity}
-              onSeeAll={(text) => {
-                setSearchSeed(text);
-                setPanel("search");
-              }}
+              onSeeAll={(text) => openSearch(text)}
             />
           )}
           <Toast message={notice} onUndo={noticeUndo && state.past.length > 0 ? undo : undefined} />
@@ -1742,41 +1883,7 @@ export function DeckEditor({
             onChange: (v) => setManaValue(sheetLine.card.oracle_id, v, cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value),
           }}
           wish={userId ? { on: wishlist.has(sheetLine.card.oracle_id), onToggle: async () => say(await wishlist.toggle(sheetLine.card.oracle_id)) } : undefined}
-          collection={
-            userId && collection.loaded
-              ? (() => {
-                  const id = sheetLine.card.oracle_id;
-                  const part = shownParts(sheetLine, splits, cards[id]).at(-1)!;
-                  const mine = collection.owned.get(id) ?? [];
-                  const isShown = (r: (typeof mine)[number]) => !!part.printingId && r.printing_id === part.printingId && isFoilFinish(r.finish) === part.foil;
-                  const p = part.printing;
-                  return {
-                    exact: mine.filter(isShown).reduce((n, r) => n + r.quantity, 0),
-                    total: ownedCopies(collection.owned, id),
-                    shownLabel: (() => {
-                      const info = p ?? mine.find(isShown)?.printing_info;
-                      return info ? `${info.set_name} #${info.number}${part.foil ? ", foil" : ""}` : "The printing shown";
-                    })(),
-                    others: mine
-                      .filter((r) => !isShown(r))
-                      .map((r) => ({
-                        quantity: r.quantity,
-                        label: `${r.printing_info ? `${r.printing_info.set.toUpperCase()} #${r.printing_info.number}` : "printing unknown"}${r.finish === "nonfoil" ? "" : ` ${r.finish}`}`,
-                      })),
-                    onAdd: async (delta: number) => {
-                      try {
-                        const target = await targetFor(id, part);
-                        if (!target) return say("Couldn't tell which printing this is.");
-                        const failed = await collection.add(target, delta);
-                        if (failed) say(failed);
-                      } catch (e) {
-                        say(`Couldn't look up this printing on Scryfall: ${(e as Error).message}`);
-                      }
-                    },
-                  };
-                })()
-              : undefined
-          }
+          collection={collectionBox(sheetLine.card.oracle_id, shownParts(sheetLine, splits, cards[sheetLine.card.oracle_id]).at(-1)!)}
           mixed={{
             parts: splits[entryKey(sheetLine.board, sheetLine.card.oracle_id)] ?? [],
             onChange: (parts) => saveSplit(sheetLine.board, sheetLine.card.oracle_id, parts),
@@ -1860,14 +1967,14 @@ export function DeckEditor({
           onSearchWording={
             readOnly
               ? undefined
-              : (query) => {
+              : (query, label) => {
                   setSheet(null);
-                  setSearchSeed(query);
-                  setPanel("search");
+                  openSearch(query, label);
                 }
           }
         />
       )}
+      {found && !sheetLine && renderFoundSheet(found)}
     </main>
   );
 }

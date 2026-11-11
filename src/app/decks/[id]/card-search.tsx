@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { entryKey, statusLabel, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
+import { entryKey, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
 import { importCard } from "@/lib/scryfall/import-card";
 import {
   buildQuery,
@@ -29,9 +29,9 @@ import {
 } from "@/lib/search/filters";
 import { loadCatalog, matchCatalog } from "@/lib/scryfall/catalog";
 import { wordingQuery } from "@/lib/search/wording";
-import { AngleButtons, WordingChips } from "./wording-ui";
-import { angleQuery, type Angle } from "@/lib/search/wording-pairs";
-import { FilterFields } from "./filter-fields";
+import { WordingChips } from "./wording-ui";
+import { FiltersBox } from "./filters-box";
+import { RESULT_GRID, ResultCard, ShowingChip } from "./result-card";
 
 /** The few fields we use from a Scryfall card object. */
 type ScryfallCard = {
@@ -64,24 +64,23 @@ type Props = {
   /** Collection tracking (v2): copies you own of a card, when you track a collection. */
   ownedOf?: (oracleId: string) => number;
   onPreview: (card: CardSummary | null) => void;
-  onClose: () => void;
+  /** Opens the card sheet on one result; Prev / Next step through `list`. */
+  onOpen: (list: CardSummary[], index: number) => void;
   /** "Hide cards in deck" (remembered with the other view settings). */
   hideInDeck: boolean;
   onHideInDeck: (hide: boolean) => void;
   /** "Include banned and preview cards" (remembered; the commander picker shares it). */
   withBanned: boolean;
   onWithBanned: (on: boolean) => void;
-  /** Text handed over from quick add's "See all results": filled in and searched on opening. */
+  /** Text handed over from quick add's "See all results", a phrase chip or an angle: filled in and searched on opening. */
   initialText?: string;
+  /** What that search is, in words ("Cards that say …"), for the Showing line. */
+  initialLabel?: string;
   /** Search by wording (v2): phrases from the commander's rules text, shown as tap-to-search chips. */
   wording?: string[];
-  /** Other angles (v2): ideas the commander's wording points to; a tap searches every phrase of one. */
-  angles?: Angle[];
-  /** Phrase -> reason, for the angle buttons' hover text. */
-  angleWhy?: Record<string, string>;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wording = [], angles = [], angleWhy = {}, wish, ownedOf }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onOpen, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, initialLabel, wording = [], wish, ownedOf }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -92,6 +91,9 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const [total, setTotal] = useState<number | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [sentQuery, setSentQuery] = useState<string | null>(null);
+  // What the box held when it was sent, and a label for it when the search came from a chip or example.
+  const [sentText, setSentText] = useState("");
+  const [label, setLabel] = useState<{ text: string; label: string } | null>(initialText && initialLabel ? { text: initialText.trim(), label: initialLabel } : null);
   // Plain words were widened to names or rules text: say that in words rather than showing the syntax.
   const [sentPlain, setSentPlain] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,7 +104,6 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const [order, setOrder] = useState<SearchOrder>("edhrec");
   const [dir, setDir] = useState<SortDir>("auto");
   const [sentOrder, setSentOrder] = useState<{ order: SearchOrder; dir: SortDir }>({ order: "edhrec", dir: "auto" });
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FilterForm>(EMPTY_FILTERS);
 
   // Tag autocomplete state
@@ -176,6 +177,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     const q = buildQuery(widenPlainWords(typed), { identity, inIdentity, legalOnly, withBanned });
     if (!typed.trim()) return;
     setSentQuery(q);
+    setSentText(typed.trim());
     setSentPlain(isPlainWords(typed) ? typed.trim() : null);
     setSentOrder(sort);
     setToken(null);
@@ -194,13 +196,28 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     const next = appendSyntax(text, filterSyntax(filters));
     setText(next);
     setFilters(EMPTY_FILTERS);
-    setFiltersOpen(false);
     search(next);
   }
 
-  function runExample(query: string) {
+  /** A chip or example: search it, and say what it is in words. */
+  function runExample(query: string, named?: string) {
     setText(query);
+    setLabel(named ? { text: query.trim(), label: named } : null);
     search(query);
+  }
+
+  /** ✕ on the Showing line: back to an empty box. */
+  function clearSearch() {
+    setText("");
+    setLabel(null);
+    setSentQuery(null);
+    setSentText("");
+    setResults([]);
+    setTotal(null);
+    setNextPage(null);
+    setWarnings([]);
+    setError(null);
+    inputRef.current?.focus();
   }
 
   // ---------- tag autocomplete ----------
@@ -285,15 +302,19 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
   const shown = results.filter((sf) => (!hideInDeck || !isInDeck(sf)) && (!onlyOwned || !ownedOf || isOwned(sf)));
   const hiddenCount = results.length - shown.length;
 
-  return (
-    <section className="mt-6 rounded-lg border border-foreground/15 p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-semibold">Search cards</h2>
-        <button onClick={onClose} aria-label="Close search" className="opacity-60 hover:opacity-100">
-          ✕
-        </button>
-      </div>
+  // The cards the sheet steps through: results we've matched to our data, in screen order.
+  const openable = shown.map((sf) => oracleIdOf(sf)).flatMap((id) => (id && summaries[id] ? [summaries[id]] : []));
+  const showingLabel =
+    label && label.text === sentText ? (
+      label.label
+    ) : sentPlain ? (
+      <span title={sentQuery ?? undefined}>cards whose name or rules text has “{sentPlain}”</span>
+    ) : (
+      <code className="break-all font-mono text-[13px]">{sentQuery}</code>
+    );
 
+  return (
+    <div>
       <div className="relative flex gap-2">
         <input
           ref={inputRef}
@@ -306,16 +327,12 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           onKeyUp={(e) => ["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key) && updateToken()}
           onClick={updateToken}
           onBlur={() => setTimeout(() => setToken(null), 150)}
-          placeholder="Card name, or try otag:ramp t:creature"
-          aria-label="Scryfall search"
+          placeholder="A name, words from the rules, or otag:ramp t:creature"
+          aria-label="Search all cards"
           spellCheck={false}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-foreground/20 bg-transparent px-3"
         />
-        <button
-          onClick={() => search()}
-          disabled={loading || !text.trim()}
-          className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-gold-ink disabled:opacity-50"
-        >
+        <button type="button" onClick={() => search()} disabled={loading || !text.trim()} className="btn btn-gold min-h-11 px-4 disabled:opacity-50">
           Search
         </button>
 
@@ -375,14 +392,6 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         >
           ⇅ {sortNote(order, dir)}
         </button>
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((o) => !o)}
-          aria-expanded={filtersOpen}
-          className={`min-h-11 rounded-lg border px-3 ${filtersOpen ? "border-gold text-gold" : "border-foreground/20 hover:bg-foreground/10"}`}
-        >
-          Filters {filtersOpen ? "▴" : "▾"}
-        </button>
         <details className="relative">
           <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-foreground/20 px-3 hover:bg-foreground/10" title="Search syntax cheat sheet">
             ? Syntax
@@ -398,6 +407,9 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                 ))}
               </tbody>
             </table>
+            <p className="mt-2 opacity-80">
+              Type <code>otag:</code>, <code>art:</code>, <code>t:</code>, <code>kw:</code> or <code>s:</code> in the box for suggestions.
+            </p>
             <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline opacity-80">
               Full syntax guide on Scryfall
             </a>
@@ -405,49 +417,53 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         </details>
       </div>
 
-      {filtersOpen && (
-        <div className="mt-3 rounded-lg border border-foreground/15 p-3">
-          <FilterFields
-            value={filters}
-            onChange={(next) => setFilters(next)}
-            fields={["types", "colors", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
-          />
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={addFilters} disabled={!filterSyntax(filters)} className="btn btn-gold min-h-11 px-4 disabled:opacity-50">
-              Add to search
-            </button>
-            <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="min-h-11 rounded-lg px-3 text-sm opacity-70 hover:opacity-100">
-              Clear
-            </button>
-            {filterSyntax(filters) && <code className="min-w-0 break-all font-mono text-xs opacity-70">{filterSyntax(filters)}</code>}
-          </div>
+      <FiltersBox
+        fields={["types", "colors", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
+        draft={filters}
+        onDraft={(next) => setFilters(next)}
+        applyLabel="Add to search"
+        hint="build a search without the syntax"
+        onApply={addFilters}
+        onClear={() => setFilters(EMPTY_FILTERS)}
+      />
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-80">
+        {identity && (
+          <label className="flex min-h-9 items-center gap-1.5">
+            <input type="checkbox" checked={inIdentity} onChange={(e) => setInIdentity(e.target.checked)} />
+            Only {commanderName ? `${commanderName}${commanderName.endsWith("s") ? "'" : "'s"}` : "commander"} colors
+          </label>
+        )}
+        <label className="flex min-h-9 items-center gap-1.5">
+          <input type="checkbox" checked={legalOnly} onChange={(e) => setLegalOnly(e.target.checked)} />
+          Commander-legal paper cards
+        </label>
+        {legalOnly && (
+          <label className="flex min-h-9 items-center gap-1.5" title="Also show cards banned in Commander, and new cards that aren't released yet">
+            <input type="checkbox" checked={withBanned} onChange={(e) => onWithBanned(e.target.checked)} />
+            Include banned and preview cards
+          </label>
+        )}
+        <label className="flex min-h-9 items-center gap-1.5">
+          <input type="checkbox" checked={hideInDeck} onChange={(e) => onHideInDeck(e.target.checked)} />
+          Hide cards in deck
+        </label>
+        {ownedOf && (
+          <label className="flex min-h-9 items-center gap-1.5" title="Only cards in your collection">
+            <input type="checkbox" checked={onlyOwned} onChange={(e) => setOnlyOwned(e.target.checked)} />
+            Hide cards I don&apos;t own
+          </label>
+        )}
+      </div>
+
+      {wording.length > 0 && (!text.trim() || wording.some((p) => wordingQuery(p) === text.trim())) && (
+        <div className="mt-3 space-y-1.5 text-sm">
+          <p className="text-xs opacity-60">
+            Wording from {commanderName ?? "your commander"}: find cards that say the same thing (~ means the card&apos;s own name)
+          </p>
+          <WordingChips phrases={wording} active={text.trim()} onSearch={(q, phrase) => runExample(q, `cards that say “${phrase}”`)} />
         </div>
       )}
-
-      {(wording.length > 0 || angles.length > 0) &&
-        (!text.trim() || wording.some((p) => wordingQuery(p) === text.trim()) || angles.some((a) => angleQuery(a) === text.trim())) && (
-          <div className="mt-3 space-y-3 text-sm">
-            {angles.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs opacity-60">Angles for {commanderName ?? "your commander"}: ideas its wording points to, every card for one idea</p>
-                <AngleButtons
-                  angles={angles}
-                  why={angleWhy}
-                  active={angles.find((a) => angleQuery(a) === text.trim())?.key ?? null}
-                  onPick={(a) => runExample(angleQuery(a))}
-                />
-              </div>
-            )}
-            {wording.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs opacity-60">
-                  Wording from {commanderName ?? "your commander"}: find cards that say the same thing (~ means the card&apos;s own name)
-                </p>
-                <WordingChips phrases={wording} active={text.trim()} onSearch={runExample} />
-              </div>
-            )}
-          </div>
-        )}
 
       {!sentQuery && !text.trim() && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
@@ -456,7 +472,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
             <button
               key={ex.query}
               type="button"
-              onClick={() => runExample(ex.query)}
+              onClick={() => runExample(ex.query, ex.label.toLowerCase())}
               title={ex.query}
               className="min-h-11 rounded-full border border-foreground/20 px-3 hover:bg-foreground/10"
             >
@@ -466,53 +482,19 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-80">
-        {identity && (
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={inIdentity} onChange={(e) => setInIdentity(e.target.checked)} />
-            Only {commanderName ? `${commanderName}${commanderName.endsWith("s") ? "'" : "'s"}` : "commander"} colors
-          </label>
-        )}
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={legalOnly} onChange={(e) => setLegalOnly(e.target.checked)} />
-          Commander-legal paper cards
-        </label>
-        {legalOnly && (
-          <label className="flex items-center gap-1.5" title="Also show cards banned in Commander, and new cards that aren't released yet">
-            <input type="checkbox" checked={withBanned} onChange={(e) => onWithBanned(e.target.checked)} />
-            Include banned and preview cards
-          </label>
-        )}
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={hideInDeck} onChange={(e) => onHideInDeck(e.target.checked)} />
-          Hide cards in deck
-        </label>
-        {ownedOf && (
-          <label className="flex items-center gap-1.5" title="Only cards in your collection">
-            <input type="checkbox" checked={onlyOwned} onChange={(e) => setOnlyOwned(e.target.checked)} />
-            Hide cards I don&apos;t own
-          </label>
-        )}
-        <span className="opacity-70">
-          Type <code>otag:</code>, <code>art:</code>, <code>t:</code>, <code>kw:</code> or <code>s:</code> for suggestions ·{" "}
-          <a href="https://scryfall.com/docs/syntax" target="_blank" rel="noopener noreferrer" className="underline">
-            syntax guide
-          </a>
-        </span>
-      </div>
-
       {sentQuery && (
-        <p className="mt-3 text-xs opacity-60">
-          {sentPlain ? (
-            <span title={sentQuery}>Cards whose name or rules text has “{sentPlain}”</span>
-          ) : (
-            <>
-              Searched <code className="font-mono">{sentQuery}</code>
-            </>
-          )}
-          {total !== null &&
-            ` · ${total.toLocaleString()} ${total === 1 ? "card" : "cards"}${total > 1 ? `, ${sortNote(sentOrder.order, sentOrder.dir)}` : ""}`}
-        </p>
+        <ShowingChip
+          label={showingLabel}
+          detail={
+            total !== null
+              ? `${total.toLocaleString()} ${total === 1 ? "card" : "cards"}${total > 1 ? `, ${sortNote(sentOrder.order, sentOrder.dir)}` : ""}`
+              : loading
+                ? "searching…"
+                : undefined
+          }
+          onClear={clearSearch}
+          clearLabel="Clear the search"
+        />
       )}
       {warnings.map((w) => (
         <p key={w} className="mt-2 text-sm text-amber-700 dark:text-amber-400">
@@ -529,86 +511,35 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       )}
 
       {shown.length > 0 && (
-        <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+        <ul className={`mt-3 ${RESULT_GRID}`}>
           {shown.map((sf) => {
             const id = oracleIdOf(sf);
             const card = id ? summaries[id] : undefined;
-            const have = id ? inDeck(id) : 0;
             return (
-              <li key={sf.id} data-preview-card className="flex flex-col gap-1.5" onMouseEnter={() => card && onPreview(card)}>
-                <div className="relative">
-                  {imageOf(sf) ? (
-                    <img
-                      src={imageOf(sf)}
-                      alt={sf.name}
-                      loading="lazy"
-                      width={244}
-                      height={340}
-                      className="w-full rounded-[4.75%/3.5%]"
-                    />
+              <ResultCard
+                key={sf.id}
+                name={sf.name}
+                image={imageOf(sf)}
+                card={card}
+                inDeck={id ? inDeck(id) : 0}
+                onPreview={() => card && onPreview(card)}
+                onOpen={() => card && onOpen(openable, Math.max(0, openable.indexOf(card)))}
+                onAdd={(board) => card && onAdd(card, board)}
+                wish={wish && card ? { on: wish.has(card.oracle_id), toggle: () => wish.toggle(card.oracle_id) } : undefined}
+                pending={
+                  matching ? (
+                    <p className="min-h-6 text-xs opacity-50">Matching…</p>
                   ) : (
-                    <div className="flex aspect-[63/88] items-center justify-center rounded-lg border border-foreground/15 p-2 text-center text-xs">
-                      {sf.name}
-                    </div>
-                  )}
-                  {have > 0 && (
-                    <span className="absolute left-1.5 top-1.5 rounded bg-green-700 px-1.5 py-0.5 text-xs font-medium text-white">
-                      In deck{have > 1 ? ` ×${have}` : ""}
-                    </span>
-                  )}
-                  {card && statusLabel(card) && <StatusBadge card={card} className="absolute bottom-1.5 left-1.5" />}
-                </div>
-                {card ? (
-                  <div className="flex flex-wrap items-center gap-1 text-xs">
-                    <button
-                      onClick={() => onAdd(card, "main")}
-                      title={`Add ${card.name} to the mainboard`}
-                      className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10"
-                    >
-                      + Main
-                    </button>
-                    <button
-                      onClick={() => onAdd(card, "maybe")}
-                      title={`Add ${card.name} to the maybeboard`}
-                      className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10"
-                    >
-                      + Maybe
-                    </button>
-                    {card.can_be_commander && (
-                      <button
-                        onClick={() => onAdd(card, "commander")}
-                        title={`Make ${card.name} your commander`}
-                        className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10"
-                      >
-                        ♛
-                      </button>
-                    )}
-                    {wish && (
-                      <button
-                        onClick={() => wish.toggle(card.oracle_id)}
-                        aria-pressed={wish.has(card.oracle_id)}
-                        title={wish.has(card.oracle_id) ? `Take ${card.name} off your wish list` : `Add ${card.name} to your wish list`}
-                        className={`rounded border px-1.5 py-0.5 hover:bg-foreground/10 ${wish.has(card.oracle_id) ? "border-gold text-gold" : "border-foreground/20"}`}
-                      >
-                        {wish.has(card.oracle_id) ? "♥" : "♡"}
-                      </button>
-                    )}
-                    <span className="ml-auto tabular-nums opacity-60">
-                      {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}
-                    </span>
-                  </div>
-                ) : matching ? (
-                  <p className="min-h-6 text-xs opacity-50">Matching…</p>
-                ) : (
-                  <FetchNewCard
-                    scryfallId={sf.id}
-                    onFetched={(fetched) => {
-                      setSummaries((s) => ({ ...s, [fetched.oracle_id]: fetched }));
-                      onAdd(fetched, "main");
-                    }}
-                  />
-                )}
-              </li>
+                    <FetchNewCard
+                      scryfallId={sf.id}
+                      onFetched={(fetched) => {
+                        setSummaries((s) => ({ ...s, [fetched.oracle_id]: fetched }));
+                        onAdd(fetched, "main");
+                      }}
+                    />
+                  )
+                }
+              />
             );
           })}
         </ul>
@@ -616,15 +547,16 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
 
       {nextPage && (
         <button
+          type="button"
           onClick={() => fetchPage(nextPage, true)}
           disabled={loading}
-          className="mt-4 rounded-md border border-foreground/20 px-4 py-2 text-sm disabled:opacity-50"
+          className="mt-4 min-h-11 rounded-lg border border-foreground/20 px-4 text-sm disabled:opacity-50"
         >
           {loading ? "Loading…" : `Show more (${results.length} of ${total?.toLocaleString()})`}
         </button>
       )}
       {loading && !nextPage && <p className="mt-3 text-sm opacity-60">Searching Scryfall…</p>}
-    </section>
+    </div>
   );
 }
 
@@ -648,7 +580,7 @@ function FetchNewCard({ scryfallId, onFetched }: { scryfallId: string; onFetched
           } else setState(r.reason);
         }}
         title="This card is newer than our nightly card data. Fetch it from Scryfall and add it to the mainboard."
-        className="rounded border border-foreground/20 px-1.5 py-0.5 hover:bg-foreground/10 disabled:opacity-50"
+        className="min-h-10 w-full rounded-lg border border-foreground/20 px-2 hover:bg-foreground/10 disabled:opacity-50"
       >
         {state === "busy" ? "Fetching…" : "New card: fetch + add"}
       </button>
@@ -657,16 +589,3 @@ function FetchNewCard({ scryfallId, onFetched }: { scryfallId: string; onFetched
   );
 }
 
-/** "Banned" or "Preview" on a card that isn't Commander-legal (yet). */
-export function StatusBadge({ card, className = "" }: { card: CardSummary; className?: string }) {
-  const label = statusLabel(card);
-  if (!label) return null;
-  return (
-    <span
-      title={label === "Banned" ? "Banned in Commander" : "Not released yet: legal in Commander from its release day"}
-      className={`rounded px-1.5 py-0.5 text-xs font-semibold ${label === "Banned" ? "bg-red-700 text-white" : "bg-sky-600 text-white"} ${className}`}
-    >
-      {label}
-    </span>
-  );
-}
