@@ -79,6 +79,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CardPanel, FloatingPreview } from "./card-panel";
 import { CardSearch } from "./card-search";
 import { CardSheet } from "./card-sheet";
+import { useCommanderWording } from "./wording-ui";
 import { ExportPanel, ImportPanel } from "./deck-text-panel";
 import { DeckToolbar, useHiddenTags, useTagViewPrefs } from "./deck-toolbar";
 import { DeckView, type DeckItem, type ViewSection } from "./deck-views";
@@ -665,6 +666,7 @@ export function DeckEditor({
     },
   };
   // Role counts cover the 100-card deck: commander(s) plus mainboard.
+  const commanderWording = useCommanderWording(commanders.map((l) => l.card));
   const counts = roleCounts([...commanders, ...mainLines], lineRoleKeys);
   // How many cards in the deck (commander + mainboard) carry each My tag.
   const myTagCounts: Record<string, number> = {};
@@ -1272,6 +1274,7 @@ export function DeckEditor({
           withBanned={prefs.allowBanned === true}
           onWithBanned={(on) => updatePrefs({ allowBanned: on })}
           initialText={searchSeed}
+          wording={commanderWording}
           wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
           ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
         />
@@ -1848,6 +1851,15 @@ export function DeckEditor({
           onPrev={() => step(-1)}
           onNext={() => step(1)}
           onClose={() => setSheet(null)}
+          onSearchWording={
+            readOnly
+              ? undefined
+              : (query) => {
+                  setSheet(null);
+                  setSearchSeed(query);
+                  setPanel("search");
+                }
+          }
         />
       )}
     </main>
