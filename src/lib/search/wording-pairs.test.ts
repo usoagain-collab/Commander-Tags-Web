@@ -40,6 +40,7 @@ describe("wordingPlan", () => {
     const plan = wordingPlan([omo]);
     expect(plan.phrases).toEqual(expect.arrayContaining(["gates with different names", "urza's", "choose a creature type"]));
     expect(plan.why["urza's"]).toBe("Feeds Omo: counts land types, and every land has them all");
+    expect(plan.phrases).not.toContain("proliferate");
   });
 
   it("one phrase per reason, and at most 3 rows per reason while others are waiting", () => {

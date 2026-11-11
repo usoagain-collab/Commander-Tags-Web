@@ -52,7 +52,8 @@ export const MIRRORS: Mirror[] = [
     why: "multiplies counters",
   },
   {
-    when: /everything counter|loyalty counter|charge counter|oil counter|experience counter/,
+    // Not everything counters (David, Nov 10, 2026): a second one does nothing for Omo.
+    when: /loyalty counter|charge counter|oil counter|experience counter/,
     also: ["proliferate"],
     why: "adds more counters",
   },
