@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchCardDetails, type CardDetails } from "@/lib/scryfall/card-details";
 import { selectionPhrase, wordingPhrases, wordingQuery } from "@/lib/search/wording";
+import { wordingPlan, type WordingPlan } from "@/lib/search/wording-pairs";
 import type { CardSummary } from "@/lib/deck/model";
 
 const cardText = (details: CardDetails) => details.faces.map((f) => f.oracleText).join("\n");
@@ -77,27 +78,35 @@ export function WordingChips({ phrases, active, onSearch }: { phrases: string[];
   );
 }
 
-/** Phrases from the commanders' rules text, for the Search panel (details are cached per visit). */
-export function useCommanderWording(commanders: CardSummary[]): string[] {
+type CommanderWording = {
+  /** Chips for the Search panel. */
+  phrases: string[];
+  /** What overall Suggest searches for: the commanders' wording plus what feeds it (null until loaded). */
+  plan: WordingPlan | null;
+};
+
+/** The commanders' wording, for the Search panel and Suggest (details are cached per visit). */
+export function useCommanderWording(commanders: CardSummary[]): CommanderWording {
   const key = commanders.map((c) => c.oracle_id).join(",");
-  const [state, setState] = useState<{ key: string; phrases: string[] }>({ key: "", phrases: [] });
+  const [state, setState] = useState<{ key: string } & CommanderWording>({ key: "", phrases: [], plan: null });
   const live = useRef(key);
 
   useEffect(() => {
     live.current = key;
     if (!commanders.length) return;
-    Promise.all(commanders.map((c) => fetchCardDetails(c.oracle_id).then((d) => wordingPhrases(cardText(d), c.name, c.type_line, 8))))
-      .then((lists) => {
+    Promise.all(commanders.map((c) => fetchCardDetails(c.oracle_id).then((d) => ({ name: c.name, type_line: c.type_line, text: cardText(d) }))))
+      .then((texts) => {
         if (live.current !== key) return;
+        const lists = texts.map((t) => wordingPhrases(t.text, t.name, t.type_line, 8));
         // Each commander gets a turn, so partners both show.
         const out: string[] = [];
         for (let i = 0; out.length < 10 && lists.some((l) => l[i]); i++) for (const l of lists) if (l[i] && !out.includes(l[i])) out.push(l[i]);
-        setState({ key, phrases: out });
+        setState({ key, phrases: out, plan: wordingPlan(texts) });
       })
-      .catch(() => live.current === key && setState({ key, phrases: [] }));
+      .catch(() => live.current === key && setState({ key, phrases: [], plan: null }));
     // commanders is read through key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return state.key === key ? state.phrases : [];
+  return state.key === key ? state : { phrases: [], plan: null };
 }

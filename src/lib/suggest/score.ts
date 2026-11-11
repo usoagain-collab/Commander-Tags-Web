@@ -33,6 +33,8 @@ export type Scored = {
   shared: ThemeTag[];
   /** Under-target roles it would fill. */
   fills: string[];
+  /** Wording matches (v2): phrases this card's rules text says, from the commander's wording or what feeds it. */
+  says?: string[];
   fitRaw: number;
   fit: number;
   pop: number;
@@ -57,7 +59,13 @@ export type ScoreContext = {
   role?: boolean;
   /** Theme key -> group number (themeGroups); themes in one group count once, at their best score. */
   groups?: Map<TagKey, number>;
+  /** Wording matches (v2): oracle id -> phrases its rules text says. Each adds WORDING_BONUS to fit. */
+  wording?: Map<string, string[]>;
 };
+
+/** Fit added per wording phrase a card says, at most two phrases (like a role filled, a little less). */
+export const WORDING_BONUS = 0.1;
+const MAX_WORDING_PHRASES_COUNTED = 2;
 
 /** Theme tags whose deck cards overlap this much (shared cards / cards with either) are one group. */
 export const GROUP_OVERLAP = 0.5;
@@ -119,14 +127,15 @@ export function scorePool(pool: PoolCard[], ctx: ScoreContext): Scored[] {
       const fills = ctx.rolesOf(card).filter((k) => ctx.under.has(k));
       const price = card.price_usd == null ? null : Number(card.price_usd);
       const pop = ctx.role ? logPopularity(card.edhrec_rank) : popularity(card.edhrec_rank);
-      return { card, shared, fitRaw, fills, price, pop, fit: 0, score: 0 };
+      const says = ctx.wording?.get(card.oracle_id) ?? [];
+      return { card, shared, fitRaw, fills, says, price, pop, fit: 0, score: 0 };
     });
 
   const maxFit = Math.max(0.0001, ...rows.map((r) => r.fitRaw));
   for (const r of rows) {
     const theme = r.fitRaw / maxFit;
     const base = ctx.role ? (5 * theme + 4 * cheapToCast(r.card.mana_value)) / 9 : theme;
-    r.fit = Math.min(1, base + 0.12 * r.fills.length);
+    r.fit = Math.min(1, base + 0.12 * r.fills.length + WORDING_BONUS * Math.min(r.says.length, MAX_WORDING_PHRASES_COUNTED));
     const cheap = r.price == null ? 0.5 : 1 - Math.min(r.price, 20) / 20;
     if (settings.style === "best") r.score = ctx.role ? 0.45 * r.fit + 0.55 * r.pop : 0.6 * r.fit + 0.4 * r.pop;
     else if (settings.style === "gems") r.score = 0.65 * r.fit + 0.35 * (1 - r.pop);
@@ -145,7 +154,8 @@ export function scorePool(pool: PoolCard[], ctx: ScoreContext): Scored[] {
   // Hidden gems needs at least two shared theme tags, so "least played" doesn't mean "random" (one shared tag
   // let filler through in the Phase 4c EDHREC check; David, Oct 19, 2026). For a role, doing the job is the first
   // match, so one shared theme is enough.
-  if (settings.style === "gems") out = out.filter((r) => r.shared.length >= (ctx.role ? 1 : 2));
+  // Saying the commander's wording counts as one shared theme here.
+  if (settings.style === "gems") out = out.filter((r) => r.shared.length + (r.says.length ? 1 : 0) >= (ctx.role ? 1 : 2));
   return out.sort((a, b) => b.score - a.score || a.card.name.localeCompare(b.card.name)).slice(0, ctx.limit ?? 24);
 }
 

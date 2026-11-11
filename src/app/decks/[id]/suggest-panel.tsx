@@ -25,6 +25,7 @@ import { FilterFields } from "./filter-fields";
 import { appendSyntax, EMPTY_FILTERS, filterSyntax, type FilterForm } from "@/lib/search/filters";
 import { buildQuery } from "@/lib/search/query";
 import { scryfallOracleIds } from "@/lib/scryfall/oracle-ids";
+import type { WordingPlan } from "@/lib/search/wording-pairs";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
 export type SuggestSource = {
@@ -38,6 +39,8 @@ export type SuggestSource = {
   staples?: string[];
   /** Overall Suggest while the deck is under its Lands target: how many lands it's short (v2). */
   landsShort?: number;
+  /** Overall Suggest (v2): phrases from the commander's wording and what feeds it, for the Wording matches row. */
+  wording?: WordingPlan;
 };
 
 type Props = {
@@ -74,6 +77,8 @@ export function SuggestPanel(props: Props) {
   const [staplePool, setStaplePool] = useState<PoolCard[]>([]);
   // Overall Suggest under the Lands target only: lands, ranked like role picks.
   const [landPool, setLandPool] = useState<PoolCard[]>([]);
+  // Overall Suggest (v2): cards whose rules text says the commander's wording or what feeds it.
+  const [wordPool, setWordPool] = useState<(PoolCard & { says: string[] })[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [combos, setCombos] = useState<ComboRow[] | null>(null);
   const [showAbove, setShowAbove] = useState(false);
@@ -83,13 +88,15 @@ export function SuggestPanel(props: Props) {
   const [filter, setFilter] = useState("");
   const [filterInfo, setFilterInfo] = useState<{ total: number; used: number; warnings: string[] } | null>(null);
   const applyFilter = (form = filterDraft, own = ownDraft) => setFilter(appendSyntax(filterSyntax(form), own));
-  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${identity.join("")}|${filter}`;
+  const wordingPhrases = source.wording?.phrases ?? [];
+  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${wordingPhrases.join(";")}|${identity.join("")}|${filter}`;
 
   useEffect(() => {
     let live = true;
     setPool(null);
     setStaplePool([]);
     setLandPool([]);
+    setWordPool([]);
     setCombos(null);
     setError(null);
     setFilterInfo(null);
@@ -121,10 +128,14 @@ export function SuggestPanel(props: Props) {
         return res;
       };
       // Staples need only the most-played end, so no least-played tail.
-      const [main, staples, lands] = await Promise.all([
+      const [main, staples, lands, words] = await Promise.all([
         ask(source.slugs, !!source.lands, 60),
         source.staples?.length ? ask(source.staples, false, 0) : Promise.resolve({ data: [], error: null }),
         source.landsShort ? ask([], true, 60) : Promise.resolve({ data: [], error: null }),
+        // Without migration 0050 this errors, and the row simply doesn't show.
+        wordingPhrases.length
+          ? supabase.rpc("wording_pool", { p_phrases: wordingPhrases, p_identity: identity, p_exclude: deckIds, p_lim: 60, ...(only ? { p_only: only } : {}) })
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (!live) return;
       // Filters need migration 0044 (suggestion_pool with p_only); before it runs, the database doesn't know p_only.
@@ -134,14 +145,21 @@ export function SuggestPanel(props: Props) {
       const found = (main.data ?? []) as PoolCard[];
       const foundStaples = staples.error ? [] : ((staples.data ?? []) as PoolCard[]);
       const foundLands = lands.error ? [] : ((lands.data ?? []) as PoolCard[]);
+      const foundWords = words.error ? [] : ((words.data ?? []) as (PoolCard & { says: string[] })[]);
       // Combos between the deck and the candidates, so a card that completes one can be held back (5c).
-      const ids = [...new Set([...props.bracket.deckIds, ...found.map((c) => c.oracle_id), ...foundStaples.map((c) => c.oracle_id), ...foundLands.map((c) => c.oracle_id)])];
+      const ids = [
+        ...new Set([
+          ...props.bracket.deckIds,
+          ...[...found, ...foundStaples, ...foundLands, ...foundWords].map((c) => c.oracle_id),
+        ]),
+      ];
       const c = ids.length ? await supabase.rpc("combos_within", { p_ids: ids }) : { data: [], error: null };
       if (!live) return;
       setCombos(c.error ? [] : ((c.data ?? []) as ComboRow[]));
       if (c.error) setError(`Couldn't check combos, so suggestions may include some: ${c.error.message}`);
       setStaplePool(foundStaples);
       setLandPool(foundLands);
+      setWordPool(foundWords);
       setPool(found);
     })();
     return () => {
@@ -157,7 +175,7 @@ export function SuggestPanel(props: Props) {
   const eligibleLands = pool && combos ? landPool.filter((c) => !isInDeck(c.oracle_id)) : [];
   const deckInput: EvaluateInput = { ...props.bracket.deck, combos: combos ?? [] };
   const issues = new Map<string, Finding[]>();
-  for (const c of [...eligible, ...eligibleStaples, ...eligibleLands]) {
+  for (const c of [...eligible, ...eligibleStaples, ...eligibleLands, ...(pool && combos ? wordPool.filter((w) => !isInDeck(w.oracle_id)) : [])]) {
     if (issues.has(c.oracle_id)) continue;
     const found = candidateIssues(deckInput, { line: { board: "main", quantity: 1, card: c }, tags: c.tags }, target);
     if (found.length) issues.set(c.oracle_id, found);
@@ -181,18 +199,32 @@ export function SuggestPanel(props: Props) {
       )
     : [];
   const landIds = new Set(lands.map((r) => r.card.oracle_id));
-  // A staple shows once, in the Staples row.
+  // Wording matches (v2): every card saying a phrase gets a little fit, here and in the main list; the best 8
+  // that aren't staples or lands get their own row. Hidden gems keeps its less-played meaning.
+  const wording = new Map(wordPool.map((c) => [c.oracle_id, c.says]));
+  const eligibleWords = pool && combos ? wordPool.filter((c) => !isInDeck(c.oracle_id) && !stapleIds.has(c.oracle_id) && !landIds.has(c.oracle_id)) : [];
+  const words: Scored[] = eligibleWords.length
+    ? scorePool(
+        eligibleWords.filter((c) => allowed(c) && (style !== "budget" || (c.price_usd != null && Number(c.price_usd) <= priceCap))),
+        { ...score, wording, dismissed: props.dismissed, limit: 8 },
+      )
+    : [];
+  const wordIds = new Set(words.map((r) => r.card.oracle_id));
+  // A card shows once: in the Lands, Staples or Wording row before the main list.
   const hiddenAbove = new Set(
-    [...eligible, ...eligibleStaples, ...eligibleLands].filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id)).map((c) => c.oracle_id),
+    [...eligible, ...eligibleStaples, ...eligibleLands, ...eligibleWords]
+      .filter((c) => issues.has(c.oracle_id) && !props.dismissed.has(c.oracle_id))
+      .map((c) => c.oracle_id),
   ).size;
   const rows: Scored[] = scorePool(
-    eligible.filter((c) => allowed(c) && !stapleIds.has(c.oracle_id) && !landIds.has(c.oracle_id)),
-    { ...score, dismissed: props.dismissed, role: !!source.roleKey },
+    eligible.filter((c) => allowed(c) && !stapleIds.has(c.oracle_id) && !landIds.has(c.oracle_id) && !wordIds.has(c.oracle_id)),
+    { ...score, wording, dismissed: props.dismissed, role: !!source.roleKey },
   );
   const nameOf = (x: string) =>
     pool?.find((c) => c.oracle_id === x)?.name ??
     staplePool.find((c) => c.oracle_id === x)?.name ??
     landPool.find((c) => c.oracle_id === x)?.name ??
+    wordPool.find((c) => c.oracle_id === x)?.name ??
     props.bracket.deck.lines.find((l) => l.card.oracle_id === x)?.card.name ??
     "a card in your deck";
   const flagsOf = (id: string) => (issues.get(id) ?? []).map((f) => cardFlag(f, id, nameOf));
@@ -213,6 +245,7 @@ export function SuggestPanel(props: Props) {
       best={best}
       row={r}
       why={why(kind)}
+      sayWhy={source.wording?.why ?? {}}
       roleNames={roleNames}
       above={flagsOf(r.card.oracle_id)}
       target={target}
@@ -271,7 +304,7 @@ export function SuggestPanel(props: Props) {
           <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
             {lands.map((r) => cardFor(r, false, "land"))}
           </ul>
-          {!staples.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
+          {!staples.length && !words.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
       )}
       {staples.length > 0 && (
@@ -281,10 +314,22 @@ export function SuggestPanel(props: Props) {
           <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
             {staples.map((r) => cardFor(r, false, "staple"))}
           </ul>
+          {!words.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
+        </section>
+      )}
+      {words.length > 0 && (
+        <section aria-label="Wording matches" className="mt-3">
+          <h3 className="eyebrow">Wording matches</h3>
+          <p className="text-[13px] opacity-70">
+            Cards whose rules text says what your commander says, or makes it happen, read straight from the text (so brand-new cards count too).
+          </p>
+          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+            {words.map((r) => cardFor(r, false))}
+          </ul>
           {rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
       )}
-      {pool !== null && combos !== null && rows.length === 0 && !staples.length && !lands.length && (
+      {pool !== null && combos !== null && rows.length === 0 && !staples.length && !lands.length && !words.length && (
         <p className="mt-3 text-sm opacity-60">
           {filter && !pool.length
             ? "No cards in your colors match these filters and this deck's themes. Try loosening a filter."
@@ -356,10 +401,13 @@ function SuggestionCard({
   above,
   target,
   why,
+  sayWhy,
 }: {
   best: boolean;
   row: Scored;
   why: string;
+  /** Wording phrase -> why it helps ("Feeds Omo: makes lands enter"). */
+  sayWhy: Record<string, string>;
   above: string[];
   target: BracketNumber;
   roleNames: Record<string, string>;
@@ -391,6 +439,19 @@ function SuggestionCard({
             Shares {row.shared.length} of your themes
           </p>
         )}
+        {!!row.says?.length && (
+          <p className="mt-1 text-[13px]">
+            <span className="font-medium text-gold">{sayWhy[row.says[0]] ?? "Says your commander's wording"}</span>
+            <span className="block opacity-80">
+              Says {row.says.slice(0, 2).map((s, i) => (
+                <span key={s}>
+                  {i > 0 && ", "}“{s}”
+                </span>
+              ))}
+              {row.says.length > 2 && ` +${row.says.length - 2} more`}
+            </span>
+          </p>
+        )}
         {above.map((a) => (
           <p key={a} className="mt-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
             ⚠ Above bracket {target}: {a}
@@ -407,7 +468,7 @@ function SuggestionCard({
               {prettyTag(t.label)}
             </span>
           ))}
-          {!row.fills.length && !row.shared.length && <span className="text-xs opacity-70">{why}</span>}
+          {!row.fills.length && !row.shared.length && !row.says?.length && <span className="text-xs opacity-70">{why}</span>}
         </div>
       </div>
       <div className="mt-auto grid grid-cols-2 gap-2">
