@@ -29,7 +29,8 @@ import {
 } from "@/lib/search/filters";
 import { loadCatalog, matchCatalog } from "@/lib/scryfall/catalog";
 import { wordingQuery } from "@/lib/search/wording";
-import { WordingChips } from "./wording-ui";
+import { AngleButtons, WordingChips } from "./wording-ui";
+import { angleQuery, type Angle } from "@/lib/search/wording-pairs";
 import { FilterFields } from "./filter-fields";
 
 /** The few fields we use from a Scryfall card object. */
@@ -74,9 +75,13 @@ type Props = {
   initialText?: string;
   /** Search by wording (v2): phrases from the commander's rules text, shown as tap-to-search chips. */
   wording?: string[];
+  /** Other angles (v2): ideas the commander's wording points to; a tap searches every phrase of one. */
+  angles?: Angle[];
+  /** Phrase -> reason, for the angle buttons' hover text. */
+  angleWhy?: Record<string, string>;
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wording = [], wish, ownedOf }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wording = [], angles = [], angleWhy = {}, wish, ownedOf }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -419,14 +424,30 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
         </div>
       )}
 
-      {wording.length > 0 && (!text.trim() || wording.some((p) => wordingQuery(p) === text.trim())) && (
-        <div className="mt-3 space-y-1.5 text-sm">
-          <p className="text-xs opacity-60">
-            Wording from {commanderName ?? "your commander"}: find cards that say the same thing (~ means the card&apos;s own name)
-          </p>
-          <WordingChips phrases={wording} active={text.trim()} onSearch={runExample} />
-        </div>
-      )}
+      {(wording.length > 0 || angles.length > 0) &&
+        (!text.trim() || wording.some((p) => wordingQuery(p) === text.trim()) || angles.some((a) => angleQuery(a) === text.trim())) && (
+          <div className="mt-3 space-y-3 text-sm">
+            {angles.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs opacity-60">Angles for {commanderName ?? "your commander"}: ideas its wording points to, every card for one idea</p>
+                <AngleButtons
+                  angles={angles}
+                  why={angleWhy}
+                  active={angles.find((a) => angleQuery(a) === text.trim())?.key ?? null}
+                  onPick={(a) => runExample(angleQuery(a))}
+                />
+              </div>
+            )}
+            {wording.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs opacity-60">
+                  Wording from {commanderName ?? "your commander"}: find cards that say the same thing (~ means the card&apos;s own name)
+                </p>
+                <WordingChips phrases={wording} active={text.trim()} onSearch={runExample} />
+              </div>
+            )}
+          </div>
+        )}
 
       {!sentQuery && !text.trim() && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

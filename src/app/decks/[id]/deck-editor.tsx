@@ -1277,6 +1277,8 @@ export function DeckEditor({
           onWithBanned={(on) => updatePrefs({ allowBanned: on })}
           initialText={searchSeed}
           wording={commanderWording.phrases}
+          angles={commanderWording.plan?.angles}
+          angleWhy={commanderWording.plan?.why}
           wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
           ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
         />

@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchCardDetails, type CardDetails } from "@/lib/scryfall/card-details";
 import { selectionPhrase, wordingPhrases, wordingQuery } from "@/lib/search/wording";
-import { wordingPlan, type WordingPlan } from "@/lib/search/wording-pairs";
+import { wordingPlan, type Angle, type WordingPlan } from "@/lib/search/wording-pairs";
 import type { CardSummary } from "@/lib/deck/model";
 
 const cardText = (details: CardDetails) => details.faces.map((f) => f.oracleText).join("\n");
@@ -71,6 +71,50 @@ export function WordingChips({ phrases, active, onSearch }: { phrases: string[];
             className={`min-h-11 rounded-full border px-3 text-left ${on ? "border-gold text-gold" : "border-foreground/20 hover:bg-foreground/10"}`}
           >
             “{p}”
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Other angles (v2, DefCat lesson 3): one button per idea the commander's wording points to, with how many cards in
+ * the deck already do it and how many more there are, when known. The whole button is the tap target.
+ */
+export function AngleButtons({
+  angles,
+  why,
+  counts,
+  active,
+  onPick,
+}: {
+  angles: Angle[];
+  why: Record<string, string>;
+  counts?: Record<string, { inDeck: number; toAdd: number }>;
+  active: string | null;
+  onPick: (angle: Angle) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {angles.map((a) => {
+        const on = active === a.key;
+        const n = counts?.[a.key];
+        return (
+          <button
+            key={a.key}
+            type="button"
+            onClick={() => onPick(a)}
+            aria-pressed={on}
+            title={why[a.phrases[0]] ?? a.key}
+            className={`min-h-11 rounded-xl border px-3 py-1 text-left text-sm ${on ? "border-gold text-gold" : "border-foreground/20 hover:bg-foreground/10"}`}
+          >
+            <span className="font-medium">{a.name}</span>
+            {n && (
+              <span className="block text-xs opacity-75">
+                {n.inDeck} in deck · {n.toAdd} more
+              </span>
+            )}
           </button>
         );
       })}
