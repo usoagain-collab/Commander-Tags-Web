@@ -52,7 +52,8 @@ export const MIRRORS: Mirror[] = [
     why: "multiplies counters",
   },
   {
-    when: /everything counter|loyalty counter|charge counter|oil counter|experience counter/,
+    // Not everything counters (David, Nov 10, 2026): a second one does nothing for Omo.
+    when: /loyalty counter|charge counter|oil counter|experience counter/,
     also: ["proliferate"],
     why: "adds more counters",
   },
@@ -116,6 +117,24 @@ export const MIRRORS: Mirror[] = [
     also: ["scry 1", "scry 2", "surveil 1", "surveil 2"],
     why: "scries or surveils",
   },
+  // Omo (David, Nov 10, 2026): lands that are every land type turn on every card that counts Gates, Urza lands,
+  // Lairs, Loci, Deserts, Caves or basic land types. "gate" alone would also match investigate and propagate.
+  {
+    when: /every land type|all basic land types|every basic land type/,
+    also: [
+      "gates with different names", "gates you control", "gate you control", "urza's", "for each locus", "lair",
+      "if you control a desert", "cave you control", "basic land types among lands you control", "domain",
+      "for each forest you control", "for each island you control", "for each swamp you control",
+      "for each mountain you control", "for each plains you control",
+    ],
+    why: "counts land types, and every land has them all",
+  },
+  // Omo again: creatures that are every creature type count for every typal card.
+  {
+    when: /every creature type|changeling/,
+    also: ["choose a creature type", "of the chosen type", "creature type of your choice", "shares a creature type", "changeling", "creatures of that type"],
+    why: "counts creature types, and every creature has them all",
+  },
 ];
 
 /** At most this many phrases go to the database in one wording search. */
@@ -138,6 +157,38 @@ const TOO_COMMON = new Set([
   "draw a card", "discard a card", "gain life", "create a treasure token", "exile the top card", "put into a graveyard", "put it into your hand",
   "at the beginning of your upkeep", "at the beginning of your end step", "at the beginning of combat on your turn", "at the beginning of each end step",
 ]);
+
+/**
+ * One phrase per reason: "choose a creature type" and "of the chosen type" are one idea (the same why), so a typal
+ * card counts once and doesn't outscore a Gate card for wording the same thing twice. First phrase kept.
+ */
+export function onePerReason(says: string[], why: Record<string, string>): string[] {
+  const seen = new Set<string>();
+  return says.filter((p) => {
+    const reason = why[p] ?? p;
+    if (seen.has(reason)) return false;
+    seen.add(reason);
+    return true;
+  });
+}
+
+/**
+ * Best rows first, at most `perReason` per reason (a row's first phrase), so one idea (typal for Omo) can't fill
+ * the whole Wording matches row; leftover slots go to the next best rows of any reason.
+ */
+export function spreadByReason<T extends { says?: string[] }>(rows: T[], why: Record<string, string>, limit = 8, perReason = 3): T[] {
+  const used = new Map<string, number>();
+  const picked = new Set<T>();
+  for (const r of rows) {
+    if (picked.size >= limit) break;
+    const reason = why[r.says?.[0] ?? ""] ?? r.says?.[0] ?? "";
+    if ((used.get(reason) ?? 0) >= perReason) continue;
+    used.set(reason, (used.get(reason) ?? 0) + 1);
+    picked.add(r);
+  }
+  for (const r of rows) if (picked.size < limit) picked.add(r);
+  return rows.filter((r) => picked.has(r));
+}
 
 /** The phrases Suggest searches for: the commanders' own wording first, then what feeds it. */
 export function wordingPlan(commanders: { name: string; type_line: string; text: string }[]): WordingPlan {

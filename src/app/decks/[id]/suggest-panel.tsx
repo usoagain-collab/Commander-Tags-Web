@@ -25,7 +25,7 @@ import { FilterFields } from "./filter-fields";
 import { appendSyntax, EMPTY_FILTERS, filterSyntax, type FilterForm } from "@/lib/search/filters";
 import { buildQuery } from "@/lib/search/query";
 import { scryfallOracleIds } from "@/lib/scryfall/oracle-ids";
-import type { WordingPlan } from "@/lib/search/wording-pairs";
+import { onePerReason, spreadByReason, type WordingPlan } from "@/lib/search/wording-pairs";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
 export type SuggestSource = {
@@ -200,13 +200,18 @@ export function SuggestPanel(props: Props) {
     : [];
   const landIds = new Set(lands.map((r) => r.card.oracle_id));
   // Wording matches (v2): every card saying a phrase gets a little fit, here and in the main list; the best 8
-  // that aren't staples or lands get their own row. Hidden gems keeps its less-played meaning.
-  const wording = new Map(wordPool.map((c) => [c.oracle_id, c.says]));
+  // that aren't staples or lands get their own row, at most 3 per reason. Hidden gems keeps its less-played meaning.
+  // Two phrases with one reason (typal: "choose a creature type", "of the chosen type") count once.
+  const sayWhy = source.wording?.why ?? {};
+  const wording = new Map(wordPool.map((c) => [c.oracle_id, onePerReason(c.says, sayWhy)]));
   const eligibleWords = pool && combos ? wordPool.filter((c) => !isInDeck(c.oracle_id) && !stapleIds.has(c.oracle_id) && !landIds.has(c.oracle_id)) : [];
   const words: Scored[] = eligibleWords.length
-    ? scorePool(
-        eligibleWords.filter((c) => allowed(c) && (style !== "budget" || (c.price_usd != null && Number(c.price_usd) <= priceCap))),
-        { ...score, wording, dismissed: props.dismissed, limit: 8 },
+    ? spreadByReason(
+        scorePool(
+          eligibleWords.filter((c) => allowed(c) && (style !== "budget" || (c.price_usd != null && Number(c.price_usd) <= priceCap))),
+          { ...score, wording, dismissed: props.dismissed, limit: 60 },
+        ),
+        sayWhy,
       )
     : [];
   const wordIds = new Set(words.map((r) => r.card.oracle_id));
