@@ -1,7 +1,8 @@
 "use client";
 
 // The playtest table on phones and touch screens (David, Nov 1, 2026). Same game logic as the desktop table, laid out
-// for one thumb: the field is an accordion (tap Lands or Play to give it the room), the side zones are small chips
+// for one thumb: the play area takes the room, with lands (and tokens, when any) always in view as rows of piles
+// under it (David, Nov 11, 2026: the old accordion meant tapping back and forth), the side zones are small chips
 // that open when needed, and everything but Next turn lives in the menu. Cards move with pointer events rather than
 // HTML5 drag, which touch browsers only start after a long press.
 import Link from "next/link";
@@ -29,8 +30,7 @@ import {
 type Update = (fn: (g: GameState) => GameState) => void;
 type MoveCard = (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
 type Tool = "search" | "scry" | "mill" | "tokens";
-type Section = "play" | "tokens" | "lands";
-/** "strip" is a closed field section: it means "the battlefield", with no particular spot. */
+/** "strip" is the lands or tokens row: it means "the battlefield", with no particular spot. */
 type DropName = "battlefield" | "strip" | "hand" | "graveyard" | "exile" | "command" | "library-top" | "library-bottom";
 
 const HINT_KEY = "playtest:phone-hint-seen";
@@ -223,7 +223,8 @@ function CounterPills({ counters }: { counters?: Record<string, number> }) {
 const playWidth = (count: number, scale: number) => Math.round((count <= 9 ? 84 : count <= 16 ? 66 : 52) * scale);
 /** Keeps the section's label readable above the first row of cards. */
 const LABEL_ROOM = 20;
-const pileWidth = (piles: number, scale: number) => Math.round((piles <= 8 ? 72 : piles <= 15 ? 56 : 46) * scale);
+/** Lands and tokens rows: small enough to leave the play area the room, big enough to read the name. */
+const PILE_CARD = 50;
 
 type Box = { width: number; height: number };
 
@@ -288,7 +289,6 @@ export function PhoneTable({
   /** A sideways phone: the field on the left, everything else in a column on the right. */
   landscape: boolean;
 }) {
-  const [section, setSection] = useState<Section>("play");
   // How-to strip, until dismissed. Browser storage is fine here: it's only a convenience.
   const [hint, setHint] = useState(false);
   useEffect(() => {
@@ -328,7 +328,7 @@ export function PhoneTable({
     watch.observe(el);
     return () => watch.disconnect();
     // Turning the phone rebuilds the field, so the element to watch changes too.
-  }, [section, landscape]);
+  }, [landscape]);
 
   useEffect(() => {
     freeSpotRef.current = (g) => freeSpot(g, box, size);
@@ -352,14 +352,13 @@ export function PhoneTable({
         if (!onBattlefield) play(iid);
         return;
       }
-      if (target === "battlefield" && el && section === "play") {
+      if (target === "battlefield" && el) {
         const r = el.getBoundingClientRect();
         return onMove(iid, "battlefield", { at: { x: ((ghost.x - r.left) / r.width) * 100, y: ((ghost.y - r.top) / r.height) * 100 } });
       }
       if (!onBattlefield) play(iid);
-      setSection("play");
     },
-    [game, onMove, play, section],
+    [game, onMove, play],
   );
 
   const { press, dragging, over, ghost } = useCardPress(onDrop, size);
@@ -396,16 +395,6 @@ export function PhoneTable({
   }, [box, landscape, tidy]);
 
   const untappedLands = lands.filter((iid) => !game.battlefield[iid].tapped).length;
-  const strips: { key: Section; label: string; detail?: string; show: boolean }[] = [
-    { key: "play", label: "Play", detail: `${others.length}`, show: true },
-    { key: "tokens", label: "Tokens", detail: `${tokenIds.length}`, show: tokenIds.length > 0 || section === "tokens" },
-    { key: "lands", label: "Lands", detail: lands.length ? `${lands.length} (${untappedLands} untapped)` : "0", show: true },
-  ];
-
-  // Tokens can all leave while their section is open.
-  useEffect(() => {
-    if (section === "tokens" && tokenIds.length === 0) setSection("play");
-  }, [section, tokenIds.length]);
 
   // A downward swipe shouldn't reload the page or bounce it. Restored on leaving.
   useEffect(() => {
@@ -425,8 +414,8 @@ export function PhoneTable({
         <Link href={`/decks/${deck.id}`} aria-label={`Back to ${deck.name}`} className="btn h-10 shrink-0 gap-1 px-2.5 text-sm font-bold">
           <span aria-hidden className="text-base leading-none">←</span> Deck
         </Link>
-        <span className="text-sm font-semibold tabular-nums">Turn {game.turn}</span>
-        <button type="button" onClick={() => setSheet("life")} aria-label={`Life ${game.life}. Change life`} className="mx-auto flex h-11 min-w-20 items-center justify-center gap-1.5 rounded-md px-2">
+        <span className="whitespace-nowrap text-sm font-semibold tabular-nums">Turn {game.turn}</span>
+        <button type="button" onClick={() => setSheet("life")} aria-label={`Life ${game.life}. Change life`} className="mx-auto flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-md px-2">
           <span aria-hidden className="text-xs opacity-70">
             Life
           </span>
@@ -438,72 +427,42 @@ export function PhoneTable({
       </header>
   );
 
+  const rowProps = { game, scale, ring: ring("strip"), dragging, onPress: pressCard, update, onInspect };
   const field = (
-      // The open section takes the room, the others shrink to a strip you can tap.
+      // Play takes the room; lands and tokens sit under it as rows, always in view.
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {strips
-          .filter((s) => s.show)
-          .map((s) =>
-            s.key === section ? (
-              <section key={s.key} data-drop="battlefield" aria-label={s.label} style={{ touchAction: s.key === "play" ? "none" : "pan-y" }} className={`felt relative min-h-0 flex-1 ${ring("battlefield")}`}>
-                <p className="pointer-events-none absolute left-2 top-0.5 z-0 text-[13px] font-semibold text-foreground/80">
-                  {s.label} {s.detail}
-                </p>
-                {s.key === "play" ? (
-                  <div ref={area} className="absolute inset-0 overflow-hidden">
-                    {others.length === 0 && (
-                      <p className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center text-sm text-foreground/75">
-                        Drag a card up from your hand to play it.
-                      </p>
-                    )}
-                    {others.map((iid) => {
-                      const p = game.battlefield[iid];
-                      return (
-                        // A tapped card sticks out sideways by a fifth of its width: keep that inside the field too.
-                        <div key={iid} className="enter absolute" style={{ left: `max(${p.tapped ? size * 0.2 : 0}px, min(${p.x}%, calc(100% - ${p.tapped ? size * 1.2 : size}px)))`, top: `max(0px, min(${p.y}%, calc(100% - ${Math.round(size * 1.4)}px)))` }}>
-                          <Tile
-                            inst={game.cards[iid]}
-                            width={size}
-                            tapped={p.tapped}
-                            faded={dragging === iid}
-                            label={`${game.cards[iid].name}${p.tapped ? ", tapped" : ""}`}
-                            onTap={() => update((g) => toggleTap(g, iid))}
-                            onHold={() => onInspect(iid)}
-                            onPress={(e) => pressCard(e, { iid, onTap: () => update((g) => toggleTap(g, iid)), onHold: () => onInspect(iid) })}
-                          >
-                            <CounterPills counters={p.counters} />
-                          </Tile>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <PileGrid
-                    game={game}
-                    ids={s.key === "lands" ? lands : tokenIds}
-                    scale={scale}
-                    empty={s.key === "lands" ? "No lands yet. Drag one up from your hand." : "No tokens."}
-                    dragging={dragging}
-                    onPress={pressCard}
-                    update={update}
-                    onInspect={onInspect}
-                  />
-                )}
-              </section>
-            ) : (
-              <button
-                key={s.key}
-                type="button"
-                data-drop="strip"
-                onClick={() => setSection(s.key)}
-                aria-label={`Open ${s.label}: ${s.detail}`}
-                className={`felt flex h-11 shrink-0 items-center justify-between border-t border-foreground/15 px-3 text-sm ${ring("strip")}`}
-              >
-                <span className="font-semibold">{s.label}</span>
-                <span className="tabular-nums text-foreground/80">{s.detail} ▴</span>
-              </button>
-            ),
-          )}
+        <section data-drop="battlefield" aria-label={`Play: ${others.length}`} style={{ touchAction: "none" }} className={`felt relative min-h-0 flex-1 ${ring("battlefield")}`}>
+          <p className="pointer-events-none absolute left-2 top-0.5 z-0 text-[13px] font-semibold text-foreground/80">Play {others.length}</p>
+          <div ref={area} className="absolute inset-0 overflow-hidden">
+            {others.length === 0 && (
+              <p className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center text-sm text-foreground/75">
+                Drag a card up from your hand to play it.
+              </p>
+            )}
+            {others.map((iid) => {
+              const p = game.battlefield[iid];
+              return (
+                // A tapped card sticks out sideways by a fifth of its width: keep that inside the field too.
+                <div key={iid} className="enter absolute" style={{ left: `max(${p.tapped ? size * 0.2 : 0}px, min(${p.x}%, calc(100% - ${p.tapped ? size * 1.2 : size}px)))`, top: `max(0px, min(${p.y}%, calc(100% - ${Math.round(size * 1.4)}px)))` }}>
+                  <Tile
+                    inst={game.cards[iid]}
+                    width={size}
+                    tapped={p.tapped}
+                    faded={dragging === iid}
+                    label={`${game.cards[iid].name}${p.tapped ? ", tapped" : ""}`}
+                    onTap={() => update((g) => toggleTap(g, iid))}
+                    onHold={() => onInspect(iid)}
+                    onPress={(e) => pressCard(e, { iid, onTap: () => update((g) => toggleTap(g, iid)), onHold: () => onInspect(iid) })}
+                  >
+                    <CounterPills counters={p.counters} />
+                  </Tile>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        {tokenIds.length > 0 && <PileRow label="Tokens" detail={`${tokenIds.length}`} ids={tokenIds} empty="No tokens." {...rowProps} />}
+        <PileRow label="Lands" detail={lands.length ? `${lands.length} (${untappedLands} untapped)` : "0"} ids={lands} empty="No lands yet. Drag one up from your hand." {...rowProps} />
       </div>
   );
 
@@ -560,7 +519,7 @@ export function PhoneTable({
       {landscape ? (
         <>
           {field}
-          <div className="flex w-64 shrink-0 flex-col overflow-hidden border-l border-foreground/10">
+          <div className="flex w-[clamp(18rem,36vw,26rem)] shrink-0 flex-col overflow-hidden border-l border-foreground/10">
             {topBar}
             {zones}
             {hand}
@@ -634,19 +593,26 @@ function ZoneChip({
 
 // ---------- lands and tokens ----------
 
-function PileGrid({
+/** One row of piles (lands or tokens) under the play area. Sideways swipes scroll it; a tap taps one card. */
+function PileRow({
+  label,
+  detail,
   game,
   ids,
   scale,
+  ring,
   empty,
   dragging,
   onPress,
   update,
   onInspect,
 }: {
+  label: string;
+  detail: string;
   game: GameState;
   ids: string[];
   scale: number;
+  ring: string;
   empty: string;
   dragging: string | null;
   onPress: (e: React.PointerEvent, opts: PressOptions) => void;
@@ -654,12 +620,16 @@ function PileGrid({
   onInspect: (iid: string) => void;
 }) {
   const piles = pilesOf(game, ids);
-  const width = pileWidth(piles.length, scale);
-  if (!piles.length) return <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center text-sm text-foreground/75">{empty}</p>;
+  const width = Math.round(PILE_CARD * scale);
   return (
-    <div className="absolute inset-0 overflow-y-auto">
+    <section data-drop="strip" aria-label={`${label}: ${detail}`} className={`felt relative shrink-0 border-t border-foreground/15 ${ring}`}>
+      <p className="pointer-events-none flex justify-between px-2 pt-0.5 text-[13px] font-semibold text-foreground/80">
+        <span>{label}</span>
+        <span className="tabular-nums">{detail}</span>
+      </p>
       {/* Room around each card, so a tapped (sideways) one doesn't cover its neighbour. */}
-      <div className="flex flex-wrap content-start gap-x-5 gap-y-3 px-5 pb-3 pt-7">
+      <div className="flex items-center overflow-x-auto pb-1.5 pt-1" style={{ columnGap: Math.round(width * 0.5), paddingInline: Math.round(width * 0.3), minHeight: Math.round(width * 1.4) + 10, scrollbarWidth: "none" }}>
+        {piles.length === 0 && <span className="m-auto text-[13px] text-foreground/70">{empty}</span>}
         {piles.map((pile) => {
           const iid = pile.ids[0];
           const inst = game.cards[iid];
@@ -671,6 +641,7 @@ function PileGrid({
               inst={inst}
               width={width}
               tapped={pile.tapped}
+              panX
               faded={dragging === iid && pile.ids.length === 1}
               label={name}
               onTap={tap}
@@ -683,15 +654,15 @@ function PileGrid({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 
 // ---------- hand ----------
 
-const HAND_CARD = 58;
+const HAND_CARD = 72;
 /** Each card keeps at least this much showing: about a fingertip. */
-const HAND_MIN_STEP = 42;
+const HAND_MIN_STEP = 50;
 
 function PhoneHand({
   game,
@@ -722,7 +693,8 @@ function PhoneHand({
     watch.observe(el);
     return () => watch.disconnect();
   }, []);
-  const width = Math.round(HAND_CARD * scale);
+  // Sideways, the hand wraps in the right column: three cards fill a row there.
+  const width = landscape ? Math.max(Math.round(HAND_CARD * scale), Math.floor((room - 20) / 3)) : Math.round(HAND_CARD * scale);
   const minStep = Math.round(HAND_MIN_STEP * scale);
   // Cards overlap just enough to fit; past that the row scrolls sideways.
   const step = ids.length > 1 ? Math.min(width + 4, Math.max(minStep, (room - width - 12) / (ids.length - 1))) : width;
