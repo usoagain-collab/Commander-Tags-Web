@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ManaSymbol } from "@/components/mana-cost";
+import { ArtCredit } from "@/components/art-credit";
 import { deleteDeck, renameDeck } from "./actions";
 import { useDeckDrop } from "./use-deck-drop";
 
@@ -12,6 +13,8 @@ export type DeckTile = {
   updated_at: string;
   card_count: number;
   art: string | null;
+  /** Illustrator of art, for the art credit. */
+  artist?: string | null;
   commander: string | null;
   identity: string[];
 };
@@ -53,6 +56,7 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
         <span className="absolute inset-x-0 bottom-0 px-4 pb-2">
           <span className="display line-clamp-2 block text-xl leading-tight">{deck.name}</span>
           {deck.commander && <span className="mt-0.5 block truncate text-sm opacity-85">{deck.commander}</span>}
+          {deck.art && <ArtCredit inline artists={[deck.artist]} className="mt-0.5 truncate" />}
         </span>
       </Link>
 

@@ -7,12 +7,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { ManaSymbol } from "@/components/mana-cost";
 import { printingImage } from "@/lib/deck/printing";
+import { ArtCredit } from "@/components/art-credit";
 
 export type PreconTile = {
   id: string;
   name: string;
   precon: { code: string; set_name: string; release: string | null; collector: boolean; type: string };
-  commanders: { name: string; printing_id: string | null; art: string | null }[];
+  commanders: { name: string; printing_id: string | null; art: string | null; artist?: string | null }[];
   identity: string[];
   size: number;
   price: number;
@@ -135,6 +136,7 @@ function Tile({ precon: p }: { precon: PreconTile }) {
       <span className="block p-3">
         <span className="display block truncate text-lg">{plainName(p.name)}</span>
         <span className="block truncate text-sm opacity-80">{p.commanders.map((c) => c.name).join(" & ")}</span>
+        {art && <ArtCredit inline artists={[lead?.artist]} className="mt-0.5 truncate" />}
         <span className="mt-2 flex items-center justify-between gap-2 text-sm">
           <span className="flex items-center gap-0.5">
             {colors.length ? colors.map((c) => <ManaSymbol key={c} symbol={c} size={18} />) : <ManaSymbol symbol="C" size={18} />}

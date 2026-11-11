@@ -974,9 +974,10 @@ export function DeckEditor({
   // The card sheet steps through cards in screen order.
   const order = sections.flatMap((s) => s.items.map((i) => i.line));
   // The deck image: a card's art, following its chosen printing. A card no longer in the deck falls back to the commander.
-  const coverArt = coverId
-    ? (["commander", "companion", "main", "maybe"] as Board[]).flatMap((b) => linesFor(entries, cards, b, shownPrintings)).find((l) => l.card.oracle_id === coverId)?.card.image_art_crop
+  const coverCard = coverId
+    ? (["commander", "companion", "main", "maybe"] as Board[]).flatMap((b) => linesFor(entries, cards, b, shownPrintings)).find((l) => l.card.oracle_id === coverId)?.card
     : null;
+  const coverArt = coverCard?.image_art_crop;
   const sheetIndex = sheet ? order.findIndex((l) => l.card.oracle_id === sheet.oracle_id && l.board === sheet.board) : -1;
   const sheetLine = sheetIndex >= 0 ? order[sheetIndex] : null;
   useEffect(() => {
@@ -1139,6 +1140,7 @@ export function DeckEditor({
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <DeckHero
         coverArt={coverArt}
+        coverArtist={coverCard?.artist}
         wide={previewMode !== "docked"}
         name={deck.name}
         commanders={commanders.map((l) => l.card)}

@@ -9,7 +9,7 @@ import { printingImage } from "@/lib/deck/printing";
 
 export const metadata = { title: "My decks · Deck Genome" };
 
-type Summary = { oracle_id: string; name: string; image_art_crop: string | null; color_identity: string[] };
+type Summary = { oracle_id: string; name: string; image_art_crop: string | null; artist: string | null; color_identity: string[] };
 
 export default async function DecksPage() {
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
@@ -17,15 +17,16 @@ export default async function DecksPage() {
   // RLS allows public decks plus the user's own; this page shows only their own.
   const { data: decks, error } = await supabase
     .from("decks")
-    .select("id, name, updated_at, cover_oracle_id, deck_cards(quantity, board, oracle_id, printing_id)")
+    .select("id, name, updated_at, cover_oracle_id, deck_cards(quantity, board, oracle_id, printing_id, printing_info)")
     .eq("owner_id", user!.id)
     .order("updated_at", { ascending: false });
 
   // Your default printings, for the art on each tile.
-  const { data: defaults } = await supabase.from("preferred_printings").select("oracle_id, printing_id");
+  const { data: defaults } = await supabase.from("preferred_printings").select("oracle_id, printing_id, printing_info");
   const defaultOf = new Map((defaults ?? []).map((p) => [p.oracle_id as string, p.printing_id as string]));
+  const defaultArtistOf = new Map((defaults ?? []).map((p) => [p.oracle_id as string, ((p.printing_info as { artist?: string | null } | null)?.artist ?? null)]));
 
-  type Row = { quantity: number; board: string; oracle_id: string; printing_id: string | null };
+  type Row = { quantity: number; board: string; oracle_id: string; printing_id: string | null; printing_info?: { artist?: string | null } | null };
   const rowsOf = (d: { deck_cards?: unknown }) => (d.deck_cards ?? []) as Row[];
   // Batches of 100: too many ids in one request make its URL too long.
   const commanderIds = [...new Set((decks ?? []).flatMap((d) => rowsOf(d).filter((r) => r.board === "commander" || r.oracle_id === d.cover_oracle_id).map((r) => r.oracle_id)))];
@@ -33,7 +34,7 @@ export default async function DecksPage() {
   for (let i = 0; i < commanderIds.length; i += 100) {
     const { data } = await supabase
       .from("card_summaries")
-      .select("oracle_id, name, image_art_crop, color_identity")
+      .select("oracle_id, name, image_art_crop, artist, color_identity")
       .in("oracle_id", commanderIds.slice(i, i + 100));
     for (const c of (data ?? []) as Summary[]) commanders.set(c.oracle_id, c);
   }
@@ -43,14 +44,19 @@ export default async function DecksPage() {
     const own = cards.filter((r) => r.board === "commander").flatMap((r) => commanders.get(r.oracle_id) ?? []);
     const cover = cards.find((r) => r.oracle_id === d.cover_oracle_id);
     const shownPrinting = (r: Row) => r.printing_id ?? defaultOf.get(r.oracle_id) ?? null;
-    const chosenArt = cover ? shownPrinting(cover) : cards.filter((r) => r.board === "commander").map(shownPrinting).find(Boolean);
+    // The row whose chosen or default printing gives the art, if any; otherwise the card's own art shows.
+    const printedRow = cover ? (shownPrinting(cover) ? cover : undefined) : cards.filter((r) => r.board === "commander").find((r) => shownPrinting(r));
+    const chosenArt = printedRow ? shownPrinting(printedRow) : null;
     const defaultArt = cover ? commanders.get(cover.oracle_id)?.image_art_crop : own[0]?.image_art_crop;
+    const printedArtist = (r: Row) => (r.printing_id ? r.printing_info?.artist : defaultArtistOf.get(r.oracle_id)) ?? null;
+    const defaultArtist = (cover ? commanders.get(cover.oracle_id)?.artist : own[0]?.artist) ?? null;
     return {
       id: d.id as string,
       name: d.name as string,
       updated_at: d.updated_at as string,
       card_count: cards.filter((r) => r.board === "commander" || r.board === "main").reduce((n, c) => n + c.quantity, 0),
       art: chosenArt ? printingImage(chosenArt, "art_crop") : (defaultArt ?? null),
+      artist: printedRow ? printedArtist(printedRow) : defaultArtist,
       commander: own.map((c) => c.name).join(" & ") || null,
       identity: [...new Set(own.flatMap((c) => c.color_identity))],
     };
