@@ -55,6 +55,28 @@ describe("wordingPlan", () => {
     expect(spreadByReason(rows.slice(0, 5), why, 4).map((r) => r.id)).toEqual([0, 1, 2, 3]);
   });
 
+  it("broader pairs (Nov 11, 2026): the right idea for commanders that had none, and not the wrong one", () => {
+    const names = (name: string, type_line: string, text: string) =>
+      wordingPlan([{ name, type_line, text }]).angles.filter((a) => !a.key.startsWith("Same wording")).map((a) => a.name);
+    expect(names("Sram, Senior Edificer", "Legendary Creature — Dwarf Advisor", "Whenever you cast an Aura, Equipment, or Vehicle spell, draw a card.")).toContain("Auras and Equipment");
+    expect(
+      names("The Gitrog Monster", "Legendary Creature — Frog Horror", "Whenever one or more land cards are put into your graveyard from anywhere, draw a card."),
+    ).toContain("Lands to the graveyard");
+    expect(names("Lyra Dawnbringer", "Legendary Creature — Angel", "Flying\nOther Angels you control get +1/+1 and have lifelink.")).toContain("Its creature type");
+    expect(names("Torbran, Thane of Red Fell", "Legendary Creature — Dwarf Noble", "If a red source you control would deal damage to an opponent or a permanent an opponent controls, it deals that much damage plus 2 instead.")).toEqual(["Burn and pings"]);
+    expect(
+      names("Mondrak, Glory Dominus", "Legendary Creature — Phyrexian Horror", "If one or more tokens would be created under your control, twice that many of those tokens are created instead."),
+    ).toContain("More tokens");
+    // Veyran doubles spell triggers, not creature triggers.
+    expect(
+      names(
+        "Veyran, Voice of Duality",
+        "Legendary Creature — Efreet Wizard",
+        "Magecraft — Whenever you cast or copy an instant or sorcery spell, Veyran gets +1/+1 until end of turn.\nIf you casting or copying an instant or sorcery spell causes a triggered ability of a permanent you control to trigger, that ability triggers an additional time.",
+      ),
+    ).toEqual(["Cheap spells"]);
+  });
+
   it("an angle is one Scryfall search for any of its phrases", () => {
     expect(angleQuery({ phrases: ["gate you control", "urza's"] })).toBe(`(o:"gate you control" or o:"urza's")`);
     expect(angleQuery({ phrases: ["landfall"] })).toBe(`o:"landfall"`);

@@ -17,6 +17,16 @@ export type Mirror = {
   why: string;
 };
 
+// Creature types common enough in commander text to look for ("other Angels you control get +1/+1").
+const CREATURE_TYPES = [
+  "angel", "assassin", "bat", "bear", "beast", "bird", "cat", "cleric", "construct", "demon", "devil",
+  "dinosaur", "dog", "dragon", "druid", "dwarf", "eldrazi", "elemental", "elf", "elves", "faerie", "fox", "fungus", "giant",
+  "goblin", "golem", "griffin", "horror", "human", "hydra", "insect", "knight", "kraken", "merfolk", "minotaur", "monk",
+  "mouse", "mutant", "ninja", "nightmare", "octopus", "ogre", "ooze", "orc", "pirate", "rabbit", "rat", "rogue", "samurai",
+  "saproling", "scarecrow", "serpent", "shaman", "skeleton", "sliver", "snake", "soldier", "sphinx", "spider", "spirit",
+  "squirrel", "treefolk", "vampire", "warlock", "warrior", "werewolf", "wizard", "wolf", "wolves", "zombie",
+];
+
 export const MIRRORS: Mirror[] = [
   {
     when: /whenever (a|one or more) lands? you control enters|landfall/,
@@ -25,13 +35,14 @@ export const MIRRORS: Mirror[] = [
     why: "makes lands enter",
   },
   {
-    when: /whenever (a|another|one or more) (nontoken )?creatures?( you control)? dies?/,
+    // Any creature type dies too: "whenever another Zombie you control dies" (Wilhelt). Only creatures die.
+    when: /whenever (a|another|one or more) (nontoken )?[a-z]+s?( you control)? dies?|if a creature dying causes a triggered ability/,
     also: ["sacrifice a creature", "sacrifice another creature", "destroy all creatures", "each player sacrifices a creature"],
     name: "Creatures dying",
     why: "makes creatures die",
   },
   {
-    when: /whenever (a|another|one or more) (nontoken )?creatures?( you control)? enters|when ~ enters/,
+    when: /whenever (a|another|one or more) (nontoken )?creatures?( or [a-z]+)?( you control)? enters|when ~ enters|if a permanent entering causes a triggered ability/,
     also: ["exile target creature you control, then return", "return it to the battlefield", "return those cards to the battlefield", "create a token that's a copy of"],
     name: "Blink and copies",
     why: "makes creatures enter again",
@@ -43,7 +54,7 @@ export const MIRRORS: Mirror[] = [
     why: "makes you discard",
   },
   {
-    when: /whenever you gain life/,
+    when: /whenever you gain life|if you(?:'ve)? gained (?:\d+|three) or more life|gained life this turn/,
     also: ["you gain 1 life", "each opponent loses 1 life and you gain", "gain life equal to"],
     name: "Repeat life gain",
     why: "gains life again and again",
@@ -68,25 +79,25 @@ export const MIRRORS: Mirror[] = [
     why: "adds more counters",
   },
   {
-    when: /create [^.]*tokens?|whenever (a|one or more) [^.]*tokens? /,
+    when: /create [^.]*tokens?|whenever (a|one or more) [^.]*tokens? |if one or more (creature )?tokens would be created|tokens? you control|if you created a token|(number of|for each) creatures? you control/,
     also: ["populate", "twice that many", "create that many", "create a token that's a copy of"],
     name: "More tokens",
     why: "makes more tokens",
   },
   {
-    when: /whenever you cast an instant or sorcery|whenever you cast a noncreature spell|whenever you cast your second spell/,
+    when: /whenever you cast (or copy )?an instant or sorcery|magecraft|whenever you cast a (noncreature )?spell|whenever you cast your second spell|instant and sorcery spells you cast cost/,
     also: ["copy target instant or sorcery spell", "costs {1} less to cast", "flashback"],
     name: "Cheap spells",
     why: "casts more spells for less",
   },
   {
-    when: /whenever ~ attacks|whenever you attack|whenever (a|one or more) creatures? you control attacks?/,
+    when: /whenever ~ attacks|whenever you attack|whenever (a|one or more) creatures? you control attacks?|if a creature attacking causes a triggered ability/,
     also: ["additional combat phase", "untap all creatures you control", "can't be blocked"],
     name: "Extra attacks",
     why: "attacks more often",
   },
   {
-    when: /whenever ~ deals combat damage to a player|whenever (a|one or more) creatures? you control deals? combat damage to a player/,
+    when: /deals? combat damage to (a player|an opponent)/,
     also: ["can't be blocked", "gains double strike", "has double strike"],
     name: "Evasion",
     why: "gets damage through",
@@ -104,13 +115,13 @@ export const MIRRORS: Mirror[] = [
     why: "fills your graveyard",
   },
   {
-    when: /whenever an artifact( you control)? enters|whenever one or more artifacts/,
+    when: /whenever an artifact( you control)? enters|whenever one or more artifacts|for each artifact you control/,
     also: ["create a treasure token", "create a clue token", "investigate", "create a food token"],
     name: "Artifact tokens",
     why: "makes artifacts enter",
   },
   {
-    when: /whenever an enchantment( you control)? enters|constellation/,
+    when: /whenever an enchantment( you control)? enters|constellation|whenever you cast an enchantment|enchantment spells you cast/,
     also: ["enchantment creature token", "return target enchantment card from your graveyard"],
     name: "Enchantments entering",
     why: "makes enchantments enter",
@@ -158,6 +169,104 @@ export const MIRRORS: Mirror[] = [
     also: ["choose a creature type", "of the chosen type", "creature type of your choice", "shares a creature type", "changeling", "creatures of that type"],
     name: "Typal",
     why: "counts creature types, and every creature has them all",
+  },
+  // Broadened Nov 11, 2026 (David: test beyond Omo, rarely played commanders too). Each pair below was added for
+  // commanders that had no angle: scripts/angles-coverage.mts lists them.
+  {
+    // A commander that names a creature type it cares about (other Angels you control, whenever a Dragon attacks).
+    when: new RegExp(
+      `\\b(${CREATURE_TYPES.join("|")})s? (creatures )?you control|\\b(${CREATURE_TYPES.join("|")}) creatures get|other (${CREATURE_TYPES.join("|")})s? |whenever (a|another) (${CREATURE_TYPES.join("|")})`,
+    ),
+    also: ["changeling", "choose a creature type", "of the chosen type", "shares a creature type", "is every creature type"],
+    name: "Its creature type",
+    why: "counts as its creature type",
+  },
+  {
+    // A commander that blinks (Abuelo) wants creatures with enter abilities to blink.
+    when: /exile (another )?target [^.]*you control[^.]*\. return (it|that card) to the battlefield|exile [^.]*you control, then return/,
+    also: ["when ~ enters", "whenever another creature you control enters", "when this creature enters"],
+    name: "Enter abilities",
+    why: "has an enter ability to reuse",
+  },
+  {
+    when: /\bauras?\b|\bequipment\b|\bequipped\b|enchanted creature|modified creature/,
+    also: ["equipped creature gets", "enchanted creature gets", "equip {1}", "attach target equipment", "aura spells you cast", "equipment spells you cast"],
+    name: "Auras and Equipment",
+    why: "suits it up",
+  },
+  {
+    when: /whenever you cast (an|a) (artifact|historic)|artifact spells you cast|artifacts you control|artifact creatures you control|historic spell/,
+    also: ["create a treasure token", "create a clue token", "artifact creature token", "colorless thopter", "colorless servo", "artifact spells you cast cost"],
+    name: "More artifacts",
+    why: "puts artifacts out",
+  },
+  {
+    when: /would deal (noncombat )?damage to an opponent|damage plus \d|double that damage|deals that much damage to each other opponent/,
+    also: ["deals 1 damage to each opponent", "deals 2 damage to each opponent", "deals 1 damage to any target", "damage to each opponent"],
+    name: "Burn and pings",
+    why: "deals damage in many small hits",
+  },
+  {
+    // Creature triggers that fire twice (Delney). Enter, attack and death doublers have their own pairs above;
+    // spell-trigger doublers (Veyran) are covered by Cheap spells.
+    when: /if a triggered ability of a creature you control/,
+    also: ["when ~ enters", "when this creature enters", "whenever another creature you control enters", "whenever ~ attacks", "whenever another creature you control dies"],
+    name: "Triggers to double",
+    why: "has triggers worth doubling",
+  },
+  {
+    when: /whenever an opponent loses life|life your opponents have lost|each opponent loses|that player loses \d life|opponents? (has|have) lost life/,
+    also: ["each opponent loses 1 life", "each opponent loses 2 life", "target opponent loses", "each opponent loses x life"],
+    name: "Drain",
+    why: "makes opponents lose life",
+  },
+  {
+    when: /whenever you lose life|pay \d life:|for each 1 life you've lost/,
+    also: ["pay 2 life", "you lose 1 life", "you lose 2 life", "pay x life"],
+    name: "Paying life",
+    why: "makes you lose life on purpose",
+  },
+  {
+    when: /land cards? (are |is )?put into your graveyard|land cards? from your graveyard|lands? (cards? )?in your graveyard/,
+    also: ["sacrifice a land", "discard a land card", "mill three cards", "return target land card from your graveyard"],
+    name: "Lands to the graveyard",
+    why: "puts lands in the graveyard",
+  },
+  {
+    when: /play (an|two|three) additional lands?|play any number of lands/,
+    also: ["play lands from your graveyard", "land card from your graveyard to your hand", "put that card into your hand if it's a land", "land card, reveal it, put it into your hand"],
+    name: "Lands to play",
+    why: "gives it lands to play",
+  },
+  {
+    when: /other permanents you control have indestructible|creatures you control (have|gain) indestructible/,
+    also: ["destroy all creatures", "destroy all nonland permanents", "destroy all artifacts", "destroy all other creatures"],
+    name: "One-sided wipes",
+    why: "turns board wipes one-sided",
+  },
+  {
+    when: /power greater than its base power|total power of creatures you control|with power 4 or greater|greatest power|power or toughness 1 or less|with power 2 or less/,
+    also: ["creatures you control get +1/+1", "put a +1/+1 counter on each creature you control", "double the power", "creatures you control get +2/+2"],
+    name: "Pump effects",
+    why: "changes creatures' power",
+  },
+  {
+    when: /twice that many of each of those kinds of counters|that many plus one of each|if you would put one or more counters|if you would proliferate|whenever you put one or more counters/,
+    also: ["put a +1/+1 counter on each creature you control", "enters with a +1/+1 counter", "put two +1/+1 counters", "proliferate", "loyalty counter"],
+    name: "Counter makers",
+    why: "puts counters out to multiply",
+  },
+  {
+    when: /whenever a spell or ability you control counters|whenever you counter/,
+    also: ["counter target spell", "counter target noncreature spell", "counter target activated or triggered ability"],
+    name: "Counterspells",
+    why: "counters spells",
+  },
+  {
+    when: /\btoxic\b|poison counters?|\binfect\b/,
+    also: ["proliferate", "toxic 1", "infect", "poison counter"],
+    name: "Poison",
+    why: "adds poison",
   },
 ];
 
