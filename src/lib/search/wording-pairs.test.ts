@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_WORDING_PHRASES, MIRRORS, onePerReason, spreadByReason, wordingPlan } from "./wording-pairs";
+import { angleQuery, MAX_WORDING_PHRASES, MIRRORS, onePerReason, spreadByReason, wordingPlan } from "./wording-pairs";
 
 const TATYOVA = {
   name: "Tatyova, Benthic Druid",
@@ -41,6 +41,9 @@ describe("wordingPlan", () => {
     expect(plan.phrases).toEqual(expect.arrayContaining(["gates with different names", "urza's", "choose a creature type"]));
     expect(plan.why["urza's"]).toBe("Feeds Omo: counts land types, and every land has them all");
     expect(plan.phrases).not.toContain("proliferate");
+    expect(plan.angles.map((a) => a.name)).toEqual(["Omo's own wording", "Land types", "Typal"]);
+    // An angle keeps every phrase, even ones the mixed search had no room for.
+    expect(plan.angles[2].phrases).toContain("creatures of that type");
   });
 
   it("one phrase per reason, and at most 3 rows per reason while others are waiting", () => {
@@ -50,6 +53,11 @@ describe("wordingPlan", () => {
     expect(spreadByReason(rows, why, 5).map((r) => r.id)).toEqual([0, 1, 2, 5, 6]);
     // Nothing else waiting: the fourth typal card still fills a slot.
     expect(spreadByReason(rows.slice(0, 5), why, 4).map((r) => r.id)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("an angle is one Scryfall search for any of its phrases", () => {
+    expect(angleQuery({ phrases: ["gate you control", "urza's"] })).toBe(`(o:"gate you control" or o:"urza's")`);
+    expect(angleQuery({ phrases: ["landfall"] })).toBe(`o:"landfall"`);
   });
 
   it("mirror phrases are plain lower-case rules text, at least 4 characters (what the database matches)", () => {

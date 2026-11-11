@@ -25,7 +25,8 @@ import { FilterFields } from "./filter-fields";
 import { appendSyntax, EMPTY_FILTERS, filterSyntax, type FilterForm } from "@/lib/search/filters";
 import { buildQuery } from "@/lib/search/query";
 import { scryfallOracleIds } from "@/lib/scryfall/oracle-ids";
-import { onePerReason, spreadByReason, type WordingPlan } from "@/lib/search/wording-pairs";
+import { onePerReason, spreadByReason, type Angle, type WordingPlan } from "@/lib/search/wording-pairs";
+import { AngleButtons } from "./wording-ui";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
 export type SuggestSource = {
@@ -79,6 +80,10 @@ export function SuggestPanel(props: Props) {
   const [landPool, setLandPool] = useState<PoolCard[]>([]);
   // Overall Suggest (v2): cards whose rules text says the commander's wording or what feeds it.
   const [wordPool, setWordPool] = useState<(PoolCard & { says: string[] })[]>([]);
+  // Other angles (v2): per idea, cards in the deck that already do it and how many more there are; one idea open.
+  const [angleCounts, setAngleCounts] = useState<Record<string, { inDeck: number; toAdd: number }>>({});
+  const [angle, setAngle] = useState<Angle | null>(null);
+  const [anglePool, setAnglePool] = useState<(PoolCard & { says: string[] })[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [combos, setCombos] = useState<ComboRow[] | null>(null);
   const [showAbove, setShowAbove] = useState(false);
@@ -169,13 +174,60 @@ export function SuggestPanel(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, supabase]);
 
+  // Angle counts: one wording search per idea in the commander's colors, split into in the deck and not.
+  const angles = source.wording?.angles ?? [];
+  const anglesKey = angles.map((a) => a.phrases.join(";")).join("|");
+  useEffect(() => {
+    let live = true;
+    setAngleCounts({});
+    if (!angles.length) return;
+    const inDeck = new Set(deckIds);
+    Promise.all(
+      angles.map(async (a) => {
+        const { data, error } = await supabase.rpc("cards_with_wording", { p_phrases: a.phrases, p_identity: identity, lim: 2000 });
+        if (error) return null;
+        const ids = ((data ?? []) as { oracle_id: string }[]).map((r) => r.oracle_id);
+        const have = ids.filter((id) => inDeck.has(id)).length;
+        return [a.key, { inDeck: have, toAdd: ids.length - have }] as const;
+      }),
+    ).then((rows) => live && setAngleCounts(Object.fromEntries(rows.filter((r) => r !== null))));
+    return () => {
+      live = false;
+    };
+    // Counted once per opening, like the pool.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anglesKey, identity.join(""), supabase]);
+
+  // One idea open: every card for it (up to 60, most phrases then most played), scored like the rest.
+  useEffect(() => {
+    let live = true;
+    setAnglePool(null);
+    if (!angle) return;
+    supabase
+      .rpc("wording_pool", { p_phrases: angle.phrases, p_identity: identity, p_exclude: deckIds, p_lim: 60 })
+      .then(({ data, error }) => {
+        if (!live) return;
+        if (error) setError(`Couldn't load the cards for ${angle.name}: ${error.message}`);
+        setAnglePool(error ? [] : ((data ?? []) as (PoolCard & { says: string[] })[]));
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [angle?.key, supabase]);
+
   const target = props.bracket.target;
   const eligible = pool && combos ? pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))) : [];
   const eligibleStaples = pool && combos ? staplePool.filter((c) => !isInDeck(c.oracle_id)) : [];
   const eligibleLands = pool && combos ? landPool.filter((c) => !isInDeck(c.oracle_id)) : [];
   const deckInput: EvaluateInput = { ...props.bracket.deck, combos: combos ?? [] };
   const issues = new Map<string, Finding[]>();
-  for (const c of [...eligible, ...eligibleStaples, ...eligibleLands, ...(pool && combos ? wordPool.filter((w) => !isInDeck(w.oracle_id)) : [])]) {
+  for (const c of [
+    ...eligible,
+    ...eligibleStaples,
+    ...eligibleLands,
+    ...(pool && combos ? [...wordPool, ...(anglePool ?? [])].filter((w) => !isInDeck(w.oracle_id)) : []),
+  ]) {
     if (issues.has(c.oracle_id)) continue;
     const found = candidateIssues(deckInput, { line: { board: "main", quantity: 1, card: c }, tags: c.tags }, target);
     if (found.length) issues.set(c.oracle_id, found);
@@ -215,6 +267,13 @@ export function SuggestPanel(props: Props) {
       )
     : [];
   const wordIds = new Set(words.map((r) => r.card.oracle_id));
+  const angleRows: Scored[] =
+    angle && anglePool && pool && combos
+      ? scorePool(
+          anglePool.filter((c) => !isInDeck(c.oracle_id) && allowed(c) && (style !== "budget" || (c.price_usd != null && Number(c.price_usd) <= priceCap))),
+          { ...score, wording: new Map(anglePool.map((c) => [c.oracle_id, onePerReason(c.says, sayWhy)])), dismissed: props.dismissed, limit: 60 },
+        )
+      : [];
   // A card shows once: in the Lands, Staples or Wording row before the main list.
   const hiddenAbove = new Set(
     [...eligible, ...eligibleStaples, ...eligibleLands, ...eligibleWords]
@@ -322,15 +381,50 @@ export function SuggestPanel(props: Props) {
           {!words.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
       )}
-      {words.length > 0 && (
+      {(words.length > 0 || (angles.length > 0 && pool !== null)) && (
         <section aria-label="Wording matches" className="mt-3">
           <h3 className="eyebrow">Wording matches</h3>
           <p className="text-[13px] opacity-70">
             Cards whose rules text says what your commander says, or makes it happen, read straight from the text (so brand-new cards count too).
           </p>
-          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
-            {words.map((r) => cardFor(r, false))}
-          </ul>
+          {angles.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-[13px] opacity-70">Angles: the ideas behind them. Tap one for every card for that idea.</p>
+              <AngleButtons
+                angles={angles}
+                why={sayWhy}
+                counts={angleCounts}
+                active={angle?.key ?? null}
+                onPick={(a) => setAngle(angle?.key === a.key ? null : a)}
+              />
+            </div>
+          )}
+          {angle ? (
+            <>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-medium">
+                  Every card for {angle.name}
+                  {anglePool && (anglePool.length >= 60 ? ` (the top ${angleRows.length})` : ` (${angleRows.length})`)}
+                </h4>
+                <button type="button" onClick={() => setAngle(null)} className="min-h-11 rounded-lg px-3 text-sm opacity-80 hover:bg-foreground/10">
+                  ← Back to the mix
+                </button>
+              </div>
+              {anglePool === null ? (
+                <p className="mt-2 text-sm opacity-70">Reading every card for {angle.name}…</p>
+              ) : angleRows.length === 0 ? (
+                <p className="mt-2 text-sm opacity-60">Nothing new for this idea in your colors (cards already in the deck, dismissed or over the price cap are left out).</p>
+              ) : (
+                <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+                  {angleRows.map((r) => cardFor(r, false))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+              {words.map((r) => cardFor(r, false))}
+            </ul>
+          )}
           {rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
         </section>
       )}
