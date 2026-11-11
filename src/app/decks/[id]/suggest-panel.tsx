@@ -21,7 +21,7 @@ import { candidateIssues, type ComboRow, type EvaluateInput, type Finding } from
 import type { BracketNumber } from "@/lib/brackets/rules";
 import { cardFlag } from "./bracket-panel";
 import { FiltersBox } from "./filters-box";
-import { RESULT_GRID, ResultCard, ShowingChip } from "./result-card";
+import { HiddenNote, RESULT_GRID, ResultCard, ShowingChip, type HiddenReason } from "./result-card";
 import { appendSyntax, EMPTY_FILTERS, filterSyntax, type FilterForm } from "@/lib/search/filters";
 import { buildQuery } from "@/lib/search/query";
 import { scryfallOracleIds } from "@/lib/scryfall/oracle-ids";
@@ -93,6 +93,7 @@ export function SuggestPanel(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [combos, setCombos] = useState<ComboRow[] | null>(null);
   const [showAbove, setShowAbove] = useState(false);
+  const [reviewDismissed, setReviewDismissed] = useState(false);
   // Scryfall filters (v2, Nov 8, 2026): the pool is narrowed to the cards a Scryfall search finds. Kept for the visit.
   const [filterDraft, setFilterDraft] = useState<FilterForm>(EMPTY_FILTERS);
   const [ownDraft, setOwnDraft] = useState("");
@@ -322,7 +323,7 @@ export function SuggestPanel(props: Props) {
       onOpen={() => props.onOpen(openList, Math.max(0, openList.findIndex((c) => c.oracle_id === r.card.oracle_id)))}
       onAdd={(board) => onAdd(r.card, board)}
       wish={props.wish ? { on: props.wish.has(r.card.oracle_id), toggle: () => props.wish!.toggle(r.card.oracle_id) } : undefined}
-      onDismiss={() => props.onDismiss(r.card)}
+      dismiss={{ on: false, toggle: () => props.onDismiss(r.card) }}
     >
       <WhyLines row={r} why={why(kind)} sayWhy={sayWhy} roleNames={roleNames} above={flagsOf(r.card.oracle_id)} target={target} />
     </ResultCard>
@@ -336,6 +337,24 @@ export function SuggestPanel(props: Props) {
       : overall
         ? "picks for the whole deck"
         : `picks with the ${prettyTag(source.label)} tag`;
+
+  // What the picks leave out, at the top so a card hidden long ago isn't forgotten.
+  const nDismissed = props.dismissed.size;
+  const hiddenReasons: HiddenReason[] = [
+    ...(nDismissed
+      ? [
+          {
+            text: `${nDismissed} ${nDismissed === 1 ? "card" : "cards"} you marked Not for this deck ${nDismissed === 1 ? "is" : "are"} never suggested`,
+            action: { label: reviewDismissed ? "Close" : "Review", onClick: () => setReviewDismissed((o) => !o) },
+          },
+        ]
+      : []),
+    ...(hiddenAbove > 0 && !showAbove
+      ? [{ text: `${hiddenAbove} ${hiddenAbove === 1 ? "card" : "cards"} would go above bracket ${target}`, action: { label: "Show", onClick: () => setShowAbove(true) } }]
+      : showAbove
+        ? [{ text: `Showing cards above bracket ${target} (marked ⚠)`, action: { label: "Hide", onClick: () => setShowAbove(false) } }]
+        : []),
+  ];
 
   return (
     <div>
@@ -365,6 +384,9 @@ export function SuggestPanel(props: Props) {
         onClear={props.onOverall}
         clearLabel="Back to picks for the whole deck"
       />
+      <HiddenNote reasons={hiddenReasons}>
+        {reviewDismissed && props.dismissed.size > 0 && <DismissedList ids={[...props.dismissed]} pool={pool ?? []} onRestore={props.onRestore} />}
+      </HiddenNote>
       {props.saveError && <p className="mt-1 text-sm text-red-400">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
       {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
@@ -377,13 +399,6 @@ export function SuggestPanel(props: Props) {
             ))}
           </ul>
         </>
-      )}
-      {(hiddenAbove > 0 || showAbove) && (
-        <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
-          <input type="checkbox" checked={showAbove} onChange={(e) => setShowAbove(e.target.checked)} />
-          Show cards above bracket {target}
-          <span className="opacity-60">({hiddenAbove} {showAbove ? "marked" : "hidden"})</span>
-        </label>
       )}
       {lands.length > 0 && (
         <section aria-label="Lands" className="mt-3">
@@ -480,53 +495,43 @@ export function SuggestPanel(props: Props) {
           {rows.map((r, i) => cardFor(r, i === 0))}
         </ul>
       )}
-      {props.dismissed.size > 0 && <DismissedList ids={[...props.dismissed]} pool={pool ?? []} onRestore={props.onRestore} />}
     </div>
   );
 }
 
-/** "Show dismissed (N)": the cards marked Not for this deck, each with Bring back. */
+/** The cards marked Not for this deck, each with Bring back (opened from the hidden-cards note). */
 function DismissedList({ ids, pool, onRestore }: { ids: string[]; pool: PoolCard[]; onRestore: (id: string) => void }) {
   const supabase = useMemo(() => createClient(), []);
-  const [open, setOpen] = useState(false);
   const [names, setNames] = useState<Record<string, string>>({});
   const known: Record<string, string> = { ...Object.fromEntries(pool.map((c) => [c.oracle_id, c.name])), ...names };
   const missing = ids.filter((id) => !known[id]);
 
   useEffect(() => {
-    if (!open || !missing.length) return;
+    if (!missing.length) return;
     fetchSummaries(supabase, missing)
       .then((found) => setNames((n) => ({ ...n, ...Object.fromEntries(found.map((c) => [c.oracle_id, c.name])) })))
       .catch(() => undefined);
     // Look names up once per opening; ids missing from our data just show as "Unknown card".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, supabase]);
+  }, [supabase]);
 
   return (
-    <div className="mt-4 border-t border-foreground/10 pt-3 text-sm">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="min-h-11 rounded-lg px-2 opacity-70 hover:opacity-100">
-        {open ? "Hide" : "Show"} dismissed ({ids.length})
-      </button>
-      {open && (
-        <ul className="mt-1 flex flex-wrap gap-2">
-          {ids
-            .map((id) => ({ id, name: known[id] ?? "Unknown card" }))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(({ id, name }) => (
-              <li key={id} className="flex items-center gap-1 rounded-lg border border-foreground/15 pl-3">
-                <span>{name}</span>
-                <button type="button" onClick={() => onRestore(id)} className="min-h-11 rounded-r-lg px-3 text-xs underline opacity-70 hover:opacity-100">
-                  Bring back
-                </button>
-              </li>
-            ))}
-        </ul>
-      )}
-    </div>
+    <ul className="mb-1.5 mt-1 flex flex-wrap gap-2">
+      {ids
+        .map((id) => ({ id, name: known[id] ?? "Unknown card" }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(({ id, name }) => (
+          <li key={id} className="flex items-center gap-1 rounded-lg border border-foreground/15 bg-background pl-3">
+            <span>{name}</span>
+            <button type="button" onClick={() => onRestore(id)} className="min-h-11 rounded-r-lg px-3 text-xs underline opacity-80 hover:opacity-100">
+              Bring back
+            </button>
+          </li>
+        ))}
+    </ul>
   );
 }
 
-/** Why a suggestion is here: shared themes, wording, bracket warnings, roles it fills. */
 function WhyLines({
   row,
   roleNames,
