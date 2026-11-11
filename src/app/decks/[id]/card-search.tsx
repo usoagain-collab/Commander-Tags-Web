@@ -31,7 +31,7 @@ import { loadCatalog, matchCatalog } from "@/lib/scryfall/catalog";
 import { wordingQuery } from "@/lib/search/wording";
 import { WordingChips } from "./wording-ui";
 import { FiltersBox } from "./filters-box";
-import { RESULT_GRID, ResultCard, ShowingChip } from "./result-card";
+import { HiddenNote, RESULT_GRID, ResultCard, ShowingChip, type HiddenReason } from "./result-card";
 
 /** The few fields we use from a Scryfall card object. */
 type ScryfallCard = {
@@ -61,6 +61,8 @@ type Props = {
   onAdd: (card: CardSummary, board: Board) => void;
   /** Wish list (v2): mark and toggle cards on your list. */
   wish?: { has: (oracleId: string) => boolean; toggle: (oracleId: string) => void };
+  /** Not for this deck: hidden from search results too, unless shown; the same list Suggested uses. */
+  dismissed?: { has: (oracleId: string) => boolean; toggle: (card: CardSummary) => void };
   /** Collection tracking (v2): copies you own of a card, when you track a collection. */
   ownedOf?: (oracleId: string) => number;
   onPreview: (card: CardSummary | null) => void;
@@ -80,7 +82,7 @@ type Props = {
   wording?: string[];
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onOpen, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, initialLabel, wording = [], wish, ownedOf }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onOpen, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, initialLabel, wording = [], wish, dismissed, ownedOf }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -299,8 +301,29 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     const id = oracleIdOf(sf);
     return !!id && !!ownedOf && ownedOf(id) > 0;
   };
-  const shown = results.filter((sf) => (!hideInDeck || !isInDeck(sf)) && (!onlyOwned || !ownedOf || isOwned(sf)));
+  const [showDismissed, setShowDismissed] = useState(false);
+  const isDismissed = (sf: ScryfallCard) => {
+    const id = oracleIdOf(sf);
+    return !!id && !!dismissed?.has(id);
+  };
+  const shown = results.filter(
+    (sf) => (!hideInDeck || !isInDeck(sf)) && (!onlyOwned || !ownedOf || isOwned(sf)) && (showDismissed || !isDismissed(sf)),
+  );
   const hiddenCount = results.length - shown.length;
+  // What the list leaves out, each with its own way back (counted per reason, so a card can count twice).
+  const plural = (n: number) => `${n} ${n === 1 ? "card" : "cards"}`;
+  const nDismissed = results.filter(isDismissed).length;
+  const nInDeck = hideInDeck ? results.filter(isInDeck).length : 0;
+  const nUnowned = onlyOwned && ownedOf ? results.filter((sf) => !isOwned(sf)).length : 0;
+  const hiddenReasons: HiddenReason[] = [
+    ...(nDismissed && !showDismissed
+      ? [{ text: `${plural(nDismissed)} you marked Not for this deck`, action: { label: "Show", onClick: () => setShowDismissed(true) } }]
+      : nDismissed
+        ? [{ text: `Showing ${plural(nDismissed)} you marked Not for this deck`, action: { label: "Hide", onClick: () => setShowDismissed(false) } }]
+        : []),
+    ...(nInDeck ? [{ text: `${plural(nInDeck)} already in your deck`, action: { label: "Show", onClick: () => onHideInDeck(false) } }] : []),
+    ...(nUnowned ? [{ text: `${plural(nUnowned)} you don't own`, action: { label: "Show", onClick: () => setOnlyOwned(false) } }] : []),
+  ];
 
   // The cards the sheet steps through: results we've matched to our data, in screen order.
   const openable = shown.map((sf) => oracleIdOf(sf)).flatMap((id) => (id && summaries[id] ? [summaries[id]] : []));
@@ -496,6 +519,11 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
           clearLabel="Clear the search"
         />
       )}
+      {sentQuery && (
+        <HiddenNote reasons={hiddenReasons}>
+          {shown.length === 0 && nextPage && hiddenCount > 0 && <p className="pb-1 text-xs opacity-75">Everything on this page is hidden. Show more loads the next page.</p>}
+        </HiddenNote>
+      )}
       {warnings.map((w) => (
         <p key={w} className="mt-2 text-sm text-amber-700 dark:text-amber-400">
           Scryfall: {w}
@@ -503,12 +531,6 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       ))}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       {total === 0 && !error && !loading && <p className="mt-3 text-sm opacity-70">No cards match that search.</p>}
-      {(hideInDeck || onlyOwned) && hiddenCount > 0 && (
-        <p className="mt-2 text-xs opacity-60">
-          {hiddenCount} {hiddenCount === 1 ? "card" : "cards"} hidden ({[hideInDeck && "in your deck", onlyOwned && "not owned"].filter(Boolean).join(" or ")})
-          {shown.length === 0 && nextPage ? " · Show more to see the next page" : ""}
-        </p>
-      )}
 
       {shown.length > 0 && (
         <ul className={`mt-3 ${RESULT_GRID}`}>
@@ -526,6 +548,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
                 onOpen={() => card && onOpen(openable, Math.max(0, openable.indexOf(card)))}
                 onAdd={(board) => card && onAdd(card, board)}
                 wish={wish && card ? { on: wish.has(card.oracle_id), toggle: () => wish.toggle(card.oracle_id) } : undefined}
+                dismiss={dismissed && card ? { on: dismissed.has(card.oracle_id), toggle: () => dismissed.toggle(card) } : undefined}
                 pending={
                   matching ? (
                     <p className="min-h-6 text-xs opacity-50">Matching…</p>

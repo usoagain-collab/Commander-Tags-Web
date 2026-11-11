@@ -20,7 +20,7 @@ export function ResultCard({
   onPreview,
   onAdd,
   wish,
-  onDismiss,
+  dismiss,
   pending,
   children,
 }: {
@@ -35,8 +35,8 @@ export function ResultCard({
   onPreview: () => void;
   onAdd: (board: Board) => void;
   wish?: { on: boolean; toggle: () => void };
-  /** Suggestions only: Not for this deck. */
-  onDismiss?: () => void;
+  /** Not for this deck: `on` = already marked (shown because the list is showing hidden cards), toggle marks or brings back. */
+  dismiss?: { on: boolean; toggle: () => void };
   /** Shown in place of the buttons when `card` is missing (Matching…, or fetch a new card). */
   pending?: ReactNode;
   /** Why it's here: shared themes, roles it fills, wording, bracket warnings. */
@@ -93,8 +93,8 @@ export function ResultCard({
           >
             + Maybe
           </button>
-          {(wish || onDismiss) && (
-            <div className={`col-span-2 grid gap-2 ${wish && onDismiss ? "grid-cols-[auto_minmax(0,1fr)]" : ""}`}>
+          {(wish || dismiss) && (
+            <div className={`col-span-2 grid gap-2 ${wish && dismiss ? "grid-cols-[auto_minmax(0,1fr)]" : ""}`}>
               {wish && (
                 <button
                   type="button"
@@ -105,17 +105,17 @@ export function ResultCard({
                   className={`min-h-10 rounded-lg border px-3 text-sm hover:bg-foreground/10 ${wish.on ? "border-gold text-gold" : "border-foreground/20"}`}
                 >
                   {wish.on ? "♥" : "♡"}
-                  {!onDismiss && <span className="ml-1.5">{wish.on ? "On your wish list" : "Wish list"}</span>}
+                  {!dismiss && <span className="ml-1.5">{wish.on ? "On your wish list" : "Wish list"}</span>}
                 </button>
               )}
-              {onDismiss && (
+              {dismiss && (
                 <button
                   type="button"
-                  onClick={onDismiss}
-                  title="Don't suggest this card for this deck again"
-                  className="min-h-10 rounded-lg px-2 text-[13px] opacity-75 hover:bg-foreground/10 hover:opacity-100"
+                  onClick={dismiss.toggle}
+                  title={dismiss.on ? "Show it in this deck's suggestions and searches again" : "Hide it from this deck's suggestions and searches"}
+                  className={`min-h-10 rounded-lg px-2 text-[13px] hover:bg-foreground/10 ${dismiss.on ? "border border-amber-500/50 text-amber-700 dark:text-amber-300" : "opacity-75 hover:opacity-100"}`}
                 >
-                  Not for this deck
+                  {dismiss.on ? "Bring back" : "Not for this deck"}
                 </button>
               )}
             </div>
@@ -125,6 +125,36 @@ export function ResultCard({
         <div className="mt-auto">{pending}</div>
       )}
     </li>
+  );
+}
+
+/**
+ * What a result list is leaving out, right under the Showing line in both tabs (David, Nov 11, 2026: at the top, so
+ * nobody forgets a card they hid a year ago). Each reason has its own Show / Hide button.
+ */
+export type HiddenReason = { text: string; action?: { label: string; onClick: () => void } };
+
+export function HiddenNote({ reasons, children }: { reasons: HiddenReason[]; children?: ReactNode }) {
+  if (!reasons.length) return null;
+  return (
+    <div role="status" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-400/10 px-3 py-1.5 text-sm">
+      <ul className="space-y-0.5">
+        {reasons.map((r) => (
+          <li key={r.text} className="flex min-h-10 flex-wrap items-center gap-x-3">
+            <span className="min-w-0 flex-1">
+              <span aria-hidden>👁 </span>
+              {r.text}
+            </span>
+            {r.action && (
+              <button type="button" onClick={r.action.onClick} className="min-h-10 rounded-lg px-2 font-medium text-amber-800 underline hover:bg-foreground/10 dark:text-amber-300">
+                {r.action.label}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {children}
+    </div>
   );
 }
 

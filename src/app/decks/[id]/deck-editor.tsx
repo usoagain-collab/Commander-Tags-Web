@@ -1009,6 +1009,17 @@ export function DeckEditor({
   const closePanel = useCallback(() => setPanel(null), []);
   const openLine = (l: DeckLine) => setSheet({ oracle_id: l.card.oracle_id, board: l.board });
 
+  /** Not for this deck, from Suggested, Search or the card sheet: hides the card from both tabs for this deck, or brings it back. */
+  const toggleDismissed = (card: CardSummary) => {
+    if (dismissed.dismissed.has(card.oracle_id)) {
+      dismissed.restore(card.oracle_id);
+      say(`${card.name} is back in this deck's suggestions and searches.`);
+    } else {
+      dismissed.dismiss(card.oracle_id);
+      say(`${card.name} is hidden from this deck's suggestions and searches. The note at the top of the list brings it back.`);
+    }
+  };
+
   /** The card sheet's collection box for one printing of a card (a deck row's, or a search result's default). */
   const collectionBox = (id: string, part: ShownPart) => {
     if (!userId || !collection.loaded) return undefined;
@@ -1058,6 +1069,7 @@ export function DeckEditor({
           : n("maybe") > 0
             ? "On your maybeboard"
             : "Not in this deck yet";
+    const shownStatus = dismissed.dismissed.has(id) ? `${status} · marked Not for this deck` : status;
     const move = (by: number) => setFound({ ...f, index: (f.index + by + f.list.length) % f.list.length });
     return (
       <CardSheet
@@ -1096,7 +1108,7 @@ export function DeckEditor({
         }}
         candidate={{
           context: f.from === "search" ? "Search result" : "Suggestion",
-          status,
+          status: shownStatus,
           actions: (
             <>
               <ActionButton gold onClick={() => addWithNotice(card, "main")}>
@@ -1106,18 +1118,7 @@ export function DeckEditor({
               {card.can_be_commander && n("commander") === 0 && (
                 <ActionButton onClick={() => addWithNotice(card, "commander")}>♛ Make commander</ActionButton>
               )}
-              {f.from === "suggest" && (
-                <ActionButton
-                  onClick={() => {
-                    dismissed.dismiss(id);
-                    say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
-                    const list = f.list.filter((c) => c.oracle_id !== id);
-                    setFound(list.length ? { ...f, list, index: Math.min(f.index, list.length - 1) } : null);
-                  }}
-                >
-                  Not for this deck
-                </ActionButton>
-              )}
+              <ActionButton onClick={() => toggleDismissed(card)}>{dismissed.dismissed.has(id) ? "Bring back (not hidden)" : "Not for this deck"}</ActionButton>
             </>
           ),
         }}
@@ -1420,6 +1421,7 @@ export function DeckEditor({
             initialText={searchSeed?.text}
             initialLabel={searchSeed?.label}
             wording={commanderWording.phrases}
+            dismissed={{ has: (id) => dismissed.dismissed.has(id), toggle: (card) => toggleDismissed(card) }}
             wish={userId ? { has: wishlist.has, toggle: async (id) => say(await wishlist.toggle(id)) } : undefined}
             ownedOf={collection.tracking ? (id) => ownedCopies(collection.owned, id) : undefined}
           />
@@ -1444,10 +1446,7 @@ export function DeckEditor({
                 onSettings={suggestStyle.setSettings}
                 saveError={suggestStyle.saveError ?? dismissed.saveError}
                 dismissed={dismissed.dismissed}
-                onDismiss={(card) => {
-                  dismissed.dismiss(card.oracle_id);
-                  say(`${card.name} won't be suggested for this deck. "Show dismissed" at the bottom brings it back.`);
-                }}
+                onDismiss={(card) => toggleDismissed(card)}
                 onRestore={dismissed.restore}
                 bracket={{ target: bracket.target, deck: bracketDeck, deckIds: deckCardIds }}
                 onAdd={addWithNotice}
