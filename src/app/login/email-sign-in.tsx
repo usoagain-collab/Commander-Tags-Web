@@ -40,6 +40,14 @@ export function EmailSignIn({ next, startMode }: { next: string; startMode: "sig
           options: { emailRedirectTo: callback(next), data: { name: name.trim().slice(0, 40) || undefined } },
         });
         if (error) throw error;
+        // Supabase answers a sign-up for an email that already has an account (Google, Discord or email) with a user
+        // that has no identities, and sends nothing. Say so instead of "we sent a link" (David, Nov 10, 2026).
+        if (data.user && data.user.identities?.length === 0) {
+          setSent(
+            `${email} already has a Deck Genome account, so no email was sent. Sign in with Google or Discord if you used one, or use "Forgot password?" to set a password.`,
+          );
+          return;
+        }
         if (data.session) {
           // Email confirmation is off in Supabase: signed in already.
           window.location.assign(next);
