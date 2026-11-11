@@ -249,6 +249,8 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - UI: `ArtCredit` (`src/components/art-credit.tsx`, text from `src/lib/art-credit.ts`) shows "Art by ... ™ & © Wizards of the Coast" on the home hero, precon tiles, the deck hero and My decks tiles. A printing with no artist yet shows no credit rather than the wrong one. Tiny thumbnails (quick add, collection) use the small full card image instead, which carries its own credit.
 - **Still art crops without a credit:** the playtester table backdrop, the avatar picker and avatars, and share previews (Open Graph image, share panel preview). Each needs a design call from David.
 
+Legal notices (Nov 11, 2026): the footer in src/app/layout.tsx and the Terms page carry the full Fan Content Policy notice with "Wizards of the Coast" spelled out, the trademark and copyright line, no affiliation with Wizards, Hasbro, Scryfall or MTGJSON, and the price and as-is disclaimers. Keep the two in step when either changes.
+
 ## Stress test fixes (Nov 9, 2026)
 
 - Source: David's Claude Doc "Deck Genome stress test" (Nov 10, 2026 run on deckgenome.com). David's calls: guest building goes to the **v3 backlog**; build **email + password accounts**; **Download my data as plain text** (not JSON) and **Delete my account**; draft **/privacy** and **/terms** for him to review.
