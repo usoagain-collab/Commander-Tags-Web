@@ -128,9 +128,10 @@ function OwnedLine({
     <li className="flex flex-wrap items-center gap-2 px-2 py-2 text-sm">
       <button type="button" onClick={onShow} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left" title="Show this printing">
         {row.printing_id ? (
-          <img src={printingImage(row.printing_id, "art_crop")} alt="" width={48} height={35} className="h-9 w-12 shrink-0 rounded object-cover" />
+          // The whole small card, not its art crop: the printed artist and copyright line are the credit Scryfall asks for.
+          <img src={printingImage(row.printing_id, "small")} alt="" width={28} height={40} className="h-10 w-7 shrink-0 rounded-sm object-contain" />
         ) : (
-          <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded bg-foreground/10 text-lg opacity-70">?</span>
+          <span className="flex h-10 w-7 shrink-0 items-center justify-center rounded-sm bg-foreground/10 text-lg opacity-70">?</span>
         )}
         <span className="min-w-0">
           <span className="block truncate font-medium">{p ? p.set_name : "Printing unknown"}</span>

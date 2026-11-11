@@ -28,6 +28,7 @@ type Info = {
   usd_foil: number | null;
   usd_etched: number | null;
   image_v: string | null;
+  artist: string | null;
 };
 type ScryfallCard = {
   id: string;
@@ -35,7 +36,8 @@ type ScryfallCard = {
   set_name: string;
   collector_number: string;
   illustration_id?: string;
-  card_faces?: { illustration_id?: string; image_uris?: Record<string, string> }[];
+  artist?: string;
+  card_faces?: { illustration_id?: string; artist?: string; image_uris?: Record<string, string> }[];
   image_uris?: Record<string, string>;
   finishes?: string[];
   prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null };
@@ -76,6 +78,7 @@ async function printingInfo(ids: string[]) {
         usd_foil: num(c.prices?.usd_foil),
         usd_etched: num(c.prices?.usd_etched),
         image_v: (c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal)?.match(/\?(\d+)/)?.[1] ?? null,
+        artist: c.artist ?? c.card_faces?.[0]?.artist ?? null,
       });
   }
   return out;

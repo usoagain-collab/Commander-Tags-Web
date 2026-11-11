@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ManaSymbol } from "@/components/mana-cost";
 import { ManaConfetti } from "./mana-confetti";
+import { ArtCredit } from "@/components/art-credit";
 import type { CardSummary } from "@/lib/deck/model";
 
 const WUBRG = ["W", "U", "B", "R", "G"];
@@ -25,6 +26,7 @@ export function DeckHero({
   onOpenCommander,
   wide,
   coverArt,
+  coverArtist,
 }: {
   name: string;
   commanders: CardSummary[];
@@ -46,8 +48,12 @@ export function DeckHero({
   wide?: boolean;
   /** Art the owner picked for this deck, instead of the commander's. */
   coverArt?: string | null;
+  /** Illustrator of coverArt, for the art credit. */
+  coverArtist?: string | null;
 }) {
-  const art = coverArt || commanders.find((c) => c.image_art_crop)?.image_art_crop;
+  const artCard = commanders.find((c) => c.image_art_crop);
+  const art = coverArt || artCard?.image_art_crop;
+  const artist = coverArt ? coverArtist : artCard?.artist;
   const pips = identity ? WUBRG.filter((c) => identity.has(c)) : [];
   return (
     <header className="relative isolate z-30 border-b border-foreground/10">
@@ -118,6 +124,7 @@ export function DeckHero({
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">{actions}</div>
+          {art && <ArtCredit artists={[artist]} className="mt-2 [text-shadow:0_1px_8px_var(--art-shadow)]" />}
         </div>
       </div>
       {celebrate && <ManaConfetti colors={pips.length ? pips : ["C"]} />}

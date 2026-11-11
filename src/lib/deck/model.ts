@@ -31,6 +31,8 @@ export type CardSummary = {
   color_identity: string[];
   image_normal: string | null;
   image_art_crop: string | null;
+  /** Illustrator of image_art_crop, for the art credit Scryfall asks for. Missing before migration 0051. */
+  artist?: string | null;
   price_usd: number | null;
   edhrec_rank: number | null;
   commander_legal: boolean;
@@ -408,6 +410,8 @@ export function withPrinting(card: CardSummary, printing: ChosenPrinting | undef
     ...card,
     image_normal: printingImage(printing.id, "normal", "front", printing.image_v),
     image_art_crop: printingImage(printing.id, "art_crop", "front", printing.image_v),
+    // A printing saved before its artist was known shows no credit rather than the default printing's artist.
+    artist: printing.artist ?? null,
     price_usd: printingPrice(printing) ?? card.price_usd,
   };
 }

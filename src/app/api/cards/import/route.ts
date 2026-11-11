@@ -8,11 +8,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const USER_AGENT = "DeckGenome/0.1 (spoiler fallback; https://deckgenome.com)";
 
-type Face = { image_uris?: Record<string, string>; illustration_id?: string; type_line?: string; oracle_text?: string; mana_cost?: string; oracle_id?: string };
+type Face = { image_uris?: Record<string, string>; illustration_id?: string; artist?: string; type_line?: string; oracle_text?: string; mana_cost?: string; oracle_id?: string };
 type ScryfallCard = {
   oracle_id?: string; name: string; layout: string; mana_cost?: string; cmc?: number; type_line?: string; oracle_text?: string;
   color_identity?: string[]; legalities?: Record<string, string>; games?: string[]; edhrec_rank?: number;
-  prices?: { usd?: string | null }; image_uris?: Record<string, string>; illustration_id?: string; card_faces?: Face[];
+  prices?: { usd?: string | null }; image_uris?: Record<string, string>; illustration_id?: string; artist?: string; card_faces?: Face[];
   game_changer?: boolean; produced_mana?: string[]; released_at?: string;
 };
 
@@ -57,6 +57,7 @@ export async function POST(request: Request) {
     game_changer: c.game_changer ?? false,
     produced_mana: c.produced_mana ?? [],
     released_at: c.released_at ?? null,
+    artist: c.artist ?? front?.artist ?? null,
   };
 
   // The write needs the server-only key; without it (e.g. not set on this host yet) say so instead of crashing.

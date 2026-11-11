@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { ArtCredit } from "@/components/art-credit";
 
 const FEATURES = [
   {
@@ -23,13 +24,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   // The most-played commanders make the backdrop, so it changes as the format does.
   const { data } = await supabase
     .from("card_summaries")
-    .select("oracle_id, name, image_art_crop")
+    .select("oracle_id, name, image_art_crop, artist")
     .eq("can_be_commander", true)
     .not("image_art_crop", "is", null)
     .not("edhrec_rank", "is", null)
     .order("edhrec_rank")
     .limit(8);
-  const art = (data ?? []) as { oracle_id: string; name: string; image_art_crop: string }[];
+  const art = (data ?? []) as { oracle_id: string; name: string; image_art_crop: string; artist: string | null }[];
 
   return (
     <main>
@@ -62,6 +63,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             </Link>
           </div>
         </div>
+        <ArtCredit artists={art.map((c) => c.artist)} className="relative mx-auto max-w-3xl px-6 pb-4 text-center" />
       </section>
       <section className="mx-auto grid max-w-5xl gap-4 px-6 pb-16 sm:grid-cols-3">
         {FEATURES.map((f) => (

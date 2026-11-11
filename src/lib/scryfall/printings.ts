@@ -10,9 +10,10 @@ export type ScryfallPrint = {
   collector_number: string;
   released_at?: string;
   illustration_id?: string;
+  artist?: string;
   finishes?: string[];
   prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null };
-  card_faces?: { oracle_id?: string; illustration_id?: string; image_uris?: Record<string, string> }[];
+  card_faces?: { oracle_id?: string; illustration_id?: string; artist?: string; image_uris?: Record<string, string> }[];
   image_uris?: Record<string, string>;
 };
 
@@ -37,6 +38,7 @@ export function toPrinting(c: ScryfallPrint, foil: boolean): ChosenPrinting {
     usd_etched: price(c.prices?.usd_etched),
     foil: foilFor(finishes, foil),
     image_v: imageVersionOf(c),
+    artist: c.artist ?? c.card_faces?.[0]?.artist ?? null,
   };
 }
 

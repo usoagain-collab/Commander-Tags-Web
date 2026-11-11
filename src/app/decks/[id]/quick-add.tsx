@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ManaCost } from "@/components/mana-cost";
 import type { Board, CardSummary } from "@/lib/deck/model";
 import { StatusBadge } from "./card-search";
+import { atSize } from "@/lib/art-credit";
 
 export type QuickAddHandle = { focus: () => void };
 
@@ -247,7 +248,8 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
                 i === active ? "bg-foreground/10" : ""
               }`}
             >
-              {card.image_art_crop && <img src={card.image_art_crop} alt="" loading="lazy" className="h-9 w-12 shrink-0 rounded object-cover" />}
+              {/* The whole small card, not its art crop: the printed artist and copyright line are the credit Scryfall asks for. */}
+              {card.image_normal && <img src={atSize(card.image_normal, "small")} alt="" loading="lazy" className="h-10 w-7 shrink-0 rounded-sm object-contain" />}
               <span className="min-w-0 flex-1 truncate">
                 {card.name}
                 <span className="ml-2 text-[13px] opacity-65">{card.type_line.split(" — ")[0]}</span>

@@ -15,13 +15,15 @@ export type ChosenPrinting = {
   foil: boolean;
   /** Scryfall's image version stamp; changes when Scryfall replaces the picture (a preview scan, say). */
   image_v?: string | null;
+  /** The illustrator, for the art credit beside an art crop. Missing on rows saved before migration 0051 until the nightly import fills it. */
+  artist?: string | null;
 };
 
 /**
  * Scryfall CDN image for a printing id: /<size>/<side>/<1st char>/<2nd char>/<id>.jpg, plus Scryfall's version stamp
  * when known, so a browser fetches the new picture once Scryfall replaces it.
  */
-export const printingImage = (id: string, size: "normal" | "art_crop" = "normal", side: "front" | "back" = "front", version?: string | null) =>
+export const printingImage = (id: string, size: "small" | "normal" | "art_crop" = "normal", side: "front" | "back" = "front", version?: string | null) =>
   `https://cards.scryfall.io/${size}/${side}/${id[0]}/${id[1]}/${id}.jpg${version ? `?${version}` : ""}`;
 
 /** The printing a default card image shows, read from its URL. */

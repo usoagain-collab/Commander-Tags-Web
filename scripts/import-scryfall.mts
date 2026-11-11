@@ -17,12 +17,12 @@ import { from as copyFrom } from "pg-copy-streams";
 const USER_AGENT = "DeckGenome/0.1 (daily bulk import; https://deckgenome.com)";
 
 type BulkEntry = { type: string; download_uri?: string; jsonl_download_uri?: string; updated_at: string };
-type Face = { image_uris?: Record<string, string>; illustration_id?: string; type_line?: string; oracle_text?: string; mana_cost?: string };
+type Face = { image_uris?: Record<string, string>; illustration_id?: string; artist?: string; type_line?: string; oracle_text?: string; mana_cost?: string };
 type ScryfallCard = {
   oracle_id?: string; name: string; layout: string; mana_cost?: string; cmc?: number; type_line?: string;
   oracle_text?: string; color_identity?: string[]; legalities?: Record<string, string>; games?: string[];
   edhrec_rank?: number; prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null }; image_uris?: Record<string, string>;
-  illustration_id?: string; card_faces?: Face[]; game_changer?: boolean; produced_mana?: string[];
+  illustration_id?: string; artist?: string; card_faces?: Face[]; game_changer?: boolean; produced_mana?: string[];
   released_at?: string; id?: string; all_parts?: { id: string; component: string; name: string; type_line?: string }[];
 };
 type Tagging = { oracle_id?: string; illustration_id?: string; weight?: string; annotation?: string | null };
@@ -52,7 +52,7 @@ async function downloadRecords<T>(entry: BulkEntry): Promise<T[]> {
   return text.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line) as T);
 }
 
-type PrintingPrices = { usd: number | null; usd_foil: number | null; usd_etched: number | null; image_v: string | null };
+type PrintingPrices = { usd: number | null; usd_foil: number | null; usd_etched: number | null; image_v: string | null; artist: string | null };
 /** Scryfall's version stamp on an image address (the number after "?"): it changes when the picture is replaced. */
 const imageVersion = (c: ScryfallCard) => (c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal)?.match(/\?(\d+)/)?.[1] ?? null;
 
@@ -82,7 +82,7 @@ async function cheapestPrices(entry: BulkEntry, inDecks: Set<string>, printingPr
     const card = JSON.parse(line) as ScryfallCard;
     if (card.id && inDecks.has(card.id)) {
       const n = (p: string | null | undefined) => (p ? Number(p) : null);
-      printingPrices.set(card.id, { usd: n(card.prices?.usd), usd_foil: n(card.prices?.usd_foil), usd_etched: n(card.prices?.usd_etched), image_v: imageVersion(card) });
+      printingPrices.set(card.id, { usd: n(card.prices?.usd), usd_foil: n(card.prices?.usd_foil), usd_etched: n(card.prices?.usd_etched), image_v: imageVersion(card), artist: card.artist ?? card.card_faces?.[0]?.artist ?? null });
     }
     if (!card.oracle_id) continue;
     keepLowest(regular, card.oracle_id, card.prices?.usd);
@@ -153,13 +153,14 @@ function cardRow(c: ScryfallCard, cheapest: Map<string, number>): Cell[] {
     c.game_changer ?? false,
     pgArray(c.produced_mana),
     c.released_at ?? null,
+    c.artist ?? front?.artist ?? null,
   ];
 }
 
 const CARD_COLUMNS = [
   "oracle_id", "name", "layout", "mana_cost", "mana_value", "type_line", "oracle_text", "color_identity",
   "legalities", "games", "edhrec_rank", "price_usd", "image_uris", "default_illustration_id",
-  "game_changer", "produced_mana", "released_at",
+  "game_changer", "produced_mana", "released_at", "artist",
 ];
 
 // ---------- main ----------
@@ -299,27 +300,27 @@ async function main() {
         await client.query("alter table public.deck_cards disable trigger deck_cards_touch");
         const updated = await client.query(
           `update public.deck_cards c
-           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)
-           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text)
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v, 'artist', p.artist)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text, artist text)
            where c.printing_id = p.id
-             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)`,
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v, 'artist', p.artist)`,
           [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
         );
         await client.query("alter table public.deck_cards enable trigger deck_cards_touch");
         const defaults = await client.query(
           `update public.preferred_printings c
-           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)
-           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text)
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v, 'artist', p.artist)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text, artist text)
            where c.printing_id = p.id
-             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)`,
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v, 'artist', p.artist)`,
           [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
         );
         const owned = await client.query(
           `update public.collection_cards c
-           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)
-           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text)
+           set printing_info = c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v, 'artist', p.artist)
+           from jsonb_to_recordset($1::jsonb) as p(id uuid, usd numeric, usd_foil numeric, usd_etched numeric, image_v text, artist text)
            where c.printing_id = p.id and c.printing_info is not null
-             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v)`,
+             and c.printing_info is distinct from c.printing_info || jsonb_build_object('usd', p.usd, 'usd_foil', p.usd_foil, 'usd_etched', p.usd_etched, 'image_v', p.image_v, 'artist', p.artist)`,
           [JSON.stringify([...printingPrices].map(([id, prices]) => ({ id, ...prices })))],
         );
         await client.query("commit");
