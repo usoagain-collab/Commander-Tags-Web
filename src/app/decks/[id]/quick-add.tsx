@@ -4,7 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { createClient } from "@/lib/supabase/client";
 import { ManaCost } from "@/components/mana-cost";
 import type { Board, CardSummary } from "@/lib/deck/model";
-import { StatusBadge } from "./card-search";
+import { StatusBadge } from "./result-card";
 import { atSize } from "@/lib/art-credit";
 
 export type QuickAddHandle = { focus: () => void };
@@ -281,7 +281,7 @@ export const QuickAdd = forwardRef<QuickAddHandle, Props>(function QuickAdd({ on
                 active === seeAllAt ? "bg-foreground/10" : ""
               }`}
             >
-              See all results for “{text.trim()}” →
+              Search all cards for “{text.trim()}” →
             </li>
           )}
         </ul>

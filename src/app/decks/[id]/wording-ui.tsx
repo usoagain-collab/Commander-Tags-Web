@@ -22,7 +22,8 @@ export function WordingSearch({
   rulesRef: React.RefObject<HTMLElement | null>;
   card: CardSummary;
   details?: CardDetails;
-  onSearch: (query: string) => void;
+  /** The Scryfall query, and what it is in words for the Showing line. */
+  onSearch: (query: string, label: string) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -44,19 +45,19 @@ export function WordingSearch({
   return (
     <div className="space-y-2 text-sm">
       {selected ? (
-        <button type="button" onClick={() => onSearch(wordingQuery(selected))} className="btn btn-gold min-h-11 w-full justify-start px-3 text-left">
+        <button type="button" onClick={() => onSearch(wordingQuery(selected), `cards that say “${selected}”`)} className="btn btn-gold min-h-11 w-full justify-start px-3 text-left">
           <span className="min-w-0 truncate">Search cards that say “{selected}”</span>
         </button>
       ) : (
         <p className="text-xs opacity-60">Search this wording: tap a phrase, or select any text above.</p>
       )}
-      {phrases.length > 0 && <WordingChips phrases={phrases} onSearch={onSearch} />}
+      {phrases.length > 0 && <WordingChips phrases={phrases} onSearch={(q, p) => onSearch(q, `cards that say “${p}”`)} />}
     </div>
   );
 }
 
 /** Tap-to-search phrases. The whole chip is the button, 44 px tall for phones. */
-export function WordingChips({ phrases, active, onSearch }: { phrases: string[]; active?: string; onSearch: (query: string) => void }) {
+export function WordingChips({ phrases, active, onSearch }: { phrases: string[]; active?: string; onSearch: (query: string, phrase: string) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
       {phrases.map((p) => {
@@ -66,7 +67,7 @@ export function WordingChips({ phrases, active, onSearch }: { phrases: string[];
           <button
             key={p}
             type="button"
-            onClick={() => onSearch(q)}
+            onClick={() => onSearch(q, p)}
             aria-pressed={on}
             className={`min-h-11 rounded-full border px-3 text-left ${on ? "border-gold text-gold" : "border-foreground/20 hover:bg-foreground/10"}`}
           >

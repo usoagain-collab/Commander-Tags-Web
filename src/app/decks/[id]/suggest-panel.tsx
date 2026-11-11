@@ -20,12 +20,12 @@ import {
 import { candidateIssues, type ComboRow, type EvaluateInput, type Finding } from "@/lib/brackets/evaluate";
 import type { BracketNumber } from "@/lib/brackets/rules";
 import { cardFlag } from "./bracket-panel";
-import { Panel } from "./deck-text-panel";
-import { FilterFields } from "./filter-fields";
+import { FiltersBox } from "./filters-box";
+import { RESULT_GRID, ResultCard, ShowingChip } from "./result-card";
 import { appendSyntax, EMPTY_FILTERS, filterSyntax, type FilterForm } from "@/lib/search/filters";
 import { buildQuery } from "@/lib/search/query";
 import { scryfallOracleIds } from "@/lib/scryfall/oracle-ids";
-import { onePerReason, spreadByReason, type Angle, type WordingPlan } from "@/lib/search/wording-pairs";
+import { angleQuery, onePerReason, spreadByReason, type Angle, type WordingPlan } from "@/lib/search/wording-pairs";
 import { AngleButtons } from "./wording-ui";
 
 /** What the suggestions are for: a role, a tag, or the deck overall. */
@@ -55,7 +55,13 @@ type Props = {
   hasCommander: boolean;
   onAdd: (card: CardSummary, board: Board) => void;
   onPreview: (card: CardSummary) => void;
-  onClose: () => void;
+  /** Opens the card sheet on one suggestion; Prev / Next step through `list`. */
+  onOpen: (list: CardSummary[], index: number) => void;
+  /** Back to the whole-deck picks (✕ on the Showing line). Absent while showing them. */
+  onOverall?: () => void;
+  /** Switches to the Search tab with a query, and what it is in words. */
+  onSearch: (query: string, label: string) => void;
+  wish?: { has: (oracleId: string) => boolean; toggle: (oracleId: string) => void };
   /** Phase 4b: change the deck's suggestion style (saved per deck). */
   onSettings: (s: SuggestSettings) => void;
   saveError: string | null;
@@ -71,7 +77,7 @@ type Props = {
 };
 
 export function SuggestPanel(props: Props) {
-  const { source, identity, deckIds, isInDeck, score, roleNames, hasCommander, onAdd, onPreview, onClose } = props;
+  const { source, identity, deckIds, isInDeck, score, roleNames, hasCommander, onAdd, onPreview } = props;
   const supabase = useMemo(() => createClient(), []);
   const [pool, setPool] = useState<PoolCard[] | null>(null);
   // Overall Suggest only: most-played cards for the roles the deck is short on.
@@ -303,41 +309,61 @@ export function SuggestPanel(props: Props) {
           : source.roleKey
             ? `A popular ${prettyTag(source.label).toLowerCase()} card in your colors`
             : `Has the ${prettyTag(source.label).toLowerCase()} tag, but none of your other themes`;
+  // A card opens the sheet, and Prev / Next step through everything shown, in screen order.
+  let openList: CardSummary[] = [];
   const cardFor = (r: Scored, best: boolean, kind: "land" | "staple" | "main" = "main") => (
-    <SuggestionCard
+    <ResultCard
       key={r.card.oracle_id}
+      name={r.card.name}
+      image={r.card.image_normal}
+      card={r.card}
       best={best}
-      row={r}
-      why={why(kind)}
-      sayWhy={source.wording?.why ?? {}}
-      roleNames={roleNames}
-      above={flagsOf(r.card.oracle_id)}
-      target={target}
-      onAdd={onAdd}
-      onPreview={onPreview}
-      onDismiss={props.onDismiss}
-    />
+      onPreview={() => onPreview(r.card)}
+      onOpen={() => props.onOpen(openList, Math.max(0, openList.findIndex((c) => c.oracle_id === r.card.oracle_id)))}
+      onAdd={(board) => onAdd(r.card, board)}
+      wish={props.wish ? { on: props.wish.has(r.card.oracle_id), toggle: () => props.wish!.toggle(r.card.oracle_id) } : undefined}
+      onDismiss={() => props.onDismiss(r.card)}
+    >
+      <WhyLines row={r} why={why(kind)} sayWhy={sayWhy} roleNames={roleNames} above={flagsOf(r.card.oracle_id)} target={target} />
+    </ResultCard>
   );
+  openList = [...lands, ...staples, ...(angle ? angleRows : words), ...rows].map((r) => r.card);
+  const overall = !source.roleKey && !source.lands && !!source.staples;
+  const showing = source.lands
+    ? "picks for Lands"
+    : source.roleKey
+      ? `picks for ${prettyTag(source.label)}`
+      : overall
+        ? "picks for the whole deck"
+        : `picks with the ${prettyTag(source.label)} tag`;
 
   return (
-    <Panel title={`Suggestions: ${prettyTag(source.label)}`} onClose={onClose}>
+    <div>
       <StyleControls settings={score.settings} onChange={props.onSettings} />
-      <SuggestFilters
+      <FiltersBox
+        fields={["types", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
         draft={filterDraft}
-        own={ownDraft}
-        applied={filter}
-        info={filterInfo}
         onDraft={(next, immediate) => {
           setFilterDraft(next);
           if (immediate) applyFilter(next);
         }}
-        onOwn={setOwnDraft}
+        own={{ value: ownDraft, onChange: setOwnDraft }}
+        applied={filter}
+        applyLabel="Apply filters"
+        hint="narrow the picks with Scryfall search"
         onApply={() => applyFilter()}
         onClear={() => {
           setFilterDraft(EMPTY_FILTERS);
           setOwnDraft("");
           setFilter("");
         }}
+        footer={filter ? <FilterInfo applied={filter} info={filterInfo} /> : null}
+      />
+      <ShowingChip
+        label={showing}
+        detail={STYLE_LABELS[score.settings.style]}
+        onClear={props.onOverall}
+        clearLabel="Back to picks for the whole deck"
       />
       {props.saveError && <p className="mt-1 text-sm text-red-400">{props.saveError}</p>}
       {!hasCommander && <p className="mt-2 text-sm opacity-70">No commander yet, so every color is allowed.</p>}
@@ -345,7 +371,7 @@ export function SuggestPanel(props: Props) {
       {!error && (pool === null || combos === null) && (
         <>
           <p className="mt-3 text-sm opacity-80">Finding cards that fit… the first search can take a few seconds.</p>
-          <ul aria-hidden className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+          <ul aria-hidden className={`mt-3 ${RESULT_GRID}`}>
             {Array.from({ length: 6 }, (_, i) => (
               <li key={i} className="aspect-[63/88] animate-pulse rounded-xl bg-foreground/10" />
             ))}
@@ -365,7 +391,7 @@ export function SuggestPanel(props: Props) {
             Lands: you&apos;re {source.landsShort} short of your target
           </h3>
           <p className="text-[13px] opacity-70">Ranked like the other picks: your themes, then how widely played. More → Auto build land base fills them all at once.</p>
-          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+          <ul className={`mt-2 ${RESULT_GRID}`}>
             {lands.map((r) => cardFor(r, false, "land"))}
           </ul>
           {!staples.length && !words.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
@@ -375,7 +401,7 @@ export function SuggestPanel(props: Props) {
         <section aria-label="Staples" className="mt-3">
           <h3 className="eyebrow">Staples for roles you&apos;re short on</h3>
           <p className="text-[13px] opacity-70">The most-played cards in your colors that fill them, themes or not.</p>
-          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+          <ul className={`mt-2 ${RESULT_GRID}`}>
             {staples.map((r) => cardFor(r, false, "staple"))}
           </ul>
           {!words.length && rows.length > 0 && <h3 className="eyebrow mt-5">Built for this deck</h3>}
@@ -406,22 +432,32 @@ export function SuggestPanel(props: Props) {
                   Every card for {angle.name}
                   {anglePool && (anglePool.length >= 60 ? ` (the top ${angleRows.length})` : ` (${angleRows.length})`)}
                 </h4>
-                <button type="button" onClick={() => setAngle(null)} className="min-h-11 rounded-lg px-3 text-sm opacity-80 hover:bg-foreground/10">
-                  ← Back to the mix
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => props.onSearch(angleQuery(angle), `every card for ${angle.name}`)}
+                    title="Every card for this idea on Scryfall, not only the ones that fit your themes"
+                    className="min-h-11 rounded-lg border border-foreground/20 px-3 text-sm hover:bg-foreground/10"
+                  >
+                    Search all cards for this ›
+                  </button>
+                  <button type="button" onClick={() => setAngle(null)} className="min-h-11 rounded-lg px-3 text-sm opacity-80 hover:bg-foreground/10">
+                    ← Back to the mix
+                  </button>
+                </div>
               </div>
               {anglePool === null ? (
                 <p className="mt-2 text-sm opacity-70">Reading every card for {angle.name}…</p>
               ) : angleRows.length === 0 ? (
                 <p className="mt-2 text-sm opacity-60">Nothing new for this idea in your colors (cards already in the deck, dismissed or over the price cap are left out).</p>
               ) : (
-                <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+                <ul className={`mt-2 ${RESULT_GRID}`}>
                   {angleRows.map((r) => cardFor(r, false))}
                 </ul>
               )}
             </>
           ) : (
-            <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+            <ul className={`mt-2 ${RESULT_GRID}`}>
               {words.map((r) => cardFor(r, false))}
             </ul>
           )}
@@ -440,12 +476,12 @@ export function SuggestPanel(props: Props) {
         </p>
       )}
       {rows.length > 0 && (
-        <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-4">
+        <ul className={`mt-3 ${RESULT_GRID}`}>
           {rows.map((r, i) => cardFor(r, i === 0))}
         </ul>
       )}
       {props.dismissed.size > 0 && <DismissedList ids={[...props.dismissed]} pool={pool ?? []} onRestore={props.onRestore} />}
-    </Panel>
+    </div>
   );
 }
 
@@ -490,19 +526,15 @@ function DismissedList({ ids, pool, onRestore }: { ids: string[]; pool: PoolCard
   );
 }
 
-function SuggestionCard({
-  best,
+/** Why a suggestion is here: shared themes, wording, bracket warnings, roles it fills. */
+function WhyLines({
   row,
   roleNames,
-  onAdd,
-  onPreview,
-  onDismiss,
   above,
   target,
   why,
   sayWhy,
 }: {
-  best: boolean;
   row: Scored;
   why: string;
   /** Wording phrase -> why it helps ("Feeds Omo: makes lands enter"). */
@@ -510,157 +542,66 @@ function SuggestionCard({
   above: string[];
   target: BracketNumber;
   roleNames: Record<string, string>;
-  onAdd: (card: CardSummary, board: Board) => void;
-  onPreview: (card: CardSummary) => void;
-  onDismiss: (card: CardSummary) => void;
 }) {
-  const { card } = row;
   return (
-    <li data-preview-card className="relative flex flex-col gap-2" onMouseEnter={() => onPreview(card)}>
-      {best && <span className="absolute -left-1 top-3 z-10 rounded-r-md bg-gold px-2 py-0.5 text-xs font-bold text-gold-ink shadow-lg">Best match</span>}
-      <button type="button" onClick={() => onPreview(card)} onFocus={() => onPreview(card)} title={`Show ${card.name} in the card panel`} className="card-lift block rounded-[4.75%/3.5%]">
-        {card.image_normal ? (
-          <img src={card.image_normal} alt={card.name} loading="lazy" draggable={false} width={244} height={340} className="w-full rounded-[4.75%/3.5%] shadow" />
-        ) : (
-          <span className="flex aspect-[63/88] items-center justify-center rounded-lg border p-2 text-center text-sm">{card.name}</span>
-        )}
-      </button>
-      <div className="min-w-0 text-sm">
-        <p className="truncate font-medium" title={card.name}>
-          {card.name}
+    <>
+      {row.shared.length > 0 && (
+        <p className="text-[13px] font-medium text-gold" title={`Fit ${Math.round(row.fit * 100)} of 100. Played ${Math.round(row.pop * 100)} of 100.`}>
+          Shares {row.shared.length} of your themes
         </p>
-        <p className="text-[13px] tabular-nums opacity-80">
-          {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "no price"} ·{" "}
-          {card.edhrec_rank ? `EDHREC #${card.edhrec_rank.toLocaleString()}` : "unranked"}
+      )}
+      {!!row.says?.length && (
+        <p className="mt-1 text-[13px]">
+          <span className="font-medium text-gold">{sayWhy[row.says[0]] ?? "Says your commander's wording"}</span>
+          <span className="block opacity-80">
+            Says {row.says.slice(0, 2).map((s, i) => (
+              <span key={s}>
+                {i > 0 && ", "}“{s}”
+              </span>
+            ))}
+            {row.says.length > 2 && ` +${row.says.length - 2} more`}
+          </span>
         </p>
-        {row.shared.length > 0 && (
-          <p className="mt-1 text-[13px] font-medium text-gold" title={`Fit ${Math.round(row.fit * 100)} of 100. Played ${Math.round(row.pop * 100)} of 100.`}>
-            Shares {row.shared.length} of your themes
-          </p>
-        )}
-        {!!row.says?.length && (
-          <p className="mt-1 text-[13px]">
-            <span className="font-medium text-gold">{sayWhy[row.says[0]] ?? "Says your commander's wording"}</span>
-            <span className="block opacity-80">
-              Says {row.says.slice(0, 2).map((s, i) => (
-                <span key={s}>
-                  {i > 0 && ", "}“{s}”
-                </span>
-              ))}
-              {row.says.length > 2 && ` +${row.says.length - 2} more`}
-            </span>
-          </p>
-        )}
-        {above.map((a) => (
-          <p key={a} className="mt-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
-            ⚠ Above bracket {target}: {a}
-          </p>
+      )}
+      {above.map((a) => (
+        <p key={a} className="mt-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+          ⚠ Above bracket {target}: {a}
+        </p>
+      ))}
+      <div className="mt-1 flex flex-wrap gap-1">
+        {row.fills.map((k) => (
+          <span key={k} className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-300">
+            Fills {roleNames[k] ?? k}
+          </span>
         ))}
-        <div className="mt-1 flex flex-wrap gap-1">
-          {row.fills.map((k) => (
-            <span key={k} className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-300">
-              Fills {roleNames[k] ?? k}
-            </span>
-          ))}
-          {row.shared.slice(0, 3).map((t) => (
-            <span key={t.key} className="rounded-full border border-foreground/20 px-2 py-0.5 text-xs" title="A theme this deck already has">
-              {prettyTag(t.label)}
-            </span>
-          ))}
-          {!row.fills.length && !row.shared.length && !row.says?.length && <span className="text-xs opacity-70">{why}</span>}
-        </div>
+        {row.shared.slice(0, 3).map((t) => (
+          <span key={t.key} className="rounded-full border border-foreground/20 px-2 py-0.5 text-xs" title="A theme this deck already has">
+            {prettyTag(t.label)}
+          </span>
+        ))}
+        {!row.fills.length && !row.shared.length && !row.says?.length && <span className="text-xs opacity-70">{why}</span>}
       </div>
-      <div className="mt-auto grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => onAdd(card, "main")} className="btn btn-gold min-h-11 whitespace-nowrap px-1">
-          + Main
-        </button>
-        <button type="button" onClick={() => onAdd(card, "maybe")} className="min-h-11 whitespace-nowrap rounded-lg border border-foreground/20 px-1 text-sm">
-          + Maybe
-        </button>
-        <button
-          type="button"
-          onClick={() => onDismiss(card)}
-          title="Don't suggest this card for this deck again"
-          className="col-span-2 min-h-10 rounded-lg px-2 text-[13px] opacity-75 hover:bg-foreground/10 hover:opacity-100"
-        >
-          Not for this deck
-        </button>
-      </div>
-    </li>
+    </>
   );
 }
 
-/** The filter toggles: guided fields plus your own Scryfall syntax; buttons apply at once, typing on Enter. */
-function SuggestFilters(props: {
-  draft: FilterForm;
-  own: string;
-  applied: string;
-  info: { total: number; used: number; warnings: string[] } | null;
-  onDraft: (next: FilterForm, immediate: boolean) => void;
-  onOwn: (own: string) => void;
-  onApply: () => void;
-  onClear: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const pending = appendSyntax(filterSyntax(props.draft), props.own) !== props.applied;
+/** Under the Filters box while a filter is on: the syntax, and how many cards Scryfall found. */
+function FilterInfo({ applied, info }: { applied: string; info: { total: number; used: number; warnings: string[] } | null }) {
   return (
-    <div className="mt-3 rounded-lg border border-foreground/15">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm">
-        <span>
-          <span className="font-medium">Filters</span>
-          <span className="ml-2 opacity-60">{props.applied ? "on" : "narrow the picks with Scryfall search"}</span>
-        </span>
-        <span aria-hidden>{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <form
-          className="border-t border-foreground/10 p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            props.onApply();
-          }}
-        >
-          <FilterFields value={props.draft} onChange={props.onDraft} fields={["types", "mv", "text", "since", "instantSpeed", "noReserved"]} />
-          <label className="mt-3 grid gap-1 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-            <span className="text-xs font-medium opacity-70 sm:text-sm">Your own filter</span>
-            <input
-              value={props.own}
-              onChange={(e) => props.onOwn(e.target.value)}
-              placeholder="any Scryfall syntax, e.g. kw:ward t:equipment"
-              aria-label="Your own Scryfall filter"
-              spellCheck={false}
-              className="min-h-11 min-w-0 rounded-lg border border-foreground/20 bg-transparent px-3 font-mono text-sm"
-            />
-          </label>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="submit" disabled={!pending} className="btn btn-gold min-h-11 px-4 disabled:opacity-50">
-              Apply filters
-            </button>
-            {(props.applied || pending) && (
-              <button type="button" onClick={props.onClear} className="min-h-11 rounded-lg px-3 text-sm opacity-70 hover:opacity-100">
-                Clear
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-      {props.applied && (
-        <div className="border-t border-foreground/10 px-3 py-2 text-xs">
-          <p>
-            <span className="opacity-60">Scryfall filter </span>
-            <code className="break-all font-mono">{props.applied}</code>
-            {props.info &&
-              ` · ${props.info.total.toLocaleString()} ${props.info.total === 1 ? "card matches" : "cards match"}${
-                props.info.total > props.info.used ? `, using the ${props.info.used.toLocaleString()} most played` : ""
-              }`}
-          </p>
-          {props.info?.warnings.map((w) => (
-            <p key={w} className="mt-1 text-amber-700 dark:text-amber-400">
-              Scryfall: {w}
-            </p>
-          ))}
-        </div>
-      )}
+    <div className="border-t border-foreground/10 px-3 py-2 text-xs">
+      <p>
+        <span className="opacity-60">Scryfall filter </span>
+        <code className="break-all font-mono">{applied}</code>
+        {info &&
+          ` · ${info.total.toLocaleString()} ${info.total === 1 ? "card matches" : "cards match"}${
+            info.total > info.used ? `, using the ${info.used.toLocaleString()} most played` : ""
+          }`}
+      </p>
+      {info?.warnings.map((w) => (
+        <p key={w} className="mt-1 text-amber-700 dark:text-amber-400">
+          Scryfall: {w}
+        </p>
+      ))}
     </div>
   );
 }
