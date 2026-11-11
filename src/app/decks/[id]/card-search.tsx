@@ -28,6 +28,8 @@ import {
   type SortDir,
 } from "@/lib/search/filters";
 import { loadCatalog, matchCatalog } from "@/lib/scryfall/catalog";
+import { wordingQuery } from "@/lib/search/wording";
+import { WordingChips } from "./wording-ui";
 import { FilterFields } from "./filter-fields";
 
 /** The few fields we use from a Scryfall card object. */
@@ -70,9 +72,11 @@ type Props = {
   onWithBanned: (on: boolean) => void;
   /** Text handed over from quick add's "See all results": filled in and searched on opening. */
   initialText?: string;
+  /** Search by wording (v2): phrases from the commander's rules text, shown as tap-to-search chips. */
+  wording?: string[];
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wish, ownedOf }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onClose, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, wording = [], wish, ownedOf }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -412,6 +416,15 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
             </button>
             {filterSyntax(filters) && <code className="min-w-0 break-all font-mono text-xs opacity-70">{filterSyntax(filters)}</code>}
           </div>
+        </div>
+      )}
+
+      {wording.length > 0 && (!text.trim() || wording.some((p) => wordingQuery(p) === text.trim())) && (
+        <div className="mt-3 space-y-1.5 text-sm">
+          <p className="text-xs opacity-60">
+            Wording from {commanderName ?? "your commander"}: find cards that say the same thing (~ means the card&apos;s own name)
+          </p>
+          <WordingChips phrases={wording} active={text.trim()} onSearch={runExample} />
         </div>
       )}
 

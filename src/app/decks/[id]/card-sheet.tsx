@@ -15,6 +15,7 @@ import { printingImage, printingPrice, type ChosenPrinting } from "@/lib/deck/pr
 import { PrintingPicker } from "./printing-picker";
 import { TUTORS_KEY } from "@/lib/tags/role-settings";
 import { TutorBadge, TutorNote } from "./tutor-label";
+import { WordingSearch } from "./wording-ui";
 
 type Props = {
   deckId: string;
@@ -57,6 +58,8 @@ type Props = {
   onCover: (on: boolean) => void;
   /** Change mana cost (v2): the card's own mana value, this deck's override (null = none), and a setter. */
   manaValue?: { own: number; counted: number | null; onChange: (value: number | null) => void };
+  /** Search by wording (v2): opens the Search panel with a rules-text search. */
+  onSearchWording?: (query: string) => void;
 };
 
 /**
@@ -69,6 +72,7 @@ export function CardSheet(props: Props) {
   const tutor = props.roleKeys.includes(TUTORS_KEY);
   const { card, board, quantity, printing } = line;
   const closeRef = useRef<HTMLButtonElement>(null);
+  const rulesRef = useRef<HTMLDivElement>(null);
   const [panel, setPanel] = useState<"main" | "decks" | "printing" | "mixed">("main");
   const [copied, setCopied] = useState(false);
   const [face, setFace] = useState(0);
@@ -296,7 +300,10 @@ export function CardSheet(props: Props) {
               />
             )}
 
-            <RulesText details={details} error={error} onRetry={retry} />
+            <div ref={rulesRef}>
+              <RulesText details={details} error={error} onRetry={retry} />
+            </div>
+            {props.onSearchWording && <WordingSearch rulesRef={rulesRef} card={card} details={details} onSearch={props.onSearchWording} />}
 
             {props.extra}
 
