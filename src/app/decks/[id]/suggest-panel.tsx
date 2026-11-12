@@ -147,9 +147,10 @@ export function SuggestPanel(props: Props) {
         ask(source.slugs, !!source.lands, 60),
         source.staples?.length ? ask(source.staples, false, 0) : Promise.resolve({ data: [], error: null }),
         source.landsShort ? ask([], true, 60) : Promise.resolve({ data: [], error: null }),
-        // Without migration 0050 this errors, and the row simply doesn't show.
+        // Without migration 0050 this errors, and the row simply doesn't show. 200, not 60: cards saying several of
+        // the commander's own phrases sort first and would leave no room for the "feeds it" ideas (Aesi, Nov 11).
         wordingPhrases.length
-          ? supabase.rpc("wording_pool", { p_phrases: wordingPhrases, p_identity: identity, p_exclude: deckIds, p_lim: 60, ...(only ? { p_only: only } : {}) })
+          ? supabase.rpc("wording_pool", { p_phrases: wordingPhrases, p_identity: identity, p_exclude: deckIds, p_lim: 200, ...(only ? { p_only: only } : {}) })
           : Promise.resolve({ data: [], error: null }),
       ]);
       if (!live) return;

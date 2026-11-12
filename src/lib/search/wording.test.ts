@@ -69,6 +69,11 @@ describe("wordingPhrases", () => {
     expect(ral).toContain("loyalty counter");
   });
 
+  it("a verb plus only a pronoun is not a phrase", () => {
+    const p = wordingPhrases("Look at the top three cards of your library. Put one into your hand and put the rest into your graveyard.", "Test", "Sorcery");
+    expect(p).not.toContain("put the rest");
+  });
+
   it("counter target spell is an action, not a kind of counter", () => {
     const p = wordingPhrases("Counter target spell.", "Counterspell", "Instant");
     expect(p).toEqual(["counter target spell"]);
