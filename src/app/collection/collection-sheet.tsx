@@ -2,6 +2,8 @@
 
 // One card in your collection (v2): every printing you own with its own count and finish, a way to add another
 // printing, and "Which printing?" for copies whose printing is unknown. Printings load live from Scryfall.
+import { priceCard, type PriceSource } from "@/lib/deck/store-prices";
+import { StorePriceList } from "@/components/store-prices";
 import { useEffect, useState } from "react";
 import { GlassOverlay } from "@/app/decks/[id]/glass-overlay";
 import { rowKey, rowUnitPrice, type Finish, type OwnedRow } from "@/lib/deck/collection";
@@ -19,16 +21,19 @@ type Props = {
   rows: OwnedRow[];
   onSet: (changes: { target: OwnedTarget; quantity: number }[]) => void;
   onClose: () => void;
+  /** Where prices come from (Settings → Prices). */
+  priceSource?: PriceSource;
 };
 
-export function CollectionSheet({ card, rows, onSet, onClose }: Props) {
+export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcgplayer" }: Props) {
+  const cheapest = priceCard(card, priceSource).price_usd;
   const [picking, setPicking] = useState<null | { assign?: OwnedRow }>(rows.length === 0 ? {} : null);
   const [shown, setShown] = useState<string | null>(null);
   const sorted = [...rows].sort((a, b) => Number(!a.printing_id) - Number(!b.printing_id) || b.quantity - a.quantity);
   const top = sorted.find((r) => rowKey(r) === shown) ?? sorted[0];
   const image = top?.printing_id ? printingImage(top.printing_id) : card.image_normal;
   const copies = rows.reduce((n, r) => n + r.quantity, 0);
-  const value = rows.reduce((s, r) => s + r.quantity * rowUnitPrice(r, card.price_usd), 0);
+  const value = rows.reduce((s, r) => s + r.quantity * rowUnitPrice(r, cheapest, priceSource), 0);
 
   const setQty = (r: OwnedRow, q: number) => onSet([{ target: r, quantity: q }]);
   /** Moves a row's copies to another finish or printing, joining any row already there. */
@@ -49,6 +54,15 @@ export function CollectionSheet({ card, rows, onSet, onClose }: Props) {
             <p className="text-sm opacity-80">
               {copies ? `${copies} ${copies === 1 ? "copy" : "copies"} · about ${money(value)}` : "Not in your collection yet"}
             </p>
+            <div className="mt-2">
+                <StorePriceList
+                  tcg={top?.printing_info ? rowUnitPrice(top, card.price_usd) : card.price_usd}
+                  stores={top?.printing_info ? top.printing_info.stores : card.store_prices}
+                  foil={!!top && top.finish !== "nonfoil"}
+                  exact={!!top?.printing_info}
+                  trend={card.price_trend}
+                />
+            </div>
           </div>
           <button type="button" onClick={onClose} className="btn min-h-11 px-4">
             Done
@@ -64,7 +78,8 @@ export function CollectionSheet({ card, rows, onSet, onClose }: Props) {
                   <OwnedLine
                     key={rowKey(r)}
                     row={r}
-                    card={card}
+                    cheapest={cheapest}
+                    priceSource={priceSource}
                     onShow={() => setShown(rowKey(r))}
                     onQuantity={(q) => setQty(r, q)}
                     onFinish={(f) => move(r, { ...r, finish: f })}
@@ -107,14 +122,17 @@ export function CollectionSheet({ card, rows, onSet, onClose }: Props) {
 
 function OwnedLine({
   row,
-  card,
   onShow,
   onQuantity,
   onFinish,
   onWhich,
+  cheapest,
+  priceSource,
 }: {
   row: OwnedRow;
-  card: CardSummary;
+  /** The card's cheapest price at the chosen store, and that store. */
+  cheapest: number | null;
+  priceSource: PriceSource;
   onShow: () => void;
   onQuantity: (q: number) => void;
   onFinish: (f: Finish) => void;
@@ -137,7 +155,7 @@ function OwnedLine({
           <span className="block truncate font-medium">{p ? p.set_name : "Printing unknown"}</span>
           <span className="block text-xs opacity-75">
             {p ? `${p.set.toUpperCase()} #${p.number} · ` : ""}
-            {money(rowUnitPrice(row, card.price_usd))} each
+            {money(rowUnitPrice(row, cheapest, priceSource))} each
           </span>
         </span>
       </button>

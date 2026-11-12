@@ -1,5 +1,6 @@
 "use client";
 
+import { TrendChip } from "@/components/store-prices";
 import type { CardSummary } from "@/lib/deck/model";
 import type { ResolvedRole } from "@/lib/tags/roles";
 import type { TagData } from "@/lib/tags/use-tag-data";
@@ -27,7 +28,7 @@ export function FloatingPreview({ side, card, ...rest }: Omit<Props, "onOpen" | 
       {card.image_normal && <img src={card.image_normal} alt="" width={250} height={349} className="w-full rounded-[4.75%/3.5%]" />}
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{card.name}</span>
-        <span className="tabular-nums opacity-60">{card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}</span>
+        <span className="tabular-nums opacity-60"><TrendChip trend={card.price_trend} /> {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}</span>
       </div>
       {rest.extra}
       <CardTags card={card} roleKeys={rest.roleKeys} roles={rest.roles} tags={rest.tags} highlight={rest.highlight} onTag={() => {}} />
@@ -55,7 +56,7 @@ export function CardPanel({ card, roleKeys, roles, tags, highlight, onTag, onOpe
       </button>
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="font-medium">{card.name}</span>
-        <span className="tabular-nums opacity-60">{card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}</span>
+        <span className="tabular-nums opacity-60"><TrendChip trend={card.price_trend} /> {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : ""}</span>
       </div>
       {extra}
       <CardTags card={card} roleKeys={roleKeys} roles={roles} tags={tags} highlight={highlight} onTag={onTag} />

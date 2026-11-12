@@ -102,7 +102,7 @@ export function FilterFields({
         </Row>
       )}
       {has("price") && (
-        <Row label="Price up to">
+        <Row label="Price up to (TCGplayer)">
           <div className="flex items-center gap-1">
             <span className="opacity-60">$</span>
             <input

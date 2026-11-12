@@ -1,5 +1,6 @@
 "use client";
 
+import { priceCard, type PriceSource } from "@/lib/deck/store-prices";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { entryKey, type Board, type CardSummary, type Entries } from "@/lib/deck/model";
@@ -55,6 +56,8 @@ const oracleIdOf = (c: ScryfallCard) => c.oracle_id ?? c.card_faces?.[0]?.oracle
 const imageOf = (c: ScryfallCard) => c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal;
 
 type Props = {
+  /** Where prices come from (Settings → Prices). */
+  priceSource?: PriceSource;
   entries: Entries;
   identity: Set<string> | null;
   commanderName: string | null;
@@ -82,7 +85,7 @@ type Props = {
   wording?: string[];
 };
 
-export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onOpen, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, initialLabel, wording = [], wish, dismissed, ownedOf }: Props) {
+export function CardSearch({ entries, identity, commanderName, onAdd, onPreview, onOpen, hideInDeck, onHideInDeck, withBanned, onWithBanned, initialText, initialLabel, wording = [], wish, dismissed, ownedOf, priceSource = "tcgplayer" }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialText ?? "");
@@ -171,7 +174,7 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
     for (let i = 0; i < ids.length; i += 60) batches.push(ids.slice(i, i + 60));
     // A page has up to 175 cards: the batches go out together rather than one after another.
     const results = await Promise.all(batches.map((b) => supabase.from("card_summaries").select("*").in("oracle_id", b)));
-    for (const { data } of results) for (const c of (data ?? []) as CardSummary[]) found[c.oracle_id] = c;
+    for (const { data } of results) for (const c of (data ?? []) as CardSummary[]) found[c.oracle_id] = priceCard(c, priceSource);
     setSummaries((prev) => ({ ...prev, ...found }));
   }
 

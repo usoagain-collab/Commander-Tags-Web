@@ -1,6 +1,8 @@
 // A deck row's chosen printing and foil state (migration 0025). Pure logic; fetching lives in lib/scryfall/printings.ts.
 // Images need no storage: Scryfall's CDN path comes from the printing id. Set, art and prices are copied at pick time.
 
+import type { StorePrices } from "./store-prices";
+
 export type ChosenPrinting = {
   id: string;
   set: string;
@@ -17,6 +19,8 @@ export type ChosenPrinting = {
   image_v?: string | null;
   /** The illustrator, for the art credit beside an art crop. Missing on rows saved before migration 0051 until the nightly import fills it. */
   artist?: string | null;
+  /** This printing at Card Kingdom, Mana Pool and Cardmarket, from MTGJSON nightly (migration 0053). */
+  stores?: StorePrices | null;
 };
 
 /**

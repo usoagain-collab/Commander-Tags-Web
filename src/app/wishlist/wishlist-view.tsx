@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 export type WishRow = { oracle_id: string; quantity: number; foil: boolean; note: string | null; added_at: string; card: CardSummary };
 type Sort = "added" | "price" | "name";
 
-export function WishlistView({ userId, initial, loadError }: { userId: string; initial: WishRow[]; loadError: string | null }) {
+export function WishlistView({ userId, initial, loadError, priceLabel = null }: { userId: string; initial: WishRow[]; loadError: string | null; priceLabel?: string | null }) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState(initial);
   const [sort, setSort] = useState<Sort>("added");
@@ -56,7 +56,7 @@ export function WishlistView({ userId, initial, loadError }: { userId: string; i
         <div>
           <h1 className="display text-3xl">Wish list</h1>
           <p className="mt-1 opacity-85">
-            {rows.length === 0 ? "Cards you want to buy, separate from any deck." : `${copies} card${copies === 1 ? "" : "s"} · about $${total.toFixed(2)}`}
+            {rows.length === 0 ? "Cards you want to buy, separate from any deck." : `${copies} card${copies === 1 ? "" : "s"} · about $${total.toFixed(2)}${priceLabel ? ` at ${priceLabel}` : ""}`}
           </p>
         </div>
         {rows.length > 0 && (
