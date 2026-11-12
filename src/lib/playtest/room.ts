@@ -1,7 +1,7 @@
 // Multiplayer playtesting (v2): a shared table where each player runs their own deck. Players meet in a room by
 // code over Supabase Realtime (nothing is stored); each one broadcasts what the others can see of their game.
 // Pure helpers here; the channel lives in use-room.ts.
-import type { GameState } from "./game";
+import { faceImage, faceName, inLandRow, type GameState } from "./game";
 
 /** What the other players see of a game: no hidden information (hand and library are counts only). */
 export type PlayerView = {
@@ -50,7 +50,9 @@ export function viewOf(game: GameState, me: { id: string; name: string; deck: st
     battlefield: game.zones.battlefield.map((iid) => {
       const c = card(iid);
       const placed = game.battlefield[iid];
-      return { iid, name: c.name, image: c.image, tapped: !!placed?.tapped, land: c.land, token: !!c.token, counters: placed?.counters ?? {} };
+      // Others never see what a face-down card is.
+      if (c.faceDown) return { iid, name: "Face-down card", image: null, tapped: !!placed?.tapped, land: false, token: !!c.token, counters: placed?.counters ?? {} };
+      return { iid, name: faceName(c), image: faceImage(c), tapped: !!placed?.tapped, land: inLandRow(c), token: !!c.token, counters: placed?.counters ?? {} };
     }),
     damage,
   };

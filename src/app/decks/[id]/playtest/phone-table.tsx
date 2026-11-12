@@ -1,14 +1,18 @@
 "use client";
 
 // The playtest table on phones and touch screens (David, Nov 1, 2026). Same game logic as the desktop table, laid out
-// for one thumb: the play area takes the room, with lands (and tokens, when any) always in view as rows of piles
+// for one thumb: the play area (tokens included) takes the room, with lands always in view as a row of piles
 // under it (David, Nov 11, 2026: the old accordion meant tapping back and forth), the side zones are small chips
 // that open when needed, and everything but Next turn lives in the menu. Cards move with pointer events rather than
 // HTML5 drag, which touch browsers only start after a long press.
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CardPicture, tableName } from "./card-picture";
 import {
   addCounter,
+  flipCard,
+  inLandRow,
+  toggleFaceDown,
   commanderTax,
   COUNTER_KINDS,
   draw,
@@ -30,7 +34,7 @@ import {
 type Update = (fn: (g: GameState) => GameState) => void;
 type MoveCard = (iid: string, to: Zone, opts?: Parameters<typeof move>[3]) => void;
 type Tool = "search" | "scry" | "mill" | "tokens";
-/** "strip" is the lands or tokens row: it means "the battlefield", with no particular spot. */
+/** "strip" is the lands row: it means "the battlefield", with no particular spot. */
 type DropName = "battlefield" | "strip" | "hand" | "graveyard" | "exile" | "command" | "library-top" | "library-bottom";
 
 const HINT_KEY = "playtest:phone-hint-seen";
@@ -195,12 +199,8 @@ function Tile({
   );
 }
 
-function CardFace({ inst }: { inst: Instance }) {
-  return inst.image ? (
-    <img src={inst.image} alt="" draggable={false} style={NO_CALLOUT} className="pointer-events-none w-full rounded-[4.75%/3.5%] shadow" />
-  ) : (
-    <span className="flex aspect-[63/88] w-full items-center justify-center rounded-lg border border-foreground/30 bg-panel-raised p-1 text-center text-[11px] leading-tight">{inst.name}</span>
-  );
+function CardFace({ inst, reveal }: { inst: Instance; reveal?: boolean }) {
+  return <CardPicture inst={inst} reveal={reveal} style={NO_CALLOUT} className="pointer-events-none" />;
 }
 
 function CounterPills({ counters }: { counters?: Record<string, number> }) {
@@ -223,7 +223,7 @@ function CounterPills({ counters }: { counters?: Record<string, number> }) {
 const playWidth = (count: number, scale: number) => Math.round((count <= 9 ? 84 : count <= 16 ? 66 : 52) * scale);
 /** Keeps the section's label readable above the first row of cards. */
 const LABEL_ROOM = 20;
-/** Lands and tokens rows: small enough to leave the play area the room, big enough to read the name. */
+/** The lands row: small enough to leave the play area the room, big enough to read the name. */
 const PILE_CARD = 50;
 
 type Box = { width: number; height: number };
@@ -249,7 +249,7 @@ const cellPosition = (i: number, box: Box, width: number) => {
 
 /** The first grid cell with no card on it, for a card played without a drop position. */
 function freeSpot(game: GameState, box: Box, width: number) {
-  const placed = game.zones.battlefield.filter((iid) => !game.cards[iid].land && !game.cards[iid].token).map((iid) => game.battlefield[iid]);
+  const placed = game.zones.battlefield.filter((iid) => !inLandRow(game.cards[iid])).map((iid) => game.battlefield[iid]);
   const { cols, rows, cellW, cellH } = cells(box, width);
   for (let i = 0; i < cols * rows; i++) {
     const spot = cellPosition(i, box, width);
@@ -311,9 +311,9 @@ export function PhoneTable({
   const playing = game.stage === "playing";
 
   const ids = game.zones.battlefield;
-  const lands = ids.filter((iid) => game.cards[iid].land);
-  const tokenIds = ids.filter((iid) => game.cards[iid].token);
-  const others = ids.filter((iid) => !game.cards[iid].land && !game.cards[iid].token);
+  // Tokens play in the free area like any other permanent; only lands get their own row.
+  const lands = ids.filter((iid) => inLandRow(game.cards[iid]));
+  const others = ids.filter((iid) => !inLandRow(game.cards[iid]));
   const size = playWidth(others.length + 1, scale);
 
   const [box, setBox] = useState<Box>({ width: 360, height: 360 });
@@ -348,7 +348,7 @@ export function PhoneTable({
       const inst = game.cards[iid];
       const el = area.current;
       const onBattlefield = !!game.battlefield[iid];
-      if (inst.land || inst.token) {
+      if (inLandRow(inst)) {
         if (!onBattlefield) play(iid);
         return;
       }
@@ -369,7 +369,7 @@ export function PhoneTable({
   const tidy = useCallback(
     () =>
       update((g) => {
-        const list = g.zones.battlefield.filter((iid) => !g.cards[iid].land && !g.cards[iid].token);
+        const list = g.zones.battlefield.filter((iid) => !inLandRow(g.cards[iid]));
         return list.reduce((acc, iid, i) => move(acc, iid, "battlefield", { at: cellPosition(i, box, size) }), g);
       }),
     [box, size, update],
@@ -429,7 +429,7 @@ export function PhoneTable({
 
   const rowProps = { game, scale, ring: ring("strip"), dragging, onPress: pressCard, update, onInspect };
   const field = (
-      // Play takes the room; lands and tokens sit under it as rows, always in view.
+      // Play takes the room (tokens too); lands sit under it as a row, always in view.
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <section data-drop="battlefield" aria-label={`Play: ${others.length}`} style={{ touchAction: "none" }} className={`felt relative min-h-0 flex-1 ${ring("battlefield")}`}>
           <p className="pointer-events-none absolute left-2 top-0.5 z-0 text-[13px] font-semibold text-foreground/80">Play {others.length}</p>
@@ -449,7 +449,7 @@ export function PhoneTable({
                     width={size}
                     tapped={p.tapped}
                     faded={dragging === iid}
-                    label={`${game.cards[iid].name}${p.tapped ? ", tapped" : ""}`}
+                    label={`${tableName(game.cards[iid])}${p.tapped ? ", tapped" : ""}`}
                     onTap={() => update((g) => toggleTap(g, iid))}
                     onHold={() => onInspect(iid)}
                     onPress={(e) => pressCard(e, { iid, onTap: () => update((g) => toggleTap(g, iid)), onHold: () => onInspect(iid) })}
@@ -461,7 +461,6 @@ export function PhoneTable({
             })}
           </div>
         </section>
-        {tokenIds.length > 0 && <PileRow label="Tokens" detail={`${tokenIds.length}`} ids={tokenIds} empty="No tokens." {...rowProps} />}
         <PileRow label="Lands" detail={lands.length ? `${lands.length} (${untappedLands} untapped)` : "0"} ids={lands} empty="No lands yet. Drag one up from your hand." {...rowProps} />
       </div>
   );
@@ -591,9 +590,9 @@ function ZoneChip({
   );
 }
 
-// ---------- lands and tokens ----------
+// ---------- lands ----------
 
-/** One row of piles (lands or tokens) under the play area. Sideways swipes scroll it; a tap taps one card. */
+/** The row of land piles under the play area. Sideways swipes scroll it; a tap taps one card. */
 function PileRow({
   label,
   detail,
@@ -633,7 +632,7 @@ function PileRow({
         {piles.map((pile) => {
           const iid = pile.ids[0];
           const inst = game.cards[iid];
-          const name = `${inst.name}, ${pile.ids.length} ${pile.tapped ? "tapped" : "untapped"}`;
+          const name = `${tableName(inst)}, ${pile.ids.length} ${pile.tapped ? "tapped" : "untapped"}`;
           const tap = () => update((g) => toggleTap(g, iid));
           return (
             <Tile
@@ -981,8 +980,6 @@ export function CardSheet({
   onClose: () => void;
 }) {
   const [custom, setCustom] = useState("");
-  const [flipped, setFlipped] = useState(false);
-  const [hasBack, setHasBack] = useState(false);
   const [countersOpen, setCountersOpen] = useState(() => Object.keys(game.battlefield[iid]?.counters ?? {}).length > 0);
   const inst = game.cards[iid];
   const zone = zoneOf(game, iid);
@@ -995,9 +992,7 @@ export function CardSheet({
     onClose();
   };
   const kinds = [...new Set([...COUNTER_KINDS, ...Object.keys(placed?.counters ?? {})])];
-  // Two-faced cards keep their back image at the same address under /back/. Split cards have none, so the Flip
-  // button only appears once that image has actually loaded.
-  const backImage = inst.image && inst.name.includes(" // ") ? inst.image.replace("/front/", "/back/") : null;
+  const playing = game.stage === "playing";
 
   const counters = onField && (
             <details className="mb-2 rounded-lg border border-foreground/15 px-3" open={countersOpen} onToggle={(e) => setCountersOpen(e.currentTarget.open)}>
@@ -1048,11 +1043,12 @@ export function CardSheet({
   return (
     <Sheet title={inst.name} onClose={onClose} z="z-[60]">
       <div className="mx-auto mb-3 w-[min(60vw,36dvh,20rem)]">
-        <CardFace inst={flipped && backImage ? { ...inst, image: backImage } : inst} />
-        {backImage && !hasBack && <img src={backImage} alt="" hidden onLoad={() => setHasBack(true)} />}
-        {hasBack && (
-          <button type="button" onClick={() => setFlipped((f) => !f)} className="btn mt-1 min-h-11 w-full">
-            Flip
+        <CardFace inst={inst} reveal />
+        {inst.faceDown && <p className="mt-1 text-center text-sm text-foreground/75">Face down: only you see this face.</p>}
+        {/* Flipping is part of the game: an MDFC flipped in hand plays as that face, a transformed card stays turned. */}
+        {inst.back && !inst.faceDown && (
+          <button type="button" onClick={() => update((g) => flipCard(g, iid))} className="btn mt-1 min-h-11 w-full">
+            ⇄ Flip to {inst.flipped ? "front" : "back"}
           </button>
         )}
       </div>
@@ -1087,6 +1083,11 @@ export function CardSheet({
           </div>
           {counters}
           <div className="grid grid-cols-2 gap-2">
+            {playing && (zone === "battlefield" || zone === "exile" || zone === "hand") && (
+              <div className="col-span-2">
+                <SheetButton onClick={() => update((g) => toggleFaceDown(g, iid))}>{inst.faceDown ? "Turn face up" : "Turn face down"}</SheetButton>
+              </div>
+            )}
             {inst.token ? (
               <div className="col-span-2">
                 <SheetButton onClick={() => go("graveyard")}>Remove token</SheetButton>

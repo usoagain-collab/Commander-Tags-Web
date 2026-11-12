@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   createToken,
+  backImageOf,
+  faceImage,
+  faceName,
+  flipCard,
+  inLandRow,
+  toggleFaceDown,
   addCounter,
   mill,
   resolveScry,
@@ -23,6 +29,7 @@ import {
   zoneOf,
   type DeckCard,
 } from "./game";
+import { viewOf } from "./room";
 
 const deck: DeckCard[] = [
   { oracleId: "omo", name: "Omo", image: null, typeLine: "Legendary Creature — Spirit", quantity: 1, commander: true },
@@ -211,5 +218,70 @@ describe("pilesOf", () => {
   it("keeps a card with counters apart", () => {
     const { g, forests } = withForests();
     expect(pilesOf(addCounter(g, forests[0], "charge", 1), forests).map((p) => p.ids.length).sort()).toEqual([1, 2]);
+  });
+});
+
+describe("flipping and face-down cards", () => {
+  const mdfc: DeckCard = { oracleId: "sink", name: "Sink into Stupor // Soporific Springs", image: "https://cards.scryfall.io/normal/front/a/b/ab.jpg", back: "https://cards.scryfall.io/normal/back/a/b/ab.jpg", typeLine: "Instant // Land", quantity: 1, commander: false };
+  const start = () => {
+    const g = keep(newGame([...deck, mdfc], 3));
+    const iid = Object.values(g.cards).find((c) => c.oracleId === "sink")!.iid;
+    const elf = Object.values(g.cards).find((c) => c.oracleId === "elf")!.iid;
+    return { g, iid, elf };
+  };
+
+  it("finds the back image only for layouts that have one", () => {
+    expect(backImageOf(mdfc.image, "modal_dfc")).toBe(mdfc.back);
+    expect(backImageOf(mdfc.image, "split")).toBeNull();
+    expect(backImageOf(null, "transform")).toBeNull();
+  });
+
+  it("flips a card with a back face; a flipped MDFC played from hand counts as its land side", () => {
+    const { g, iid, elf } = start();
+    expect(flipCard(g, elf)).toBe(g);
+    let v = flipCard(g, iid);
+    expect(faceImage(v.cards[iid])).toBe(mdfc.back);
+    expect(faceName(v.cards[iid])).toBe("Soporific Springs");
+    v = move(v, iid, "battlefield");
+    expect(v.cards[iid].flipped).toBe(true);
+    expect(inLandRow(v.cards[iid])).toBe(true);
+    // Leaving the battlefield turns it front up again.
+    v = move(v, iid, "graveyard");
+    expect(v.cards[iid].flipped).toBe(false);
+    expect(faceImage(v.cards[iid])).toBe(mdfc.image);
+  });
+
+  it("turns any card face down until it changes zones", () => {
+    const { g, elf } = start();
+    let v = toggleFaceDown(move(g, elf, "battlefield"), elf);
+    expect(v.cards[elf].faceDown).toBe(true);
+    expect(v.zones.battlefield).toContain(elf);
+    expect(toggleFaceDown(v, elf).cards[elf].faceDown).toBe(false);
+    v = move(v, elf, "exile");
+    expect(v.cards[elf].faceDown).toBe(false);
+  });
+
+  it("a card turned face down in hand stays down when played or exiled (morph, foretell), not when moved elsewhere", () => {
+    const { g, elf } = start();
+    const inHand = move(g, elf, "hand");
+    const down = toggleFaceDown(inHand, elf);
+    expect(move(down, elf, "battlefield").cards[elf].faceDown).toBe(true);
+    expect(move(down, elf, "exile").cards[elf].faceDown).toBe(true);
+    expect(move(down, elf, "graveyard").cards[elf].faceDown).toBe(false);
+  });
+
+  it("a face-down land is a creature, not a land; tokens go in the play area", () => {
+    const { g } = start();
+    const forest = [...g.zones.library, ...g.zones.hand].find((i) => g.cards[i].name === "Forest")!;
+    const v = toggleFaceDown(move(g, forest, "battlefield"), forest);
+    expect(inLandRow(v.cards[forest])).toBe(false);
+    const t = createToken(v, { name: "Treasure", image: null, typeLine: "Token Artifact — Treasure" });
+    expect(t.battlefield.t1).not.toEqual(t.battlefield[forest]);
+  });
+
+  it("other players see a face-down card as a back", () => {
+    const { g, elf } = start();
+    const v = viewOf(toggleFaceDown(move(g, elf, "battlefield"), elf), { id: "me", name: "Me", deck: "D" }, {});
+    expect(v.battlefield.find((c) => c.iid === elf)).toMatchObject({ name: "Face-down card", image: null });
   });
 });

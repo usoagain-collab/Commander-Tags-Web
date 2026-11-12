@@ -15,8 +15,16 @@ export type Instance = {
   /** Front face is a land: it sits in the lands row on the battlefield. */
   land: boolean;
   commander: boolean;
-  /** A token (6c): it sits in the tokens row and stops existing when it leaves the battlefield. */
+  /** A token (6c): it stops existing when it leaves the battlefield. */
   token?: boolean;
+  /** The back face's own image, for cards with two pictures (transforming and modal double-faced cards). */
+  back?: string | null;
+  /** Back face is a land (an MDFC played as its land side goes to the lands row). */
+  backLand?: boolean;
+  /** Showing the back face. Kept while the card moves (flip an MDFC in hand, then play it); reset when it leaves the battlefield. */
+  flipped?: boolean;
+  /** Face down (morph, manifest, cloak, foretell). Reset whenever the card changes zones. */
+  faceDown?: boolean;
 };
 
 /** Where a nonland card sits on the battlefield (percent of the play area), and whether it's tapped. */
@@ -51,7 +59,14 @@ export type GameState = {
   seed: number;
 };
 
-export type DeckCard = { oracleId: string; name: string; image: string | null; typeLine: string; quantity: number; commander: boolean };
+export type DeckCard = { oracleId: string; name: string; image: string | null; typeLine: string; quantity: number; commander: boolean; back?: string | null };
+
+/** Scryfall layouts whose back face has its own picture (split cards, Rooms and adventures share one). */
+export const TWO_IMAGE_LAYOUTS = new Set(["transform", "modal_dfc", "reversible_card", "double_faced_token"]);
+
+/** The back face's picture, which Scryfall keeps at the same address under /back/. */
+export const backImageOf = (image: string | null, layout: string | null | undefined) =>
+  image && layout && TWO_IMAGE_LAYOUTS.has(layout) ? image.replace("/front/", "/back/") : null;
 
 // ---------- randomness (seeded, so tests and replays are repeatable) ----------
 
@@ -78,6 +93,16 @@ export function shuffled<T>(items: T[], seed: number): [T[], number] {
 }
 
 const frontIsLand = (typeLine: string) => /\bLand\b/.test(typeLine.split(" // ")[0]);
+const backIsLand = (typeLine: string) => /\bLand\b/.test(typeLine.split(" // ")[1] ?? "");
+
+/** The picture to draw for a face-up card: its back face when flipped. */
+export const faceImage = (inst: Instance) => (inst.flipped && inst.back ? inst.back : inst.image);
+
+/** The name of the face showing (an MDFC flipped to its land reads as the land). */
+export const faceName = (inst: Instance) => (!inst.back ? inst.name : (inst.name.split(" // ")[inst.flipped ? 1 : 0] ?? inst.name));
+
+/** Sits in the lands row: a land face up, by the face that's showing. Face-down cards are 2/2 creatures. */
+export const inLandRow = (inst: Instance) => !inst.faceDown && (inst.flipped && inst.back ? !!inst.backLand : inst.land);
 
 // ---------- starting a game ----------
 
@@ -91,6 +116,7 @@ export function newGame(deck: DeckCard[], seed: number, freeMulligan = true): Ga
     for (let k = 0; k < c.quantity; k++) {
       const iid = `c${++n}`;
       cards[iid] = { iid, oracleId: c.oracleId, name: c.name, image: c.image, typeLine: c.typeLine, land: frontIsLand(c.typeLine), commander: c.commander };
+      if (c.back) Object.assign(cards[iid], { back: c.back, backLand: backIsLand(c.typeLine) });
       (c.commander ? command : library).push(iid);
     }
   }
@@ -174,13 +200,13 @@ export function pilesOf(state: GameState, ids: string[]): Pile[] {
   const piles = new Map<string, Pile>();
   for (const iid of ids) {
     const p = state.battlefield[iid];
-    const key = `${state.cards[iid].name}|${p.tapped}|${JSON.stringify(p.counters ?? {})}`;
+    const key = `${faceName(state.cards[iid])}|${p.tapped}|${JSON.stringify(p.counters ?? {})}`;
     const pile = piles.get(key);
     if (pile) pile.ids.push(iid);
     else piles.set(key, { key, ids: [iid], tapped: p.tapped });
   }
   // Same-named piles stay together however the tapping went.
-  return [...piles.values()].sort((a, b) => state.cards[a.ids[0]].name.localeCompare(state.cards[b.ids[0]].name) || Number(a.tapped) - Number(b.tapped));
+  return [...piles.values()].sort((a, b) => faceName(state.cards[a.ids[0]]).localeCompare(faceName(state.cards[b.ids[0]])) || Number(a.tapped) - Number(b.tapped));
 }
 
 export function untapAll(state: GameState): GameState {
@@ -229,6 +255,14 @@ export function move(state: GameState, iid: string, to: Zone, opts: MoveOptions 
     return { ...state, battlefield: { ...state.battlefield, [iid]: { ...state.battlefield[iid], ...clampPos(opts.at) } } };
   }
   const zones = { ...state.zones, [from]: state.zones[from].filter((x) => x !== iid) };
+  // A face-down card is turned face up when it changes zones, except one turned down in hand and then played or
+  // exiled (morph, disguise, foretell). A transformed card comes back front up off the battlefield.
+  const c = state.cards[iid];
+  const staysDown = from === "hand" && (to === "battlefield" || to === "exile");
+  const cards =
+    (c.faceDown && !staysDown) || (c.flipped && from === "battlefield")
+      ? { ...state.cards, [iid]: { ...c, faceDown: c.faceDown && staysDown, flipped: from === "battlefield" ? false : c.flipped } }
+      : state.cards;
   if (to === "library") zones.library = opts.library === "bottom" ? [...zones.library, iid] : [iid, ...zones.library];
   else zones[to] = [...zones[to], iid];
 
@@ -237,14 +271,30 @@ export function move(state: GameState, iid: string, to: Zone, opts: MoveOptions 
   if (to === "battlefield") battlefield[iid] = { ...clampPos(opts.at ?? nextSpot(state)), tapped: false };
 
   const casts = from === "command" && to === "battlefield" && state.cards[iid].commander ? { ...state.casts, [iid]: (state.casts[iid] ?? 0) + 1 } : state.casts;
-  return { ...state, zones, battlefield, casts };
+  return { ...state, cards, zones, battlefield, casts };
+}
+
+// ---------- faces ----------
+
+/** Turns a two-image card to its other face (transform, or pick an MDFC's side), in any zone. */
+export function flipCard(state: GameState, iid: string): GameState {
+  const c = state.cards[iid];
+  if (!c?.back || c.faceDown) return state;
+  return { ...state, cards: { ...state.cards, [iid]: { ...c, flipped: !c.flipped } } };
+}
+
+/** Turns a card face down or back up. On the battlefield it stays where it is. */
+export function toggleFaceDown(state: GameState, iid: string): GameState {
+  const c = state.cards[iid];
+  if (!c) return state;
+  return { ...state, cards: { ...state.cards, [iid]: { ...c, faceDown: !c.faceDown } } };
 }
 
 const clampPos = (p: { x: number; y: number }) => ({ x: Math.min(92, Math.max(0, p.x)), y: Math.min(85, Math.max(0, p.y)) });
 
 /** A free-ish spot for a card played without a drop position (keyboard or button), left to right. */
 function nextSpot(state: GameState) {
-  const n = state.zones.battlefield.filter((iid) => !state.cards[iid].land).length;
+  const n = state.zones.battlefield.filter((iid) => !inLandRow(state.cards[iid])).length;
   return { x: (n % 10) * 9 + 1, y: Math.floor(n / 10) * 30 + 2 };
 }
 
@@ -266,7 +316,7 @@ export function readSaved(raw: string | null, deckKey: string): GameState | null
 /** Identifies a deck list (which cards, how many, which art), so a saved game is only reused for the same list. */
 export const deckKey = (deck: DeckCard[]) =>
   deck
-    .map((c) => `${c.commander ? "C" : ""}${c.quantity}x${c.oracleId}@${c.image ?? ""}`)
+    .map((c) => `${c.commander ? "C" : ""}${c.quantity}x${c.oracleId}@${c.image ?? ""}${c.back ? "+b" : ""}`)
     .sort()
     .join(",");
 
@@ -324,8 +374,8 @@ export const setTopRevealed = (state: GameState, on: boolean): GameState => ({ .
 
 export type TokenSpec = { name: string; image: string | null; typeLine: string };
 
-/** Puts a new token onto the battlefield (in the tokens row). */
-export function createToken(state: GameState, spec: TokenSpec): GameState {
+/** Puts a new token onto the battlefield, in the play area like any other permanent. */
+export function createToken(state: GameState, spec: TokenSpec, at?: { x: number; y: number }): GameState {
   const n = (state.tokensMade ?? 0) + 1;
   const iid = `t${n}`;
   const inst: Instance = { iid, oracleId: "", name: spec.name, image: spec.image, typeLine: spec.typeLine, land: false, commander: false, token: true };
@@ -334,7 +384,7 @@ export function createToken(state: GameState, spec: TokenSpec): GameState {
     tokensMade: n,
     cards: { ...state.cards, [iid]: inst },
     zones: { ...state.zones, battlefield: [...state.zones.battlefield, iid] },
-    battlefield: { ...state.battlefield, [iid]: { x: 0, y: 0, tapped: false } },
+    battlefield: { ...state.battlefield, [iid]: { ...clampPos(at ?? nextSpot(state)), tapped: false } },
   };
 }
 
