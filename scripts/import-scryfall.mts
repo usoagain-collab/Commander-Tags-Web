@@ -13,6 +13,7 @@ import { createInterface } from "node:readline";
 import { Readable } from "node:stream";
 import pg from "pg";
 import { from as copyFrom } from "pg-copy-streams";
+import { fetchWithRetry } from "../src/lib/scryfall/fetch-retry.ts";
 
 const USER_AGENT = "DeckGenome/0.1 (daily bulk import; https://deckgenome.com)";
 
@@ -33,8 +34,12 @@ type ScryfallTag = {
 
 // ---------- download & parse ----------
 
+/** Scryfall sometimes answers 503 or 429 for a minute; wait and try again (about 2.5 minutes in all) before failing the run. */
+const getWithRetry = (url: string, headers: Record<string, string>) =>
+  fetchWithRetry(url, { headers }, { onRetry: ({ attempt, waitMs, reason }) => console.log(`  ${url} -> ${reason}; try ${attempt + 1} in ${Math.round(waitMs / 1000)}s`) });
+
 async function scryfallJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: "application/json", "User-Agent": USER_AGENT } });
+  const res = await getWithRetry(url, { Accept: "application/json", "User-Agent": USER_AGENT });
   if (!res.ok) throw new Error(`GET ${url} -> HTTP ${res.status}`);
   return (await res.json()) as T;
 }
@@ -43,7 +48,7 @@ async function scryfallJson<T>(url: string): Promise<T> {
 async function downloadRecords<T>(entry: BulkEntry): Promise<T[]> {
   const url = entry.jsonl_download_uri ?? entry.download_uri;
   if (!url) throw new Error(`Bulk entry ${entry.type} has no download link`);
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  const res = await getWithRetry(url, { "User-Agent": USER_AGENT });
   if (!res.ok) throw new Error(`GET ${url} -> HTTP ${res.status}`);
   let buf = Buffer.from(await res.arrayBuffer());
   if (buf[0] === 0x1f && buf[1] === 0x8b) buf = gunzipSync(buf); // gzip magic bytes
@@ -66,7 +71,7 @@ const imageVersion = (c: ScryfallCard) => (c.image_uris?.normal ?? c.card_faces?
 async function cheapestPrices(entry: BulkEntry, inDecks: Set<string>, printingPrices: Map<string, PrintingPrices>) {
   const url = entry.jsonl_download_uri ?? entry.download_uri;
   if (!url?.includes(".jsonl")) throw new Error("default_cards has no JSONL download link");
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  const res = await getWithRetry(url, { "User-Agent": USER_AGENT });
   if (!res.ok || !res.body) throw new Error(`GET ${url} -> HTTP ${res.status}`);
   const regular = new Map<string, number>();
   const foil = new Map<string, number>();
