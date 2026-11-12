@@ -270,6 +270,21 @@ MTGJSON publishes once a day (its files were dated 06:13 UTC on Nov 11, 2026), w
 - B. A: plus full 90-day history only for cards in someone's deck or collection. A real per-card price chart, but about 15,000 printings × 90 days ≈ 60-100 MB, so it needs the paid database tier or a slimmer `cards` table first.
 - C. MTGJSON's GraphQL service for history on demand. In beta, tokens for Patreon supporters only, 500 requests an hour: too fragile to build on.
 
+**Every place a price shows (checked in the code Nov 11, 2026), and how it follows the store setting.** One helper picks a card's price for the chosen store and finish (falling back to Scryfall's price when that store has none), and everything below calls it, so no screen keeps showing the old number.
+| Where | Today's price comes from | With A |
+| --- | --- | --- |
+| Deck page: hero total, summary bar (incl. **Still to buy**), Stacks headings, Sort by price, card panel and floating preview, Text rows | `linesFor` in `model.ts` (already swaps in the chosen printing's price) | The store price is applied in the same place, so all of these follow with no screen-by-screen changes |
+| Card sheet | the line's card | Also lists every store (normal and foil), Card Kingdom's buylist, and the 30-day trend |
+| Stats: price bands, deck total | `stats.ts` from the lines | Follows the lines; adds the deck price line (from `deck_price_history`) |
+| Mixed copies (`printing_split`) | `rowPrice` / `totalPriceWithSplits` in `splits.ts` | Split parts get per-store prices in the nightly reprice too (today they aren't repriced at all, an older gap this fixes) |
+| Search and Suggest results, Budget style's price cap, Auto build land base's cap | `card_summaries.price_usd` | `card_summaries` gains `store_prices`; results, caps and the "cheap" score use the chosen store |
+| Printing picker | live from Scryfall per printing | Scryfall knows only its TCGplayer price (and €) for printings nobody has picked, so the picker keeps those and says "TCGplayer"; the store price shows once a printing is picked |
+| Collection page (value, sort by price, card sheet) | `rowUnitPrice` with `printing_info` | Follows the setting; Card Kingdom's buylist can show as "you could sell for" |
+| Wish list (total, sort, rows) | `card.price_usd` | Follows the setting |
+| Precons page (deck price) | SQL `precon_list` | Stays TCGplayer (one shared, cached page for everyone); labeled as such |
+| Search filter "Price under $X" | Scryfall syntax (`usd<=`), answered by Scryfall | Can only use Scryfall's price, so it stays TCGplayer; labeled |
+| Exports and Download my data | no prices | No change |
+
 **Buy links:** MTGJSON's purchase links carry MTGJSON's own affiliate tags. We could build plain store links from the TCGplayer and Card Kingdom product ids in `cardIdentifiers` instead, or our own affiliate links later (an income question for David).
 
 **Questions for David:** (1) A, B or C; (2) which stores matter to you (all four, or just US stores); (3) buy links at all, and plain or affiliate.
