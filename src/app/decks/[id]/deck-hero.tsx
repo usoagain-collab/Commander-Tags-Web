@@ -19,7 +19,7 @@ export function DeckHero({
   backLink,
   complete,
   celebrate,
-  themes,
+  plays,
   note,
   status,
   actions,
@@ -38,8 +38,8 @@ export function DeckHero({
   complete: boolean;
   /** Just became complete: one shimmer across the banner. */
   celebrate: boolean;
-  /** The deck's top themes, in words. */
-  themes: string[];
+  /** The Plays line (archetype, own words, tags). Hidden on phones. */
+  plays?: React.ReactNode;
   note?: React.ReactNode;
   status?: React.ReactNode;
   actions: React.ReactNode;
@@ -117,12 +117,7 @@ export function DeckHero({
             <Stat>${price.toFixed(0)}</Stat>
             {status}
           </div>
-          {themes.length > 0 && (
-            <p className="mt-2 hidden text-sm [text-shadow:0_1px_8px_var(--art-shadow)] sm:block">
-              <span className="opacity-75">Plays: </span>
-              {themes.join(" · ")}
-            </p>
-          )}
+          {plays && <div className="hidden sm:block">{plays}</div>}
           <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">{actions}</div>
           {art && <ArtCredit artists={[artist]} className="mt-2 [text-shadow:0_1px_8px_var(--art-shadow)]" />}
         </div>

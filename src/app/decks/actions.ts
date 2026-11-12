@@ -89,7 +89,7 @@ export async function copyDeck(id: string) {
 
   const { data: shared, error: readError } = await supabase.rpc("shared_deck", { p_id: id });
   if (readError || !shared) throw new Error(`Couldn't read that deck${readError ? `: ${readError.message}` : "."}`);
-  const src = shared.deck as { name: string; owner_id: string; role_targets: unknown; custom_roles: unknown; target_bracket: number | null; cover_oracle_id: string | null; mana_values?: unknown };
+  const src = shared.deck as { name: string; owner_id: string; role_targets: unknown; custom_roles: unknown; target_bracket: number | null; cover_oracle_id: string | null; mana_values?: unknown; plays?: unknown };
   const rows = (shared.rows ?? []) as SharedRow[];
 
   const name = (src.owner_id === user.id ? `${src.name} (copy)` : src.name).slice(0, 120);
@@ -102,6 +102,7 @@ export async function copyDeck(id: string) {
       custom_roles: src.custom_roles ?? [],
       cover_oracle_id: src.cover_oracle_id,
       ...(src.mana_values && Object.keys(src.mana_values).length ? { mana_values: src.mana_values } : {}),
+      ...(src.plays ? { plays: src.plays } : {}),
     })
     .select("id")
     .single();

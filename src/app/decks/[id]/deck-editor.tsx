@@ -127,6 +127,10 @@ import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
 import type { CutterCard } from "@/lib/cutter/archetype";
 import type { CutterPrefs, CutterState } from "@/lib/cutter/state";
 import { useCutterPrefs, useCutterState } from "@/lib/cutter/use-cutter";
+import { archetypeLabel, detectArchetypes } from "@/lib/cutter/archetype";
+import { ARCHETYPES, GENERAL_KEY } from "@/lib/cutter/archetypes";
+import { NO_PLAYS, playsTags, playsToSave, steerThemes, type Plays } from "@/lib/tags/plays";
+import { PlaysEditor, PlaysLine, type PlaysHeadline } from "./plays-line";
 
 type State = {
   entries: Entries;
@@ -205,7 +209,7 @@ function reducer(state: State, action: Action): State {
 export type Visibility = "private" | "unlisted" | "public";
 
 type Props = {
-  deck: { id: string; name: string; visibility: Visibility; cover_oracle_id?: string | null; mana_values?: ManaValues };
+  deck: { id: string; name: string; visibility: Visibility; cover_oracle_id?: string | null; mana_values?: ManaValues; plays?: Plays };
   initialEntries: Entries;
   initialCategories: Categories;
   initialPrintings: Printings;
@@ -304,6 +308,18 @@ export function DeckEditor({
     if (error) {
       setManaValues(before);
       setNotice(`Couldn't change the mana value: ${error.message}`);
+    }
+  };
+  // The Plays line (v2): saved directly to decks.plays, like the deck image. Picked tags steer Suggest and the Cutter.
+  const [plays, setPlaysState] = useState<Plays>(deck.plays ?? NO_PLAYS);
+  const [editingPlays, setEditingPlays] = useState(false);
+  const savePlays = async (next: Plays) => {
+    const before = plays;
+    setPlaysState(next);
+    const { error } = await createClient().from("decks").update({ plays: playsToSave(next) }).eq("id", deck.id);
+    if (error) {
+      setPlaysState(before);
+      setNotice(`Couldn't save what this deck plays: ${error.message}`);
     }
   };
   const clearFlags = async (oracleId: string) => {
@@ -744,9 +760,15 @@ export function DeckEditor({
   // Only standard role tags are left out: a custom role is made from a theme (Lifegain, Pridemate), and dropping its
   // tags left a life gain deck scored on +1/+1 counters alone (David, Nov 8, 2026: Cosmogrand Zenith, Herald of War).
   const suggestRoleTags = new Set(roles.flatMap((r) => (r.tagSet && !r.custom ? [...r.tagSet] : [])));
-  const suggestThemes: ThemeTag[] = trees
-    ? themeTags(themeCards, { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: suggestRoleTags, hidden }).slice(0, 15)
-    : [];
+  // Tags picked in the Plays line always count, at double weight (steerThemes). Only oracle tags: the pool has no art tags.
+  const playsOracle = plays.tags.filter((k) => k.startsWith("o:"));
+  const steeredThemes = (cards: ThemeCard[], roleTags: Set<string>): ThemeTag[] => {
+    if (!trees) return [];
+    const opts = { settings: { ...themeSettings, mode: "gameplay" as const, sortBy: "relevance" as const }, trees, roleTags, hidden };
+    const top = themeTags(cards, opts).slice(0, 15);
+    return playsOracle.length ? steerThemes(top, themeTags(cards, { ...opts, limit: Infinity }), playsOracle) : top;
+  };
+  const suggestThemes: ThemeTag[] = steeredThemes(themeCards, suggestRoleTags);
   // Themes that mark mostly the same deck cards count once in a suggestion's fit (themeGroups in score.ts).
   const suggestGroups = (() => {
     if (!trees || !suggestThemes.length) return undefined;
@@ -789,6 +811,50 @@ export function DeckEditor({
       tags: tags.oracleTags[l.card.oracle_id] ?? [],
       roles: lineRoleKeys(l),
     }));
+  // The Plays line's archetype (v2): what the builder set (Plays or the Cutter's Yes / pick), else a guess from
+  // the cards. Detection is the Cutter's own, a few ms, so it only reruns when the deck or its tags change.
+  const allArchetypes = useMemo(() => [...ARCHETYPES, ...cutterSettings.prefs.archetypes], [cutterSettings.prefs.archetypes]);
+  // The line lists are rebuilt each render, so the memo keys on what detection reads: cards, copies, roles.
+  const archetypeInput = [...commanders, ...mainLines].map((l) => `${l.board[0]}${l.card.oracle_id}:${l.quantity}:${lineRoleKeys(l).join(",")}`).join("|");
+  const ranked = useMemo(
+    () => (tags.tree ? detectArchetypes({ cards: cutterCards(), tree: tags.tree, combos: combos.combos.length, archetypes: allArchetypes }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cutterCards reads exactly what archetypeInput spells out
+    [archetypeInput, tags.oracleTags, tags.tree, combos.combos.length, allArchetypes],
+  );
+  const cutterArchetype = cutter.state.archetype;
+  const settledArchetype = plays.archetype ?? (cutterArchetype.status !== "auto" ? cutterArchetype.key : null);
+  const playsHeadline: PlaysHeadline | null = (() => {
+    const set = settledArchetype ? ranked.find((d) => d.archetype.key === settledArchetype) : undefined;
+    if (set) return { label: archetypeLabel(set), guessed: false };
+    const guess = ranked[0];
+    return guess && guess.archetype.key !== GENERAL_KEY ? { label: archetypeLabel(guess), guessed: true } : null;
+  })();
+  // Answering Yes or picking an archetype in the Smart Cutter updates the Plays line too, so the two always agree.
+  const lastCutterArchetype = useRef(cutterArchetype);
+  useEffect(() => {
+    const before = lastCutterArchetype.current;
+    lastCutterArchetype.current = cutterArchetype;
+    if (readOnly || (before.key === cutterArchetype.key && before.status === cutterArchetype.status)) return;
+    const key = cutterArchetype.status === "auto" ? null : cutterArchetype.key;
+    if (key !== plays.archetype) void savePlays({ ...plays, archetype: key });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a change to the Cutter's answer should save
+  }, [cutterArchetype]);
+  /** Saving the Plays editor: an archetype set there becomes the Cutter's picked one (or back to its own guess). */
+  const savePlaysFromEditor = (next: Plays) => {
+    void savePlays(next);
+    if (next.archetype !== settledArchetype) {
+      cutter.setState((st) => ({
+        ...st,
+        archetype: next.archetype ? { key: next.archetype, status: "picked", rejected: st.archetype.rejected } : { key: null, status: "auto", rejected: st.archetype.rejected },
+      }));
+    }
+    setEditingPlays(false);
+    say("Saved what this deck plays.");
+  };
+  const tagLabel = (key: string) => {
+    const { kind, slug } = splitKey(key);
+    return kind === "o" ? (tags.tree?.label(slug) ?? slug) : (artTree?.label(slug) ?? Object.values(tags.artTags).flat().find(([s]) => aKey(s) === key)?.[1] ?? slug);
+  };
   /** Asks first when a manual removal would put a role below target (David, Nov 7, 2026); otherwise just does it. */
   const [belowTarget, setBelowTarget] = useState<{ lines: string[]; proceed: () => void } | null>(null);
   const guardRemoval = (plan: Plan, proceed: () => void) => {
@@ -1287,7 +1353,14 @@ export function DeckEditor({
         backLink={!readOnly}
         complete={complete}
         celebrate={celebrate}
-        themes={themes.slice(0, 3).map((t) => prettyTag(t.label))}
+        plays={
+          <PlaysLine
+            archetype={playsHeadline}
+            text={plays.text}
+            tags={playsTags(plays, themes, tagLabel)}
+            onEdit={readOnly ? undefined : () => setEditingPlays(true)}
+          />
+        }
         onOpenCommander={(i) => openLine(commanders[i])}
         note={
           readOnly &&
@@ -1525,6 +1598,9 @@ export function DeckEditor({
           onClose={closePanel}
         />
       )}
+      {editingPlays && !readOnly && (
+        <PlaysEditor plays={plays} themes={themes} ranked={ranked} labelOf={tagLabel} onSave={savePlaysFromEditor} onClose={() => setEditingPlays(false)} />
+      )}
       {panel === "cutter" && !readOnly && tags.tree && (
         <CutterPanel
           deckId={deck.id}
@@ -1534,12 +1610,10 @@ export function DeckEditor({
           roles={roles}
           tree={tags.tree}
           themesFor={(list) =>
-            trees
-              ? themeTags(
-                  list.map((c) => ({ oracle: c.tags, art: [], commander: c.commander, land: isLand(c.card.type_line) })),
-                  { settings: { ...themeSettings, mode: "gameplay", sortBy: "relevance" }, trees, roleTags: roleTagSet, hidden },
-                ).slice(0, 15)
-              : []
+            steeredThemes(
+              list.map((c) => ({ oracle: c.tags, art: [], commander: c.commander, land: isLand(c.card.type_line) })),
+              roleTagSet,
+            )
           }
           keysOf={(t) => (trees ? cardKeys({ oracle: t, art: [], commander: false, land: false }, themeSettings.specific, trees) : [])}
           rolesFor={(c, t) => visibleRoleKeys(c, t)}
