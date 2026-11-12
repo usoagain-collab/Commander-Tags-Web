@@ -9,7 +9,7 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <p className="eyebrow">Last updated November 9, 2026</p>
+      <p className="eyebrow">Last updated November 12, 2026</p>
       <h1 className="display text-3xl sm:text-4xl">Privacy</h1>
       <p className="mt-4 text-lg opacity-90">
         Deck Genome is a Commander deck builder. We keep only what it needs to save your decks, and we never sell your data or show ads.
@@ -49,7 +49,8 @@ export default function PrivacyPage() {
               <strong>Supabase</strong> stores the database and handles sign-in (servers in the United States).
             </li>
             <li>
-              <strong>Vercel</strong> runs the website.
+              <strong>Vercel</strong> runs the website and counts page visits (which pages are viewed, the referring site, and the
+              country, browser and device type). It uses no cookies and doesn&apos;t identify you.
             </li>
             <li>
               <strong>Scryfall</strong> supplies card data and images. Your browser loads card images and some searches straight from Scryfall,
