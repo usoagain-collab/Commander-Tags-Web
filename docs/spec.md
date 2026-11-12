@@ -243,7 +243,7 @@ Everything else on the v2 backlog is built. These need a schema OK or a directio
 - **Link sign-in methods:** turn on manual identity linking in Supabase (Authentication → Providers settings).
 - ~~**Pricing details (per store):** an API key from a price source.~~ Not blocked any more (Nov 11, 2026): MTGJSON's price files need no key. See "Prices from MTGJSON" below.
 
-### Prices from MTGJSON (proposal, Nov 11, 2026)
+### Prices from MTGJSON (proposal, Nov 11, 2026; David chose A with all four stores)
 
 **Who does what.** Scryfall stays the source for everything the builder thinks with: Tagger tags (MTGJSON has none), card images (MTGJSON has none and points to Scryfall), live search with full syntax, rules text, legality, rulings, and new spoilers (Scryfall has them within hours; MTGJSON rebuilds once a day). MTGJSON adds what Scryfall lacks: precon decklists (already used), prices **per store**, what stores pay (buylist), and **90 days of price history**. Scryfall's own USD price is TCGplayer's, so it stays the default and nothing changes for people who never open a price setting.
 
@@ -287,7 +287,7 @@ MTGJSON publishes once a day (its files were dated 06:13 UTC on Nov 11, 2026), w
 
 **Buy links:** MTGJSON's purchase links carry MTGJSON's own affiliate tags. We could build plain store links from the TCGplayer and Card Kingdom product ids in `cardIdentifiers` instead, or our own affiliate links later (an income question for David).
 
-**Questions for David:** (1) A, B or C; (2) which stores matter to you (all four, or just US stores); (3) buy links at all, and plain or affiliate.
+**David's choices (Nov 11, 2026):** option **A**, with **all four stores** (TCGplayer, Card Kingdom, Mana Pool, Cardmarket in €). Still open: buy links at all, and plain or affiliate. The schema (the `store_prices` and `price_trend` columns, `deck_price_history`) is the one described under A.
 
 ## v3 backlog
 
