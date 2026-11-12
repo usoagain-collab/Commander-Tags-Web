@@ -20,7 +20,7 @@ concurrency:
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45 # the MTGJSON price step streams a 148 MB file (about 10 minutes)
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
@@ -46,6 +46,12 @@ jobs:
         if: steps.secret.outputs.ok == 'true'
       # Two-card combos from Commander Spellbook (Phase 5a). After the Scryfall import, because combos point
       # at cards. Streams a ~700 MB file; about 2 minutes.
+      # Store prices from MTGJSON (v2): Card Kingdom, Mana Pool, Cardmarket, the 30-day trend and each deck's
+      # price history. After the Scryfall import, which writes the TCGplayer prices these sit beside. A few minutes
+      # (it streams the 148 MB 90-day price file).
+      - run: npm run import:prices
+        if: steps.secret.outputs.ok == 'true'
+        continue-on-error: true # a price failure keeps yesterday's prices and must not stop combos or precons
       - run: npm run import:combos
         if: steps.secret.outputs.ok == 'true'
       # Commander precons from MTGJSON (v2). After the Scryfall import, because decks point at cards. Only new

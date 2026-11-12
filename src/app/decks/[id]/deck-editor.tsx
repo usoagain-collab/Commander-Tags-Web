@@ -121,6 +121,8 @@ import { useCollection } from "@/lib/deck/use-collection";
 import { readCardLang } from "@/lib/deck/card-language";
 import { useLocalized } from "@/lib/deck/use-localized";
 import { artCount, totalPriceWithSplits, type SplitPart, type Splits } from "@/lib/deck/splits";
+import { priceCards, pricePrintings, readPriceSource } from "@/lib/deck/store-prices";
+import { priceSplits } from "@/lib/deck/deck-totals";
 import { applyOrder, mergeOrder, readOrder } from "@/lib/tags/order";
 import { CutterPanel, type AddItem, type CutItem } from "./cutter-panel";
 import { belowTargetText, belowTargetWarning } from "@/lib/cutter/score";
@@ -541,6 +543,12 @@ export function DeckEditor({
   // What each row shows: its own pick, else your default. Edits and undo work on the picks alone.
   const { preferred, setDefault } = usePreferredPrintings(initialPreferred);
   const shownPrintings = useMemo(() => effectivePrintings(entries, printings, preferred), [entries, printings, preferred]);
+  // Prices from your chosen store (v2, Settings → Prices). Everything priced below reads these; edits keep the
+  // printings' own prices, so nothing priced here is ever saved.
+  const priceSource = readPriceSource(prefs);
+  const pricedCards = useMemo(() => priceCards(cards, priceSource), [cards, priceSource]);
+  const pricedPrintings = useMemo(() => pricePrintings(shownPrintings, priceSource), [shownPrintings, priceSource]);
+  const pricedSplits = useMemo(() => priceSplits(splits, priceSource), [splits, priceSource]);
 
   // ---------- bracket targeting (Phase 5b) ----------
   const bracket = useBracketTarget(deck.id, targetBracket, readOnly);
@@ -609,8 +617,8 @@ export function DeckEditor({
   // ---------- what's on screen ----------
   const identity = deckIdentity(entries, cards);
   const size = deckSize(entries);
-  const countedCards = useMemo(() => applyManaValues(cards, manaValues), [cards, manaValues]);
-  const rawLines = (["commander", "companion", "main", "maybe"] as Board[]).map((b) => linesFor(entries, countedCards, b, shownPrintings));
+  const countedCards = useMemo(() => applyManaValues(pricedCards, manaValues), [pricedCards, manaValues]);
+  const rawLines = (["commander", "companion", "main", "maybe"] as Board[]).map((b) => linesFor(entries, countedCards, b, pricedPrintings));
   // Card language (v2): pictures in your language where that printing exists in it.
   // Your setting, also on decks shared with you and precons (prefs are the viewer's own).
   const cardLang = readCardLang(prefs);
@@ -1349,7 +1357,7 @@ export function DeckEditor({
         commanders={commanders.map((l) => l.card)}
         identity={identity}
         size={size}
-        price={totalPriceWithSplits(entries, cards, shownPrintings, splits)}
+        price={totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits)}
         backLink={!readOnly}
         complete={complete}
         celebrate={celebrate}
@@ -1479,6 +1487,7 @@ export function DeckEditor({
           >
             <div hidden={panel !== "search"}>
           <CardSearch
+            priceSource={priceSource}
             // A new "See all results" while Search is already open starts it over with that text.
             key={searchSeed?.n ?? 0}
             entries={entries}
@@ -1502,6 +1511,7 @@ export function DeckEditor({
             {suggestFor && suggestShown && (
               <div hidden={panel !== "suggest"}>
               <SuggestPanel
+                priceSource={priceSource}
                 source={suggestFor}
                 identity={identity ? [...identity] : ["W", "U", "B", "R", "G"]}
                 deckIds={[...new Set(Object.keys(entries).map((k) => k.split("|")[1]))]}
@@ -1550,6 +1560,7 @@ export function DeckEditor({
       )}
       {panel === "lands" && !readOnly && (
         <LandBasePanel
+          priceSource={priceSource}
           identity={identity ? COLORS.filter((c) => identity.has(c)) : null}
           target={landTarget}
           landCount={counts[landRoleKey] ?? 0}
@@ -1588,6 +1599,7 @@ export function DeckEditor({
       )}
       {panel === "stats" && (
         <StatsPanel
+          history={readOnly ? undefined : { deckId: deck.id, source: priceSource, total: totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits) }}
           lines={[...commanders, ...companions, ...mainLines]}
           identity={identity}
           roles={roles}
@@ -1913,7 +1925,7 @@ export function DeckEditor({
       <SummaryBar
         deckLines={[...commanders, ...mainLines]}
         size={size}
-        price={totalPriceWithSplits(entries, cards, shownPrintings, splits)}
+        price={totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits)}
         unowned={collection.tracking ? unownedPrice(collection.owned, [...commanders, ...companions, ...mainLines]) : undefined}
       />
 
@@ -1942,7 +1954,7 @@ export function DeckEditor({
       {sheetLine && (
         <CardSheet
           deckId={deck.id}
-          line={sheetLine}
+          line={{ ...sheetLine, printing: shownPrintings[entryKey(sheetLine.board, sheetLine.card.oracle_id)] ?? sheetLine.printing }}
           index={sheetIndex}
           total={order.length}
           warnings={warningsFor(sheetLine)}

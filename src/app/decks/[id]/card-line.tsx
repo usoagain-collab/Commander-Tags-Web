@@ -1,5 +1,6 @@
 "use client";
 
+import { TrendChip } from "@/components/store-prices";
 import { ManaCost } from "@/components/mana-cost";
 import { OwnedBadge } from "./owned-badge";
 import type { DeckItem } from "./deck-views";
@@ -134,7 +135,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
       </button>
       <ManaCost cost={card.mana_cost} />
       <span className="hidden w-14 shrink-0 text-right text-[13px] tabular-nums opacity-80 sm:inline">
-        {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "–"}
+        {card.price_usd != null ? `$${Number(card.price_usd).toFixed(2)}` : "–"} <TrendChip trend={card.price_trend} />
       </span>
     </li>
   );

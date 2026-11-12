@@ -3,6 +3,7 @@
 // Auto build land base (v2): previews the lands it would add, then adds them as one undoable edit.
 // Candidates come from our card data (most played first) with their tags, so fetch lands count for the colors
 // they find. The picking rules live in src/lib/deck/land-base.ts.
+import { priceCard, type PriceSource } from "@/lib/deck/store-prices";
 import { useEffect, useMemo, useState } from "react";
 import { ManaSymbol } from "@/components/mana-cost";
 import { BASIC_NAMES, NONBASIC_SHARE, planLandBase, type LandCandidate } from "@/lib/deck/land-base";
@@ -40,6 +41,8 @@ function savedCap(): number | null {
 }
 
 type Props = {
+  /** Where prices come from (Settings → Prices); the price cap follows it. */
+  priceSource: PriceSource;
   identity: Color[] | null;
   target: number;
   landCount: number;
@@ -84,7 +87,7 @@ export function LandBasePanel(props: Props) {
           .limit(250),
         supabase.from("card_summaries").select("*").in("name", Object.values(BASIC_NAMES)).ilike("type_line", "Basic%"),
       ]);
-      const rows = (lands.data ?? []) as CardSummary[];
+      const rows = ((lands.data ?? []) as CardSummary[]).map((c) => priceCard(c, props.priceSource));
       const tags = rows.length ? await supabase.rpc("card_tags_for", { oracle_ids: rows.map((c) => c.oracle_id) }) : { data: { o: {} }, error: null };
       if (!current) return;
       const failed = lands.error ?? basicRows.error ?? tags.error;
@@ -94,7 +97,7 @@ export function LandBasePanel(props: Props) {
       }
       const byId = ((tags.data as { o?: Record<string, string[]> } | null)?.o ?? {}) as Record<string, string[]>;
       setPool(rows.filter((c) => c.counts_as_land).map((c) => ({ ...c, tags: byId[c.oracle_id] ?? [] })));
-      setBasics(Object.fromEntries(((basicRows.data ?? []) as CardSummary[]).map((c) => [c.name, c])));
+      setBasics(Object.fromEntries(((basicRows.data ?? []) as CardSummary[]).map((c) => [c.name, priceCard(c, props.priceSource)])));
     })();
     return () => {
       current = false;

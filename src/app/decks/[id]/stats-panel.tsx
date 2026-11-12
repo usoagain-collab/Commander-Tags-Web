@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 // Deck stats (step 3i), on the same full-screen glass as Bracket: every number and bar is a button that lists its
 // cards beside the charts (a sheet from the bottom on narrow screens). Plain CSS bars, no chart library.
 import type { DeckLine } from "@/lib/deck/model";
+import type { PriceSource } from "@/lib/deck/store-prices";
+import { PriceHistory } from "./price-history";
 import {
   COLOR_NAMES,
   colorBalance,
@@ -88,7 +90,10 @@ export function StatsPanel({
   paused,
   onOpenCard,
   onClose,
+  history,
 }: {
+  /** The deck's price line (v2): needs the deck, your price source and today's total. */
+  history?: { deckId: string; source: PriceSource; total: number };
   lines: DeckLine[];
   identity: Set<string> | null;
   roles: { key: string; name: string; target: number }[];
@@ -134,6 +139,7 @@ export function StatsPanel({
                 <Types {...shared} />
                 <CreatureTypes {...shared} />
                 <Prices {...shared} />
+                {history && <PriceHistory deckId={history.deckId} source={history.source} total={history.total} />}
               </div>
               <Tokens {...shared} tokens={tokens} nameOf={nameOf} />
             </div>

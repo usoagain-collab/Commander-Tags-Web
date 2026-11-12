@@ -14,7 +14,8 @@
     "import:combos": "node --env-file-if-exists=.env.local scripts/import-combos.mts",
     "cutter:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/cutter-check.mts",
     "wording:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/wording-check.mts",
-    "import:precons": "node --env-file-if-exists=.env.local scripts/import-precons.mts"
+    "import:precons": "node --env-file-if-exists=.env.local scripts/import-precons.mts",
+    "import:prices": "node --env-file-if-exists=.env.local scripts/run-ts.mjs scripts/import-prices.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -1,6 +1,7 @@
 // Collection tracking (v2): copies owned per card, printing and finish (migration 0040, table collection_cards).
 // A null printing means "printing unknown" (plain lists, and everything imported before 0040).
 // Pure helpers: reading collection exports, owned checks for a deck, the unowned price, CSV export.
+import { pricePrinting, type PriceSource } from "./store-prices";
 import type { DeckLine } from "./model";
 import { foilFor, type ChosenPrinting } from "./printing";
 
@@ -86,8 +87,10 @@ export function unownedPrice(c: Collection, lines: Pick<DeckLine, "quantity" | "
 }
 
 /** What one owned row is worth each: its own printing and finish when known, else the card's cheapest price. */
-export function rowUnitPrice(r: OwnedRow, fallback: number | null): number {
-  const p = r.printing_info;
+export function rowUnitPrice(r: OwnedRow, fallback: number | null, source: PriceSource = "tcgplayer"): number {
+  // Your chosen store (Settings → Prices) when the nightly import knows this printing there; fallback is already
+  // the card's cheapest price at that store.
+  const p = r.printing_info ? pricePrinting(r.printing_info as unknown as ChosenPrinting, source) : null;
   if (!p) return fallback ?? 0;
   const v = r.finish === "etched" ? (p.usd_etched ?? p.usd_foil) : r.finish === "foil" ? (p.usd_foil ?? p.usd_etched) : p.usd;
   return v ?? fallback ?? 0;

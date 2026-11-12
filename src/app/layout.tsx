@@ -46,7 +46,7 @@ export default async function RootLayout({
             <a className="underline" href="https://scryfall.com" target="_blank" rel="noopener noreferrer">
               Scryfall
             </a>
-            ; preconstructed deck lists from{" "}
+            ; preconstructed deck lists and Card Kingdom, Mana Pool and Cardmarket prices from{" "}
             <a className="underline" href="https://mtgjson.com" target="_blank" rel="noopener noreferrer">
               MTGJSON
             </a>

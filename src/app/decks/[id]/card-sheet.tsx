@@ -12,6 +12,7 @@ import type { TagData } from "@/lib/tags/use-tag-data";
 import { CommanderLegality, LegalityAndRulings, RulesText, useCardDetails } from "./card-details";
 import { CardTags } from "./card-tags";
 import { printingImage, printingPrice, type ChosenPrinting } from "@/lib/deck/printing";
+import { StorePriceList } from "@/components/store-prices";
 import { PrintingPicker } from "./printing-picker";
 import { TUTORS_KEY } from "@/lib/tags/role-settings";
 import { TutorBadge, TutorNote } from "./tutor-label";
@@ -198,9 +199,18 @@ export function CardSheet(props: Props) {
                 {props.candidate ? props.candidate.status : <>{quantity > 1 ? `${quantity} copies · ` : ""}{BOARD_LABELS[board]}</>}
                 {card.price_usd != null && <> · ${Number(card.price_usd).toFixed(2)} each</>}
                 {printing && printingPrice(printing) == null && card.price_usd != null && (
-                  <span title="Scryfall has no price for this printing, so this is the card's cheapest price"> (est.)</span>
+                  <span title="No price for this printing, so this is the card's cheapest price"> (est.)</span>
                 )}
               </p>
+              <div className="mt-2">
+                <StorePriceList
+                  tcg={printing ? printingPrice(printing) : (card.tcg_usd !== undefined ? card.tcg_usd : card.price_usd)}
+                  stores={printing ? printing.stores : card.store_prices}
+                  foil={!!printing?.foil}
+                  exact={!!printing}
+                  trend={card.price_trend}
+                />
+              </div>
               {printing && (
                 <p className="mt-1 text-sm opacity-85">
                   {printing.set_name} ({printing.set.toUpperCase()}) #{printing.number}

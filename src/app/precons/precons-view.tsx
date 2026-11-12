@@ -112,7 +112,7 @@ export function PreconsView({ precons, failed }: { precons: PreconTile[]; failed
         <a href="https://mtgjson.com" className="underline" target="_blank" rel="noreferrer">
           MTGJSON
         </a>{" "}
-        (MIT license), refreshed nightly. Card images and prices from Scryfall.
+        (MIT license), refreshed nightly. Card images and prices (TCGplayer) from Scryfall.
       </p>
     </main>
   );

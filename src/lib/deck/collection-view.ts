@@ -1,5 +1,6 @@
 // The Collection page's items and sections (v2): each printing you own as its own item, or one item per card,
 // grouped by set, type or color and sorted. Pure logic; the page is src/app/collection/collection-view.tsx.
+import type { PriceSource } from "./store-prices";
 import { rowUnitPrice, type OwnedRow } from "./collection";
 import type { ViewMode } from "./grouping";
 import { isLand } from "@/lib/tags/roles";
@@ -47,18 +48,18 @@ const setLabel = (r: OwnedRow) => (r.printing_info ? `${r.printing_info.set.toUp
 const rowImage = (r: OwnedRow, card: CardSummary) => (r.printing_id ? printingImage(r.printing_id, "normal", "front", r.printing_info?.image_v) : card.image_normal);
 
 /** Items to show: one per owned row, or one per card (its most-owned printing on top). Rows of unknown cards are left out. */
-export function collectionItems(rows: OwnedRow[], cards: Record<string, CardSummary>, perCard: boolean, filter: CollectionFilter = "all"): CollectionItem[] {
+export function collectionItems(rows: OwnedRow[], cards: Record<string, CardSummary>, perCard: boolean, filter: CollectionFilter = "all", source: PriceSource = "tcgplayer"): CollectionItem[] {
   const kept = rows.filter((r) => cards[r.oracle_id] && (filter === "all" || (filter === "foil" ? r.finish !== "nonfoil" : !r.printing_id)));
   const make = (card: CardSummary, list: OwnedRow[], key: string): CollectionItem => {
     const top = [...list].sort((a, b) => b.quantity - a.quantity || Number(!!b.printing_id) - Number(!!a.printing_id))[0];
-    const value = list.reduce((s, r) => s + r.quantity * rowUnitPrice(r, card.price_usd), 0);
+    const value = list.reduce((s, r) => s + r.quantity * rowUnitPrice(r, card.price_usd, source), 0);
     const printings = new Set(list.map((r) => r.printing_id ?? "?")).size;
     return {
       key,
       card,
       rows: list,
       quantity: list.reduce((s, r) => s + r.quantity, 0),
-      unitPrice: Math.max(...list.map((r) => rowUnitPrice(r, card.price_usd))),
+      unitPrice: Math.max(...list.map((r) => rowUnitPrice(r, card.price_usd, source))),
       value,
       image: rowImage(top, card),
       foil: list.every((r) => r.finish !== "nonfoil"),

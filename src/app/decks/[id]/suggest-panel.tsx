@@ -2,6 +2,7 @@
 
 // Suggestions (Phase 4a). Asks suggestion_pool() (migration 0012) for candidates, scores them in the browser
 // against the deck's theme tags and under-target roles (src/lib/suggest/score.ts), and shows why each card fits.
+import { priceCard, type PriceSource } from "@/lib/deck/store-prices";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
@@ -46,6 +47,8 @@ export type SuggestSource = {
 
 type Props = {
   source: SuggestSource;
+  /** Where prices come from (Settings → Prices). */
+  priceSource: PriceSource;
   identity: string[];
   /** Cards in the deck when the panel asked (left out of the pool). */
   deckIds: string[];
@@ -154,10 +157,12 @@ export function SuggestPanel(props: Props) {
       if (main.error && only && /p_only|suggestion_pool/i.test(main.error.message))
         return setError("Filters aren't available yet: the database needs an update. Clear the filters to see suggestions.");
       if (main.error) return setError(`Couldn't load suggestions: ${main.error.message}`);
-      const found = (main.data ?? []) as PoolCard[];
-      const foundStaples = staples.error ? [] : ((staples.data ?? []) as PoolCard[]);
-      const foundLands = lands.error ? [] : ((lands.data ?? []) as PoolCard[]);
-      const foundWords = words.error ? [] : ((words.data ?? []) as (PoolCard & { says: string[] })[]);
+      // Prices from your chosen store (Settings → Prices), so Budget's cap and the cheap score follow it.
+      const priced = <C extends PoolCard>(rows: unknown) => ((rows ?? []) as C[]).map((c) => priceCard(c, props.priceSource));
+      const found = priced<PoolCard>(main.data);
+      const foundStaples = staples.error ? [] : priced<PoolCard>(staples.data);
+      const foundLands = lands.error ? [] : priced<PoolCard>(lands.data);
+      const foundWords = words.error ? [] : priced<PoolCard & { says: string[] }>(words.data);
       // Combos between the deck and the candidates, so a card that completes one can be held back (5c).
       const ids = [
         ...new Set([
@@ -215,7 +220,7 @@ export function SuggestPanel(props: Props) {
       .then(({ data, error }) => {
         if (!live) return;
         if (error) setError(`Couldn't load the cards for ${angle.name}: ${error.message}`);
-        setAnglePool(error ? [] : ((data ?? []) as (PoolCard & { says: string[] })[]));
+        setAnglePool(error ? [] : ((data ?? []) as (PoolCard & { says: string[] })[]).map((c) => priceCard(c, props.priceSource)));
       });
     return () => {
       live = false;

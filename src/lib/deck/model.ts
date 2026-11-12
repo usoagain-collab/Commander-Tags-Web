@@ -5,6 +5,7 @@
 // undo/redo exact, and the same row list is what autosave sends to the database.
 
 import { foilFor, printingImage, printingPrice, type ChosenPrinting } from "./printing";
+import type { PriceTrend, StorePrices } from "./store-prices";
 
 export type Board = "commander" | "main" | "maybe" | "companion";
 export const BOARDS: Board[] = ["commander", "main", "companion", "maybe"];
@@ -49,6 +50,12 @@ export type CardSummary = {
   produced_mana?: string[];
   /** An instant, or has Flash (Smart Cutter speed; migration 0031). */
   instant_speed?: boolean;
+  /** The cheapest printing at Card Kingdom, Mana Pool and Cardmarket (migration 0053; missing before it). */
+  store_prices?: StorePrices | null;
+  /** 7- and 30-day change of the cheapest TCGplayer price (migration 0053). */
+  price_trend?: PriceTrend | null;
+  /** Set by priceCard when another source replaced price_usd: the TCGplayer price, for the store list. */
+  tcg_usd?: number | null;
 };
 
 /** Copies of each card on each board, keyed by `board|oracle_id`. */

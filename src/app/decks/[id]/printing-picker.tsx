@@ -83,7 +83,9 @@ export function PrintingPicker({
   return (
     <div className="rounded-lg border border-foreground/15 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-medium">Printing &amp; foil</p>
+        <p className="text-sm font-medium">
+          Printing &amp; foil <span className="font-normal opacity-60">· TCGplayer prices</span>
+        </p>
         <button type="button" onClick={onDone} className="min-h-11 px-3 text-sm opacity-70">
           Back
         </button>

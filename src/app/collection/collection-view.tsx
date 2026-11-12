@@ -4,6 +4,7 @@
 // card sheet per card (printings, finishes, counts). Add cards one at a time or import an export from Moxfield,
 // Archidekt, ManaBox or a plain list, keeping each line's printing; export it again as CSV. Decks then mark the
 // cards you own (green = that printing, orange = another one) and price only what you don't.
+import { priceCard, priceCards, readPriceSource } from "@/lib/deck/store-prices";
 import { useEffect, useMemo, useState } from "react";
 import { useTagViewPrefs } from "@/app/decks/[id]/deck-toolbar";
 import { exportCollectionCsv, parseCollection, rowUnitPrice } from "@/lib/deck/collection";
@@ -39,6 +40,8 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const collection = useCollection(userId);
   const [tagView, updateTagView] = useTagViewPrefs(savedTagView, userId);
   const prefs = readCollectionPrefs(tagView.collection);
+  // Prices from your chosen store (Settings → Prices).
+  const priceSource = readPriceSource(tagView);
   const setPrefs = (patch: Partial<CollectionPrefs>) => updateTagView({ collection: { ...prefs, ...patch } });
 
   const [cards, setCards] = useState<Record<string, CardSummary>>({});
@@ -67,7 +70,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
     if (failed) setMessage(failed);
   };
 
-  const listed = collectionItems(collection.rows, cards, prefs.perCard, filter).filter((it) => matchesQuery(it, query));
+  const listed = collectionItems(collection.rows, priceCards(cards, priceSource), prefs.perCard, filter, priceSource).filter((it) => matchesQuery(it, query));
   // Card language (v2): pictures in your language where that printing exists in it.
   const cardLang = readCardLang(tagView);
   const localize = useLocalized(cardLang, listed.slice(0, limit).map((it) => printingIdFromImage(it.image)));
@@ -75,7 +78,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const sections = collectionSections(items, prefs.group, prefs.sort);
   const known = collection.rows.filter((r) => cards[r.oracle_id]);
   const copies = known.reduce((s, r) => s + r.quantity, 0);
-  const value = known.reduce((s, r) => s + r.quantity * rowUnitPrice(r, cards[r.oracle_id].price_usd), 0);
+  const value = known.reduce((s, r) => s + r.quantity * rowUnitPrice(r, priceCard(cards[r.oracle_id], priceSource).price_usd, priceSource), 0);
   const unknownCopies = known.filter((r) => !r.printing_id).reduce((s, r) => s + r.quantity, 0);
   const distinct = new Set(known.map((r) => r.oracle_id)).size;
   const shownCount = sections.reduce((n, s) => n + s.items.length, 0);
@@ -206,7 +209,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
         </>
       )}
 
-      {open && <CollectionSheet card={open} rows={collection.owned.get(open.oracle_id) ?? []} onSet={save} onClose={() => setOpen(null)} />}
+      {open && <CollectionSheet priceSource={priceSource} card={open} rows={collection.owned.get(open.oracle_id) ?? []} onSet={save} onClose={() => setOpen(null)} />}
     </main>
   );
 }
