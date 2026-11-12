@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Cinzel, Fraunces, Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
@@ -62,6 +63,8 @@ export default async function RootLayout({
             pages.
           </p>
         </footer>
+        {/* Vercel Web Analytics: counts page visits, no cookies. It only sends data from the deployed site, never from local dev. */}
+        <Analytics />
       </body>
     </html>
   );
