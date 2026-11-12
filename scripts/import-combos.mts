@@ -32,6 +32,11 @@ type Variant = {
   popularity?: number | null;
   legalities?: { commander?: boolean };
 };
+/** What a combo does, most decisive first: a win, then a lock or "each opponent loses", then infinites, then the rest. */
+function orderResults(names: string[]) {
+  const rank = (n: string) => (/^win the game/i.test(n) ? 0 : /lose the game|lock|can't/i.test(n) ? 1 : /^infinite/i.test(n) ? 2 : 3);
+  return [...names].sort((x, y) => rank(x) - rank(y));
+}
 type Row = { id: string; a: string; b: string; results: string[]; tag: string | null; requires: number; popularity: number | null };
 
 const dbUrl = process.env.SUPABASE_DB_URL;
@@ -75,7 +80,7 @@ try {
       id: value.id,
       a,
       b,
-      results: (value.produces ?? []).map((p) => p.feature?.name).filter((n): n is string => !!n).slice(0, 3),
+      results: orderResults((value.produces ?? []).map((p) => p.feature?.name).filter((n): n is string => !!n)).slice(0, 6),
       tag,
       requires,
       popularity: typeof value.popularity === "number" ? value.popularity : null,

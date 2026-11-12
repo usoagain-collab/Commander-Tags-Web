@@ -1,7 +1,9 @@
 // Commander Brackets rules, as DATA (spec: "Rules as config"). When WotC updates the brackets, edit this file;
 // the evaluator (evaluate.ts) reads everything from here.
 //
-// Source: WotC Commander Brackets, with the October 2025 update (tutor limits removed). Checked Oct 2026.
+// Source: WotC Commander Brackets beta (Feb 11, 2025), the October 21, 2025 update (tutor limits removed entirely,
+// "no early-game combos" replaced by how many turns a game is expected to last) and the February 9, 2026 update
+// (Farewell and Biorhythm became Game Changers). Rechecked Nov 11, 2026 against magic.wizards.com.
 // Choices made with David (Oct 19 and 21, 2026):
 //   - "a few" extra-turn cards in brackets 2-3 = up to 2;
 //   - two-card combos follow Commander Spellbook's own rating of each combo (see comboBracketByTag);
@@ -9,12 +11,12 @@
 
 export type BracketNumber = 1 | 2 | 3 | 4 | 5;
 
-export const BRACKETS: { n: BracketNumber; name: string; blurb: string }[] = [
-  { n: 1, name: "Exhibition", blurb: "Theme first; no Game Changers, extra turns, combos or land denial." },
-  { n: 2, name: "Core", blurb: "Precon level; no Game Changers or two-card combos." },
-  { n: 3, name: "Upgraded", blurb: "Up to 3 Game Changers; no early-game two-card combos or land denial." },
-  { n: 4, name: "Optimized", blurb: "Anything goes, short of a competitive (cEDH) deck." },
-  { n: 5, name: "cEDH", blurb: "Competitive: built to win as fast as possible." },
+export const BRACKETS: { n: BracketNumber; name: string; blurb: string; turns: string }[] = [
+  { n: 1, name: "Exhibition", blurb: "Theme first; no Game Changers, two-card combos, extra turns or mass land denial.", turns: "Games are expected to last at least 9 turns." },
+  { n: 2, name: "Core", blurb: "Precon level; no Game Changers, two-card combos or mass land denial; extra turns only a few, never chained.", turns: "Games are expected to last at least 8 turns." },
+  { n: 3, name: "Upgraded", blurb: "Up to 3 Game Changers; no mass land denial; no two-card combos that win early; extra turns only a few, never chained.", turns: "Nobody expects to win or lose before turn 6." },
+  { n: 4, name: "Optimized", blurb: "Anything legal goes: strong, fast decks, short of a competitive (cEDH) build.", turns: "Games can end from turn 4." },
+  { n: 5, name: "cEDH", blurb: "Competitive: built to win as fast as possible, with the metagame in mind.", turns: "Games can end on any turn." },
 ];
 
 export const BRACKET_RULES = {
