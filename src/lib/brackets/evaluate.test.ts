@@ -89,6 +89,13 @@ describe("estimateBracket", () => {
     expect(run(deck, [combo("Gravecrawler", "Not in deck", "R")]).findings).toEqual([]);
   });
 
+  it("lists combos needing a generic piece separately, without raising the floor", () => {
+    const deck = [line("Gravecrawler"), line("Phyrexian Altar")];
+    const e = run(deck, [combo("Gravecrawler", "Phyrexian Altar", "R", 1), combo("Gravecrawler", "Not in deck", "R", 1)]);
+    expect(e.floor).toBe(1);
+    expect(e.alsoNeeds!.map((c) => c.id)).toEqual(["Gravecrawler-Phyrexian Altar"]);
+  });
+
   it("lists what crosses the target, highest first", () => {
     const e = run([gc("Rhystic Study"), line("Armageddon"), line("Time Warp")]);
     expect(e.floor).toBe(4);

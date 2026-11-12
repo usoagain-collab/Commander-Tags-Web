@@ -112,7 +112,7 @@ import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
 import { deckAccentVars } from "@/lib/ui/deck-colors";
-import { estimatePower } from "@/lib/brackets/power";
+import { bracketRolesOf, estimatePower } from "@/lib/brackets/power";
 import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
 import { useWishlist } from "@/lib/deck/use-wishlist";
 import { isFoilFinish, ownedCopies, ownedMatch, unownedPrice } from "@/lib/deck/collection";
@@ -782,7 +782,8 @@ export function DeckEditor({
     estimate && trees && tags.tree
       ? estimatePower({
           lines: [...commanders, ...companions, ...mainLines],
-          rolesOf: lineRoleKeys,
+          // Standard roles from the cards' tags, not this deck's role settings (hidden roles, categories).
+          rolesOf: bracketRolesOf(tags.tree, (id) => tags.oracleTags[id] ?? []),
           tagsOf: (id) => tags.oracleTags[id] ?? [],
           counterTags: tags.tree.descendants(["counterspell"].filter((t) => tags.tree!.has(t))),
           // The commander's pinned tags lead the theme list but often only the commander has them.

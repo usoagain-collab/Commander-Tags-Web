@@ -131,7 +131,9 @@ export function BracketPanel({
               </button>
             ))}
           </div>
-          <p className="mt-2 opacity-80">{BRACKETS[target - 1].blurb}</p>
+          <p className="mt-2 opacity-80">
+            {BRACKETS[target - 1].blurb} {BRACKETS[target - 1].turns}
+          </p>
           {saveError && <p className="mt-1 text-red-400">{saveError}</p>}
           {comboError && <p className="mt-1 text-amber-400">{comboError}</p>}
         </section>
@@ -182,6 +184,14 @@ export function BracketPanel({
                         <p className={`mt-1 ${tooHigh ? "text-amber-300" : "opacity-80"}`}>
                           {f.minBracket === 1 ? "Fits any bracket" : `Fits bracket ${f.minBracket} and up`} · Spellbook: {c.bracket_tag ? COMBO_TAG_NAMES[c.bracket_tag] ?? c.bracket_tag : "unrated"}
                         </p>
+                        <a
+                          href={`https://commanderspellbook.com/combo/${c.id}/`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-block underline opacity-80 hover:opacity-100"
+                        >
+                          How it works on Commander Spellbook ↗
+                        </a>
                         {c.results.length > 0 && (
                           <ul className="mt-2 list-disc pl-4 opacity-85">
                             {c.results.slice(0, 4).map((r) => (
@@ -199,9 +209,73 @@ export function BracketPanel({
           </section>
         )}
 
-        <p className="pb-4 opacity-70">
-          Cards can&apos;t show intent, so 1 vs 2, &quot;early&quot; combos, chained extra turns and cEDH are up to you.
-        </p>
+        {estimate && (estimate.alsoNeeds?.length ?? 0) > 0 && (
+          <section>
+            <SectionHeading title="Combos that need one more piece" count={estimate.alsoNeeds!.length} note="Not two-card combos, so they don't set the bracket" over={false} />
+            <p className="mb-2 opacity-80">
+              These two cards make a combo once you also have a common kind of card (for example any sacrifice outlet). If your deck has that piece, your table may treat them like a two-card combo.
+            </p>
+            <ul className="grid gap-2 lg:grid-cols-2">
+              {estimate.alsoNeeds!.map((c) => {
+                const pair = linesIn([c.card_a, c.card_b]);
+                return (
+                  <li key={c.id} className="panel flex items-center gap-3 p-3">
+                    <div className="grid w-28 shrink-0 grid-cols-2 gap-1">
+                      {pair.map((l) => (
+                        <CardButton key={l.card.oracle_id} line={l} onOpen={onOpenCard} />
+                      ))}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium">{pair.map((l) => l.card.name).join(" + ")}</p>
+                      <p className="opacity-80">
+                        {c.results.slice(0, 2).join(" · ") || "Combo"} · Spellbook: {c.bracket_tag ? COMBO_TAG_NAMES[c.bracket_tag] ?? c.bracket_tag : "unrated"}
+                      </p>
+                      <a href={`https://commanderspellbook.com/combo/${c.id}/`} target="_blank" rel="noreferrer" className="underline opacity-80 hover:opacity-100">
+                        What else it needs ↗
+                      </a>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <section className="space-y-2 border-t border-foreground/15 pt-4 pb-4 opacity-85">
+          <h3 className="eyebrow">What this checks</h3>
+          <p>
+            The bracket line above comes only from the rules Wizards of the Coast set for each bracket: Game Changers (their official list), mass land denial, extra turns and two-card combos (from Commander Spellbook, using its own rating of each combo). It reads every card in the commander zone, companion and mainboard, whatever roles or tags you track. Tutors have had no bracket limit since Wizards&apos; October 2025 update (the strongest ones are Game Changers), so they count toward How it plays but never move the bracket.
+          </p>
+          <p>
+            Cards can&apos;t show intent. Whether a deck is 1 or 2, whether a combo comes together early, whether extra turns chain, and whether a deck is cEDH depend on how it&apos;s built to play, so the estimate never claims bracket 5 and says &quot;2 or lower&quot; or &quot;4+&quot; where the cards can&apos;t tell.
+          </p>
+          <h3 className="eyebrow pt-2">Brackets are a rough guide</h3>
+          <p>
+            A bracket is an estimate of power, not an exact measure. Your bracket 3 deck may be much stronger or much weaker than another bracket 3 deck: the commander, card quality, speed, synergy, how often it draws its best cards and the person piloting it all matter, and no card list shows all of that. Wizards of the Coast describes the brackets as a tool to guide the conversation before a game, not a ruling on who can play against whom.
+          </p>
+          <p>
+            Use this number to start that conversation, not to end it. Tell the table your bracket, mention anything they&apos;d want to know (a combo, Game Changers, fast mana, a plan that ends games early), and adjust together so everyone has a good game.
+          </p>
+          <p className="text-[13px] opacity-80">
+            Sources: Wizards of the Coast,{" "}
+            <a className="underline" href="https://magic.wizards.com/en/news/announcements/introducing-commander-brackets-beta" target="_blank" rel="noreferrer">
+              Introducing Commander Brackets
+            </a>
+            ,{" "}
+            <a className="underline" href="https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-october-21-2025" target="_blank" rel="noreferrer">
+              October 2025 update
+            </a>{" "}
+            and{" "}
+            <a className="underline" href="https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-february-9-2026" target="_blank" rel="noreferrer">
+              February 2026 update
+            </a>
+            ; combos from{" "}
+            <a className="underline" href="https://commanderspellbook.com" target="_blank" rel="noreferrer">
+              Commander Spellbook
+            </a>
+            , refreshed nightly.
+          </p>
+        </section>
       </div>
     </GlassOverlay>
   );

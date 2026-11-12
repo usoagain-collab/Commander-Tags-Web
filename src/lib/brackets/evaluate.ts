@@ -26,7 +26,15 @@ export type Finding = {
   combo?: ComboRow;
 };
 
-export type BracketEstimate = { floor: BracketNumber; findings: Finding[] };
+export type BracketEstimate = {
+  floor: BracketNumber;
+  findings: Finding[];
+  /**
+   * Two-card combos that also need a generic piece ("a sacrifice outlet", "a creature"). WotC's limit is on two-card
+   * combos, so these don't move the floor, but they are listed so nothing Spellbook knows about is hidden.
+   */
+  alsoNeeds?: ComboRow[];
+};
 
 export type EvaluateInput = {
   /** The 100-card deck: commander(s), companion and mainboard. */
@@ -87,9 +95,15 @@ export function estimateBracket(input: EvaluateInput): BracketEstimate {
   }
 
   const name = new Map(input.lines.map((l) => [l.card.oracle_id, l.card.name]));
+  const alsoNeeds: ComboRow[] = [];
+  const seen = new Set<string>();
   for (const c of input.combos) {
-    if (!name.has(c.card_a) || !name.has(c.card_b)) continue;
-    if (c.requires > 0 && !R.comboCountsWithRequirements) continue;
+    if (!name.has(c.card_a) || !name.has(c.card_b) || seen.has(c.id)) continue;
+    seen.add(c.id);
+    if (c.requires > 0 && !R.comboCountsWithRequirements) {
+      alsoNeeds.push(c);
+      continue;
+    }
     const min = (c.bracket_tag && R.comboBracketByTag[c.bracket_tag]) || R.comboBracketUntagged;
     const rating = c.bracket_tag ? COMBO_TAG_NAMES[c.bracket_tag] ?? c.bracket_tag : "unrated";
     findings.push({
@@ -103,7 +117,7 @@ export function estimateBracket(input: EvaluateInput): BracketEstimate {
 
   findings.sort((a, b) => b.minBracket - a.minBracket);
   const floor = Math.min(4, Math.max(1, ...findings.map((f) => f.minBracket))) as BracketNumber;
-  return { floor, findings };
+  return { floor, findings, alsoNeeds };
 }
 
 /** What the badge says: "2 or lower" (1 vs 2 is intent), "3", "4+" (4 vs 5 is intent). */

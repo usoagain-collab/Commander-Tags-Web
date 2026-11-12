@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
-import { estimatePower, type PowerInput } from "./power";
+import { bracketRolesOf, estimatePower, type PowerInput } from "./power";
+import { TagTree } from "@/lib/tags/tree";
 
 const line = (id: string, mv: number, over: Partial<CardSummary> = {}, quantity = 1): DeckLine => ({
   board: "main",
@@ -53,12 +54,36 @@ describe("refined bracket estimate", () => {
     const lines = [line("a", 5), line("b", 5)];
     const combo = { id: "x", card_a: "a", card_b: "b", results: [], bracket_tag: "E", requires: 0, popularity: 1 };
     const p = estimatePower(base(lines, {}, { estimate: { floor: 3, findings: [{ kind: "combo", minBracket: 1, label: "", cards: ["a", "b"], combo }] } }));
-    expect(p.parts.find((x) => x.key === "combos")!.points).toBe(0);
+    const part = p.parts.find((x) => x.key === "combos")!;
+    expect(part.points).toBe(0);
+    expect(part.detail).toContain("1 rated Exhibition"); // named, never "none" next to a listed combo
+    expect(part.cards).toEqual(["a", "b"]);
     expect(p.playsLike).toBe(3);
   });
 
   it("counts a counterspell as cheap interaction", () => {
     const p = estimatePower(base([line("cs", 2)], {}, { tagsOf: () => ["counterspell"] }));
     expect(p.parts.find((x) => x.key === "interaction")!.points).toBe(1.5);
+  });
+
+  it("finds tutors from card tags alone, whatever the deck's role settings", () => {
+    // tutor > tutor-creature; tutor > tutor-land > tutor-land-basic (land tutors are Ramp, not Tutors)
+    const tree = new TagTree({
+      n: 1000,
+      art_n: 1000,
+      tags: [
+        ["tutor", "tutor", 0, []],
+        ["tutor-creature", "tutor creature", 50, [0]],
+        ["tutor-land", "tutor land", 0, [0]],
+        ["tutor-land-basic", "tutor land basic", 80, [2]],
+        ["ramp", "ramp", 500, []],
+      ],
+    } as unknown as ConstructorParameters<typeof TagTree>[0]);
+    const tagsOf = (id: string) => ({ worldly: ["tutor-creature"], cultivate: ["tutor-land-basic", "ramp"] })[id] ?? [];
+    const rolesOf = bracketRolesOf(tree, tagsOf);
+    expect(rolesOf(line("worldly", 1))).toContain("tutors");
+    expect(rolesOf(line("cultivate", 3))).not.toContain("tutors");
+    const p = estimatePower(base([line("worldly", 1), line("cultivate", 3)], {}, { rolesOf, tagsOf }));
+    expect(p.parts.find((x) => x.key === "tutors")!.cards).toEqual(["worldly"]);
   });
 });

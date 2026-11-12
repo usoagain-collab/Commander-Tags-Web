@@ -6,6 +6,18 @@
 import type { BracketNumber } from "./rules";
 import type { DeckLine } from "@/lib/deck/model";
 import type { BracketEstimate } from "./evaluate";
+import { resolveRoles, rolesOf, STANDARD_ROLES } from "@/lib/tags/roles";
+import type { TagTree } from "@/lib/tags/tree";
+
+/**
+ * The roles the power estimate counts with: the STANDARD role definitions only, read straight from each card's
+ * tags. Never the deck's own role settings: a hidden Tutors role, a custom role or a manual category must not
+ * change the bracket estimate (David, Nov 11, 2026: it has to stand on its own).
+ */
+export function bracketRolesOf(tree: TagTree, tagsOf: (oracleId: string) => string[]) {
+  const roles = resolveRoles(STANDARD_ROLES, tree);
+  return (line: DeckLine) => rolesOf(line.card, tagsOf(line.card.oracle_id), roles);
+}
 
 export type PowerPart = { key: string; label: string; points: number; max: number; detail: string; cards: string[] };
 export type PowerEstimate = { score: number; playsLike: BracketNumber; mapped: BracketNumber; parts: PowerPart[] };
@@ -13,7 +25,7 @@ export type PowerEstimate = { score: number; playsLike: BracketNumber; mapped: B
 export type PowerInput = {
   /** The 100-card deck (commander, companion, mainboard). */
   lines: DeckLine[];
-  /** Role keys a line fills (rolesOf, with manual categories). */
+  /** Standard role keys a line fills, from its tags alone (bracketRolesOf), never the deck's role settings. */
   rolesOf: (line: DeckLine) => string[];
   tagsOf: (oracleId: string) => string[];
   /** Counterspell tags, sub-tags included. */
@@ -55,7 +67,7 @@ export function estimatePower(input: PowerInput): PowerEstimate {
   parts.push({ key: "fast", label: "Fast mana", points: capped(sumQ(fast), POWER.fastMana.per, POWER.fastMana.max), max: POWER.fastMana.max, detail: `${sumQ(fast)} ramp cards at mana value 2 or less`, cards: ids(fast) });
 
   const tutors = spells.filter((l) => input.rolesOf(l).includes("tutors"));
-  parts.push({ key: "tutors", label: "Tutors", points: capped(sumQ(tutors), POWER.tutors.per, POWER.tutors.max), max: POWER.tutors.max, detail: `${sumQ(tutors)} cards that find another card`, cards: ids(tutors) });
+  parts.push({ key: "tutors", label: "Tutors", points: capped(sumQ(tutors), POWER.tutors.per, POWER.tutors.max), max: POWER.tutors.max, detail: `${sumQ(tutors)} ${sumQ(tutors) === 1 ? "card that finds" : "cards that find"} another card (land tutors count as ramp instead)`, cards: ids(tutors) });
 
   const cheap = spells.filter(
     (l) =>
@@ -64,15 +76,23 @@ export function estimatePower(input: PowerInput): PowerEstimate {
   );
   parts.push({ key: "interaction", label: "Cheap interaction", points: capped(sumQ(cheap), POWER.interaction.per, POWER.interaction.max), max: POWER.interaction.max, detail: `${sumQ(cheap)} removal or counterspells at mana value 2 or less`, cards: ids(cheap) });
 
-  // Exhibition combos (loops that don't win alone) don't raise the floor in v1, so they don't count here either.
-  const combos = input.estimate.findings.filter((f) => f.combo && f.minBracket > 1);
+  // Combos Spellbook rates Exhibition (slow, or a lot of setup) don't raise the floor, so they score no points
+  // here either, but they are still named so the card never reads "none" next to a listed combo.
+  const allCombos = input.estimate.findings.filter((f) => f.combo);
+  const combos = allCombos.filter((f) => f.minBracket > 1);
+  const slow = allCombos.length - combos.length;
+  const slowWords = slow ? `${slow} rated Exhibition by Commander Spellbook (slow or hard to assemble), no points` : "";
   parts.push({
     key: "combos",
     label: "Two-card combos",
     points: combos.length === 0 ? 0 : combos.length === 1 ? POWER.combos.one : POWER.combos.more,
     max: POWER.combos.more,
-    detail: combos.length ? `${combos.length} that can win or lock the game` : "None that win on their own",
-    cards: [...new Set(combos.flatMap((f) => f.cards))],
+    detail: combos.length
+      ? `${combos.length} rated above Exhibition by Commander Spellbook${slow ? `; ${slowWords}` : ""}`
+      : slow
+        ? slowWords.charAt(0).toUpperCase() + slowWords.slice(1)
+        : "None found in this deck",
+    cards: [...new Set(allCombos.flatMap((f) => f.cards))],
   });
 
   const gc = input.lines.filter((l) => l.card.game_changer);
