@@ -166,7 +166,8 @@ Ideas for after v1 is fully working and tested with friends (phase 7). When some
 | Feature | What it means | Added |
 | --- | --- | --- |
 | Mixed copies of one card | Different printings or foil for copies of the same card on one board, such as 10 Forests with different art. **Built Nov 8, 2026** (option A, migration 0039): card sheet → **Mixed printings…** on rows with 2+ copies; `deck_cards.printing_split` lists printings with copies, the rest use the row's printing. Tiles show "N arts", prices count each copy, Moxfield / Archidekt / plain exports write a line per printing. Saved directly, not Ctrl+Z | Oct 31, 2026 |
-| Pricing details | Prices per store and price settings (foil and per-printing prices are built) | Oct 18, 2026 |
+| Pricing details | Prices per store and price settings (foil and per-printing prices are built). **No API key needed (Nov 11, 2026):** MTGJSON's free daily price files cover TCGplayer, Card Kingdom (also what it pays, its buylist), Mana Pool and Cardmarket (EUR). Proposal in "Prices from MTGJSON" below | Oct 18, 2026 |
+| Price trends | Was out of scope for v1 (today's price only). From MTGJSON's 90 days of prices: "↑ 40% in 30 days" on cards and a deck-total line over time, without storing 90 days per card. Proposal in "Prices from MTGJSON" below | Nov 11, 2026 |
 | Collection tracking | Ownership checkmarks, "add to collection", the "unowned" price total (also listed under Out of scope for v1). **Built Nov 8, 2026** (option A, migration 0038): **Collection** page (import Moxfield / Archidekt / ManaBox CSV or a plain list, add to or replace, − / +, export CSV); in decks ✓ / "1/4" labels, **Still to buy $X** in the summary bar (basics left out), **In your collection − N +** in the card sheet, **Hide cards I don't own** in Search. Per card, plain and foil counts. Foil counts change only by import for now. **Per printing since Nov 8, 2026** (David asked; migration 0040): each printing and finish is its own row, the Collection page has Grid / Stacks / Text with group, sort and filters, decks show green ✓ for the exact printing and orange ✓ for another one, card sheet Add to my collection, bulk Mark owned | Oct 18, 2026 |
 | Scryfall-style search and Suggest filters | From Jake and Joel's Scryfall guide: search like Scryfall without leaving the site. **Built Nov 8, 2026** (migration 0044): Search has a Sort menu (most played, price, mana value, name, newest, power; direction), a Filters drawer that writes Scryfall syntax into the box, autocomplete after t:, kw: and s:, example searches and a syntax cheat sheet. Suggest has Filters (type, mana value, rules text, new cards since a year, instant speed, no Reserved List, your own syntax) that narrow the pool to what a Scryfall search finds. Same release: custom roles count as themes, and themes on mostly the same cards count once | Nov 8, 2026 |
 | Wish list | Cards you want to buy, separate from any deck. **Built Nov 8, 2026** (option A, migration 0037): **♡ Wish list** page from the header (copies, foil, note, sort, total, Copy as a list), ♡ in the card sheet and on Search results | Oct 18, 2026 |
@@ -240,7 +241,53 @@ Everything else on the v2 backlog is built. These need a schema OK or a directio
 
 - **EDHREC suggestions:** EDHREC's permission (their terms bar automated queries and republishing).
 - **Link sign-in methods:** turn on manual identity linking in Supabase (Authentication → Providers settings).
-- **Pricing details (per store):** an API key from a price source (TCGplayer's API is closed to new developers; JustTCG or Scryfall's own USD/EUR/TIX are options).
+- ~~**Pricing details (per store):** an API key from a price source.~~ Not blocked any more (Nov 11, 2026): MTGJSON's price files need no key. See "Prices from MTGJSON" below.
+
+### Prices from MTGJSON (proposal, Nov 11, 2026; David chose A with all four stores)
+
+**Who does what.** Scryfall stays the source for everything the builder thinks with: Tagger tags (MTGJSON has none), card images (MTGJSON has none and points to Scryfall), live search with full syntax, rules text, legality, rulings, and new spoilers (Scryfall has them within hours; MTGJSON rebuilds once a day). MTGJSON adds what Scryfall lacks: precon decklists (already used), prices **per store**, what stores pay (buylist), and **90 days of price history**. Scryfall's own USD price is TCGplayer's, so it stays the default and nothing changes for people who never open a price setting.
+
+**Rule for a fast site:** the browser never touches MTGJSON. Its smallest price file is 5.6 MB compressed, far too much for a page load (it allows browser downloads, but that doesn't make it a good idea). The nightly GitHub Actions job reads the files, works out the few numbers each card needs, and writes them into rows the pages already load (`card_summaries`, a deck row's `printing_info`). No extra request on any page, so pages stay as fast as now.
+
+**What the files hold (checked Nov 11, 2026):**
+| File | Size (gzip) | What's in it |
+| --- | --- | --- |
+| `AllPricesToday.json.gz` | 5.6 MB | Today's prices for 114,658 printings, keyed by MTGJSON's own id. Paper: TCGplayer (USD, 103,000 printings), Card Kingdom (USD, retail and buylist, 100,464), Mana Pool (USD, 103,405), Cardmarket (EUR, 104,237); normal, foil and etched. MTGO: Cardhoarder |
+| `AllPrices.json.gz` | 148 MB | The same for each of the last 90 days |
+| `csv/cardIdentifiers.csv.gz` | 15 MB | MTGJSON id → Scryfall printing id, oracle id and illustration id (also TCGplayer and Card Kingdom product ids) |
+
+MTGJSON publishes once a day (its files were dated 06:13 UTC on Nov 11, 2026), well before our 22:30 UTC import. License MIT; credit MTGJSON where its prices show (the footer already credits it for precons).
+
+**Space is the limit.** The database is at **407 MB of 500** (Nov 11, 2026; the precons and wording index used most of the headroom). Storing 90 days for every printing would take roughly 100 MB, so it doesn't fit.
+
+- ★ **A. Nightly summaries only (about 10-15 MB):**
+  - `cards.store_prices` jsonb: per store, the cheapest printing's price, normal and foil (39k rows). Used for cards with no chosen printing, like today's cheapest price.
+  - Chosen printings (decks, collection, wish list; about 15,000 today, mostly precons) get the same per-store prices inside `printing_info`, written by the existing nightly reprice step (no new column).
+  - `cards.price_trend` jsonb: 7-day and 30-day change for the cheapest printing at the chosen reference store, worked out from `AllPrices` during the import and then thrown away.
+  - `deck_price_history (deck_id, day, total_usd)`: one number per deck per day, kept a year (about 3 MB for today's 235 decks). Gives each deck its own price line without per-card history.
+  - UI: Settings → **Prices from**: TCGplayer (default) / Card Kingdom / Mana Pool / Cheapest store / Cardmarket (€). The card sheet lists each store's price (and Card Kingdom's buylist, "they pay $X"). Small ↑ / ↓ trend marks on cards that moved 20%+ in 30 days. The deck total in Stats gets a line chart. Budget suggestions and the price cap follow the chosen store.
+  - Cost: one new migration, about 3 minutes more in the nightly job (download plus streaming the 148 MB history file), no change to page loads.
+- B. A: plus full 90-day history only for cards in someone's deck or collection. A real per-card price chart, but about 15,000 printings × 90 days ≈ 60-100 MB, so it needs the paid database tier or a slimmer `cards` table first.
+- C. MTGJSON's GraphQL service for history on demand. In beta, tokens for Patreon supporters only, 500 requests an hour: too fragile to build on.
+
+**Every place a price shows (checked in the code Nov 11, 2026), and how it follows the store setting.** One helper picks a card's price for the chosen store and finish (falling back to Scryfall's price when that store has none), and everything below calls it, so no screen keeps showing the old number.
+| Where | Today's price comes from | With A |
+| --- | --- | --- |
+| Deck page: hero total, summary bar (incl. **Still to buy**), Stacks headings, Sort by price, card panel and floating preview, Text rows | `linesFor` in `model.ts` (already swaps in the chosen printing's price) | The store price is applied in the same place, so all of these follow with no screen-by-screen changes |
+| Card sheet | the line's card | Also lists every store (normal and foil), Card Kingdom's buylist, and the 30-day trend |
+| Stats: price bands, deck total | `stats.ts` from the lines | Follows the lines; adds the deck price line (from `deck_price_history`) |
+| Mixed copies (`printing_split`) | `rowPrice` / `totalPriceWithSplits` in `splits.ts` | Split parts get per-store prices in the nightly reprice too (today they aren't repriced at all, an older gap this fixes) |
+| Search and Suggest results, Budget style's price cap, Auto build land base's cap | `card_summaries.price_usd` | `card_summaries` gains `store_prices`; results, caps and the "cheap" score use the chosen store |
+| Printing picker | live from Scryfall per printing | Scryfall knows only its TCGplayer price (and €) for printings nobody has picked, so the picker keeps those and says "TCGplayer"; the store price shows once a printing is picked |
+| Collection page (value, sort by price, card sheet) | `rowUnitPrice` with `printing_info` | Follows the setting; Card Kingdom's buylist can show as "you could sell for" |
+| Wish list (total, sort, rows) | `card.price_usd` | Follows the setting |
+| Precons page (deck price) | SQL `precon_list` | Stays TCGplayer (one shared, cached page for everyone); labeled as such |
+| Search filter "Price under $X" | Scryfall syntax (`usd<=`), answered by Scryfall | Can only use Scryfall's price, so it stays TCGplayer; labeled |
+| Exports and Download my data | no prices | No change |
+
+**Buy links:** MTGJSON's purchase links carry MTGJSON's own affiliate tags. We could build plain store links from the TCGplayer and Card Kingdom product ids in `cardIdentifiers` instead, or our own affiliate links later (an income question for David).
+
+**David's choices (Nov 11, 2026):** option **A**, with **all four stores** (TCGplayer, Card Kingdom, Mana Pool, Cardmarket in €). Still open: buy links at all, and plain or affiliate. The schema (the `store_prices` and `price_trend` columns, `deck_price_history`) is the one described under A.
 
 ## v3 backlog
 
