@@ -253,6 +253,13 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **One Filters box** (`filters-box.tsx`): Suggested applies and keeps it (plus "Your own filter"); Search adds the syntax to the box.
 - **Card sheet for cards not in the deck:** `CardSheet` prop `candidate` (`context`, `status`, `actions`) with a synthetic `quantity: 0` line; `renderFoundSheet` in the editor (Add to main / maybe, Make commander, Not for this deck or Bring back, wish list, collection, Add to another deck, Copy name). Prev / Next step through the list it came from (`found`). A tag tapped there opens the Suggested picks with that tag. Esc closes the sheet first, then the drawer.
 
+## Plays line (v2, David, Nov 11, 2026)
+
+- The line under the deck name: archetype chip, the owner's own words, then "Plays: tag · tag · tag". Automatic = a guessed archetype (`detectArchetypes`, shown gray; only when it beats General) and the top 3 Top tags in the current mode. The owner taps the whole line to open `PlaysEditor` (`plays-line.tsx`): archetype (likely ones first, Show all), up to 3 tags from the deck's themes, up to 80 characters of text, Back to automatic. Hidden on phones like before.
+- Migration **0052** `decks.plays` jsonb (null = automatic; tags, text, archetype), returned by `deck_bundle` and `shared_deck` (now the current definition of both), copied by `copyDeck`. Logic in `src/lib/tags/plays.ts` (tested).
+- **Picked tags steer Suggest and the Smart Cutter (David chose double):** `steerThemes` keeps the usual top 15 and adds picked oracle tags from the unlimited theme list, each at `PLAYS_WEIGHT` = 2 times its score. Art tags show on the line but can't steer (the pool has oracle tags only).
+- **Archetype agrees with the Cutter both ways:** saving an archetype in Plays sets `decks.cutter.archetype` to picked (Automatic sets it back to auto); a Yes, pick or Change in the Cutter saves `plays.archetype` (an effect in `deck-editor.tsx` that fires only when the Cutter answer changes, never on page load). Viewers can't read `decks.cutter`, which is why the archetype also lives in `plays`.
+
 ## Artist credit (Nov 11, 2026)
 
 - **Rule (Scryfall, docs/api/images):** wherever an art_crop shows, the artist name and the copyright line show in the same view, or the full card image is shown instead. David asked for this after a Scryfall rules check.

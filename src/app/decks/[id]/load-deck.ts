@@ -26,6 +26,8 @@ export type DeckRow = {
   playtest_flags?: Record<string, number> | null;
   /** Change mana cost (migration 0036): oracle id -> counted mana value. */
   mana_values?: unknown;
+  /** The Plays line (migration 0052): picked tags, text, archetype. */
+  plays?: unknown;
   /** Smart Cutter state (migration 0033), owner only. */
   cutter?: unknown;
 };
