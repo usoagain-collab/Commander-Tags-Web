@@ -63,7 +63,7 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
       {/* One line on every tile: the time shortens rather than pushing Rename and Delete onto a second line. */}
       <div className="flex min-h-11 items-center gap-x-3 px-4 pb-2 text-sm">
         {pips.length > 0 && (
-          <span className="inline-flex gap-0.5">
+          <span className="inline-flex shrink-0 gap-0.5">
             {pips.map((c) => (
               <ManaSymbol key={c} symbol={c} size={16} />
             ))}

@@ -10,7 +10,7 @@ export function ManaSymbol({ symbol, size = 14 }: { symbol: string; size?: numbe
       width={size}
       height={size}
       loading="lazy"
-      className="inline-block align-[-0.15em]"
+      className="inline-block max-w-none shrink-0 align-[-0.15em]"
     />
   );
 }

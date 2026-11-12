@@ -530,7 +530,7 @@ function MixedPrintings({
       <ul className="divide-y divide-foreground/10">
         {parts.map((p, i) => (
           <li key={`${p.printing.id}-${p.printing.foil}`} className="flex min-h-11 items-center gap-2">
-            <img src={printingImage(p.printing.id)} alt="" className="h-12 rounded" />
+            <img src={printingImage(p.printing.id)} alt="" className="h-12 w-auto max-w-none shrink-0 rounded" />
             <span className="min-w-0 flex-1 truncate">{label(p.printing)}</span>
             <button type="button" aria-label="One copy fewer" onClick={() => set(i, p.quantity - 1)} className="min-h-9 min-w-9 rounded-md border border-foreground/20">
               −
