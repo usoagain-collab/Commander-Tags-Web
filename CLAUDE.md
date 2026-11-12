@@ -139,6 +139,12 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Lands and tokens stack in piles (`pilesOf` in `game.ts`, shared with the phone):** by name, tapped ones in their own pile, a card with counters apart. A click anywhere on a pile taps or untaps its next card, and the pile keeps its width as it shrinks, so repeated clicks land on the same pile.
 - **Commander tax shows only in the Command zone**, as "Tax: N" (by name for partners), even while the commander is out of the zone.
 
+## Flip, face down, tokens in play (David, Nov 11, 2026)
+
+- **Flip:** two-image cards (`TWO_IMAGE_LAYOUTS`: transform, modal_dfc, reversible_card, double_faced_token) get `Instance.back` (the front image with `/front/` swapped for `/back/`, set in `page.tsx` after the language swap, so it follows printing and language). `flipCard` works in any zone: an MDFC flipped in hand plays as that face (`inLandRow` puts a land face in the Lands row), a flipped card turns front up when it leaves the battlefield. Desktop: **X** on the hovered card or the right-click menu; phones: Flip in the card sheet (a real game action now, not a preview).
+- **Face down:** `toggleFaceDown` on any card (**Z**, right-click menu, card sheet). Drawn as `CardBack` (`card-picture.tsx`); hover preview and card sheet still show you the face. Reset on any zone change, except a card turned down in hand and then played or exiled (morph, foretell). Others in a multiplayer room see "Face-down card" with no image.
+- **Tokens go in the play area** like any permanent (no Tokens row on either table); `createToken(state, spec, at)` takes the phone's free spot.
+
 ## Playtester on phones (built Nov 1, 2026)
 
 - **David's rule:** never block a feature by screen size; let the user decide if it's too cramped. The playtester works everywhere.

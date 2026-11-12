@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { DeckUnavailable } from "@/components/deck-unavailable";
-import type { DeckCard } from "@/lib/playtest/game";
+import { backImageOf, type DeckCard } from "@/lib/playtest/game";
 import { readCardLang, type Localized } from "@/lib/deck/card-language";
 import { printingIdFromImage, printingImage } from "@/lib/deck/printing";
 import { createClient } from "@/lib/supabase/server";
@@ -35,6 +35,7 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
       const printing = r.printing ?? loaded.preferred[r.oracle_id];
       return c ? [{ oracleId: c.oracle_id, name: c.name, image: printing ? printingImage(printing.id, "normal", "front", printing.image_v) : c.image_normal, typeLine: c.type_line, quantity: r.quantity, commander: r.board === "commander" }] : [];
     });
+  const layouts = new Map(loaded.cards.map((c) => [c.oracle_id, c.layout]));
   // Card language (v2): pictures already looked up for your language (the deck page looks up the rest).
   const lang = readCardLang(loaded.profile?.tag_view);
   if (lang !== "en") {
@@ -51,6 +52,9 @@ export default async function PlaytestPage({ params }: { params: Promise<{ id: s
       if (hit) c.image = printingImage(hit.localized_id, "normal", "front", hit.image_v);
     }
   }
+
+  // Two-image cards (transform, modal DFCs) can flip on the table; the back follows the chosen printing and language.
+  for (const c of cards) c.back = backImageOf(c.image, layouts.get(c.oracleId));
 
   // A game table: dark in both looks, so the felt and the cards keep their contrast.
   return (

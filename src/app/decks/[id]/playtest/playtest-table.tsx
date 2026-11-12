@@ -11,8 +11,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { createClient } from "@/lib/supabase/client";
 import { tokenImage, type DeckToken } from "@/lib/deck/tokens";
 import { CardSheet, PhoneTable } from "./phone-table";
+import { CardPicture, tableName } from "./card-picture";
 import {
   createToken,
+  flipCard,
+  toggleFaceDown,
+  inLandRow,
   addCounter,
   COUNTER_KINDS,
   mill,
@@ -155,6 +159,10 @@ export function PlaytestTable({ deck, cards, tokens, canFlag, playerName }: Prop
       if ((e.key === "+" || e.key === "=") && onField) update((g) => addCounter(g, onField, "+1/+1", 1));
       else if (e.key === "-" && onField) update((g) => addCounter(g, onField, "+1/+1", -1));
       else if (k === "t" && onField) update((g) => toggleTap(g, onField));
+      else if (k === "x" && hovered) {
+        if (!hovered.back) return say(`${hovered.name} has no back face to flip to.`);
+        update((g) => flipCard(g, hovered.iid));
+      } else if (k === "z" && hovered) update((g) => toggleFaceDown(g, hovered.iid));
       else if (k === "f" && hovered) void flag(hovered);
       else if (k === "g" && hovered) update((g) => move(g, hovered.iid, "graveyard"));
       else if (k === "e" && hovered) update((g) => move(g, hovered.iid, "exile"));
@@ -174,7 +182,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag, playerName }: Prop
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [game, update, preview, tool, flag]);
+  }, [game, update, preview, tool, flag, say]);
 
   if (cards.length === 0)
     return (
@@ -221,7 +229,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag, playerName }: Prop
       </main>
       )}
 
-      {!compact && <HoverPreview card={preview} onLeave={clearPreview} />}
+      {!compact && <HoverPreview card={preview ? (game.cards[preview.iid] ?? null) : null} onLeave={clearPreview} />}
       {game.stage === "mulligan" && <MulliganDialog game={game} update={update} card={card} onInspect={onInspect} />}
       {viewing && <ZoneViewer zone={viewing} game={game} onClose={() => setViewing(null)} onMove={drop} onPreview={setPreview} onInspect={onInspect} />}
       {inspect && compact && <CardSheet game={game} iid={inspect} update={update} onMove={drop} onFlag={flag} canFlag={canFlag} onClose={() => setInspect(null)} />}
@@ -231,7 +239,7 @@ export function PlaytestTable({ deck, cards, tokens, canFlag, playerName }: Prop
       {tool === "search" && <LibrarySearch game={game} update={update} onMove={drop} onPreview={setPreview} onInspect={onInspect} onClose={() => setTool(null)} />}
       {tool === "scry" && <ScryDialog compact={compact} game={game} update={update} onClose={() => setTool(null)} />}
       {tool === "mill" && <MillDialog compact={compact} game={game} update={update} onClose={() => setTool(null)} />}
-      {tool === "tokens" && <TokenPicker compact={compact} tokens={tokens} update={update} onClose={() => setTool(null)} />}
+      {tool === "tokens" && <TokenPicker compact={compact} tokens={tokens} update={update} place={(g) => freeSpot.current?.(g)} onClose={() => setTool(null)} />}
       {help && <ShortcutSheet onClose={() => setHelp(false)} />}
       <Multiplayer room={room} compact={compact} />
       {toast && (
@@ -443,15 +451,12 @@ function CardView({
       }
       onMouseEnter={() => onPreview(inst)}
       onMouseLeave={() => onPreview(null)}
-      title={title ?? inst.name}
+      title={title ?? tableName(inst)}
+      aria-label={tableName(inst)}
       style={{ width: size }}
       className={`block shrink-0 transition-transform ${tapped ? "rotate-90" : ""}`}
     >
-      {inst.image ? (
-        <img src={inst.image} alt={inst.name} draggable={false} className="w-full rounded-[4.75%/3.5%] shadow" />
-      ) : (
-        <span className="flex aspect-[63/88] w-full items-center justify-center rounded-lg border bg-foreground/5 p-1 text-center text-[10px]">{inst.name}</span>
-      )}
+      <CardPicture inst={inst} />
     </button>
   );
 }
@@ -619,9 +624,9 @@ function Battlefield({
   // The commander's art lies faintly across the table for the whole game, wherever the commander goes.
   const art = useRef(game.cards[game.zones.command[0]]?.image?.replace("/normal/", "/art_crop/") ?? null);
   const ids = game.zones.battlefield;
-  const lands = ids.filter((iid) => game.cards[iid].land);
-  const tokenIds = ids.filter((iid) => game.cards[iid].token);
-  const others = ids.filter((iid) => !game.cards[iid].land && !game.cards[iid].token);
+  // Tokens play in the free area like any other permanent; only lands get their own row.
+  const lands = ids.filter((iid) => inLandRow(game.cards[iid]));
+  const others = ids.filter((iid) => !inLandRow(game.cards[iid]));
 
   // A click taps or untaps the next card in the pile, so there's nothing to aim at. The top card stays put as a pile
   // shrinks (the depth behind it never changes the width), so repeated clicks keep landing on the same pile.
@@ -637,7 +642,7 @@ function Battlefield({
           <div key={pile.key} className={`enter relative shrink-0 cursor-pointer pl-2 ${pile.tapped ? "mx-3" : ""}`} onClick={() => onTap(iid)}>
             {pile.ids.slice(1, 3).map((behind, i) => (
               <div key={behind} aria-hidden className={`pointer-events-none absolute top-0 w-[72px] ${pile.tapped ? "rotate-90" : ""}`} style={{ left: 4 - i * 4 }}>
-                {inst.image ? <img src={inst.image} alt="" className="w-full rounded-[4.75%/3.5%] shadow" /> : <div className="aspect-[63/88] rounded-lg border bg-foreground/5" />}
+                <CardPicture inst={inst} />
               </div>
             ))}
             <div className="relative">
@@ -647,7 +652,7 @@ function Battlefield({
                 tapped={pile.tapped}
                 onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
                 onPreview={onPreview}
-                title={`${pile.ids.length} × ${inst.name}: click to ${pile.tapped ? "untap" : "tap"} one, right-click for counters and moves`}
+                title={`${pile.ids.length} × ${tableName(inst)}: click to ${pile.tapped ? "untap" : "tap"} one, right-click for counters and moves`}
               />
               <CounterBadges counters={game.battlefield[iid]?.counters} />
             </div>
@@ -683,14 +688,13 @@ function Battlefield({
                 onClick={() => onTap(iid)}
                 onContextMenu={(e) => onMenu(iid, e.clientX, e.clientY)}
                 onPreview={onPreview}
-                title={`${game.cards[iid].name}: click to tap, right-click for counters and moves`}
+                title={`${tableName(game.cards[iid])}: click to tap, right-click for counters, flip and moves`}
               />
               <CounterBadges counters={p.counters} />
             </div>
           );
         })}
       </div>
-      {tokenIds.length > 0 && pileRow("Tokens", tokenIds.length, pilesOf(game, tokenIds))}
       {/* Lands row, grouped automatically. */}
       {pileRow("Lands", lands.length, pilesOf(game, lands))}
     </DropTarget>
@@ -712,10 +716,11 @@ function HoverPreview({ card, onLeave }: { card: Instance | null; onLeave: () =>
   if (!card) return null;
   return (
     <div aria-hidden className={`pointer-events-none fixed top-14 z-[60] w-[270px] ${side === "left" ? "left-3" : "right-3"}`}>
-      {card.image ? (
-        <img src={card.image} alt="" className="w-full rounded-[4.75%/3.5%] shadow-2xl" />
-      ) : (
-        <div className="flex aspect-[63/88] items-center justify-center rounded-xl border bg-background p-4 text-center">{card.name}</div>
+      <CardPicture inst={card} reveal className="shadow-2xl" />
+      {(card.faceDown || card.back) && (
+        <p className="mt-1 rounded bg-black/80 px-2 py-1 text-center text-xs text-white">
+          {card.faceDown ? "Face down: only you see this face. Z turns it up." : `${card.flipped ? "Back" : "Front"} face. X flips it.`}
+        </p>
       )}
     </div>
   );
@@ -754,7 +759,7 @@ function Hand({
             onPreview={onPreview}
             onClick={choosing ? () => onBottom(iid) : undefined}
             onDoubleClick={choosing ? undefined : () => onPlay(iid)}
-            title={choosing ? `Put ${game.cards[iid].name} on the bottom` : `${game.cards[iid].name}: drag to play (or double-click)`}
+            title={choosing ? `Put ${game.cards[iid].name} on the bottom` : `${tableName(game.cards[iid])}: drag to play (or double-click)${game.cards[iid].back ? ", X flips it" : ""}`}
           />
         ))}
       </div>
@@ -917,12 +922,8 @@ function ZoneViewer({
 function ListCard({ inst, size, onPreview, onInspect }: { inst: Instance; size: number; onPreview: (c: Instance | null) => void; onInspect?: (iid: string) => void }) {
   if (!onInspect) return <CardView inst={inst} size={size} onPreview={onPreview} />;
   return (
-    <button type="button" onClick={() => onInspect(inst.iid)} aria-label={`See ${inst.name}`} className="block w-full">
-      {inst.image ? (
-        <img src={inst.image} alt="" draggable={false} className="w-full rounded-[4.75%/3.5%] shadow" />
-      ) : (
-        <span className="flex aspect-[63/88] w-full items-center justify-center rounded-lg border bg-foreground/5 p-1 text-center text-[11px]">{inst.name}</span>
-      )}
+    <button type="button" onClick={() => onInspect(inst.iid)} aria-label={`See ${tableName(inst)}`} className="block w-full">
+      <CardPicture inst={inst} />
     </button>
   );
 }
@@ -1024,7 +1025,7 @@ function CardMenu({
         }}
       />
       <div role="menu" aria-label={`${inst.name} actions`} className="fixed z-50 w-60 rounded-lg border border-foreground/20 bg-background p-2 text-sm shadow-xl" style={{ left, top }}>
-        <p className="truncate px-1 pb-1 font-semibold">{inst.name}</p>
+        <p className="truncate px-1 pb-1 font-semibold">{tableName(inst)}</p>
         <MenuItem
           onClick={() => {
             update((g) => toggleTap(g, iid));
@@ -1032,6 +1033,24 @@ function CardMenu({
           }}
         >
           {p?.tapped ? "Untap" : "Tap"}
+        </MenuItem>
+        {inst.back && !inst.faceDown && (
+          <MenuItem
+            onClick={() => {
+              update((g) => flipCard(g, iid));
+              onClose();
+            }}
+          >
+            ⇄ Flip to {inst.flipped ? "front" : "back"} (X)
+          </MenuItem>
+        )}
+        <MenuItem
+          onClick={() => {
+            update((g) => toggleFaceDown(g, iid));
+            onClose();
+          }}
+        >
+          {inst.faceDown ? "Turn face up (Z)" : "Turn face down (Z)"}
         </MenuItem>
         {!inst.token && (
           <MenuItem
@@ -1331,11 +1350,24 @@ function MillDialog({ compact, game, update, onClose }: { compact: boolean; game
 // ---------- tokens (6c) ----------
 
 /** The deck's tokens (from its cards) to put onto the battlefield, plus any other token by name. */
-function TokenPicker({ compact, tokens, update, onClose }: { compact: boolean; tokens: DeckToken[]; update: (fn: (g: GameState) => GameState) => void; onClose: () => void }) {
+function TokenPicker({
+  compact,
+  tokens,
+  update,
+  place,
+  onClose,
+}: {
+  compact: boolean;
+  tokens: DeckToken[];
+  update: (fn: (g: GameState) => GameState) => void;
+  /** The phone layout's next free spot in the play area (the desktop table picks its own). */
+  place: (g: GameState) => { x: number; y: number } | undefined;
+  onClose: () => void;
+}) {
   const [name, setName] = useState("");
   const [made, setMade] = useState<string | null>(null);
   const make = (spec: { name: string; image: string | null; typeLine: string }) => {
-    update((g) => createToken(g, spec));
+    update((g) => createToken(g, spec, place(g)));
     setMade(spec.name);
   };
   return (
@@ -1416,7 +1448,9 @@ const SHORTCUTS: [string, string][] = [
   ["B", "Card under the mouse to the battlefield"],
   ["G", "Card under the mouse to the graveyard"],
   ["E", "Card under the mouse to exile"],
-  ["Right-click", "Card menu: counters, flag, moves"],
+  ["X", "Flip the card under the mouse to its other face (double-faced cards)"],
+  ["Z", "Turn the card under the mouse face down or face up"],
+  ["Right-click", "Card menu: counters, flip, face down, flag, moves"],
   ["Esc", "Close any panel"],
   ["?", "Show or hide this list"],
 ];
