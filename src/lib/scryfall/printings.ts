@@ -88,7 +88,7 @@ export const printingRef = ref;
 export async function fetchPrintingsByRef(refs: { set: string; number: string }[]) {
   const found = new Map<string, { printing: ChosenPrinting; oracleId: string | null }>();
   for (let i = 0; i < refs.length; i += 75) {
-    if (i) await new Promise((r) => setTimeout(r, 110)); // Scryfall asks for at most 10 requests a second
+    if (i) await new Promise((r) => setTimeout(r, 550)); // Scryfall allows 2 collection requests a second
     const res = await fetch("https://api.scryfall.com/cards/collection", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -106,7 +106,7 @@ export async function fetchPrintingsById(ids: string[]) {
   const found = new Map<string, { printing: ChosenPrinting; oracleId: string | null }>();
   const unique = [...new Set(ids)];
   for (let i = 0; i < unique.length; i += 75) {
-    if (i) await new Promise((r) => setTimeout(r, 110));
+    if (i) await new Promise((r) => setTimeout(r, 550)); // 2 collection requests a second at most
     const res = await fetch("https://api.scryfall.com/cards/collection", {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
