@@ -1,20 +1,27 @@
 "use client";
 
-// Feedback button (Phase 7a, for the friend test): a short message plus the page it was sent from, saved to the
-// feedback table (migration 0020). David reads them in the Supabase dashboard.
+// Feedback button (Phase 7a, opened to everyone Nov 14, 2026): a short message plus the page it was sent from,
+// posted to /api/feedback, which saves it to the feedback table (migrations 0020, 0054). David reads them in the
+// Supabase dashboard. Signed-out visitors can add an email for a reply. The "website" box is a spam trap people
+// never see; bots that fill it are dropped by the server.
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { createClient } from "@/lib/supabase/client";
 
 export function FeedbackButton({
   className = "opacity-70 hover:opacity-100",
+  signedIn = false,
 }: {
   className?: string;
+  /** Signed-in senders are known by their account, so the reply-email box is only shown to visitors. */
+  signedIn?: boolean;
 }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  const [email, setEmail] = useState("");
+  const [trap, setTrap] = useState("");
+  const openedAt = useRef(0);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | string>(
     "idle",
   );
@@ -23,13 +30,31 @@ export function FeedbackButton({
     e.preventDefault();
     if (!text.trim()) return;
     setStatus("sending");
-    const { error } = await createClient()
-      .from("feedback")
-      .insert({ message: text.trim(), page: path });
-    if (error) setStatus(`Couldn't send: ${error.message}`);
+    let error: string | null = null;
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text.trim(),
+          page: path,
+          email: signedIn ? "" : email.trim(),
+          website: trap,
+          elapsedMs: Date.now() - openedAt.current,
+        }),
+      });
+      if (!res.ok)
+        error =
+          ((await res.json().catch(() => null)) as { error?: string } | null)
+            ?.error ?? "Couldn't send it just now.";
+    } catch {
+      error = "Couldn't send it. Check your connection and try again.";
+    }
+    if (error) setStatus(error);
     else {
       setStatus("sent");
       setText("");
+      setEmail("");
       setTimeout(() => {
         setOpen(false);
         setStatus("idle");
@@ -39,7 +64,14 @@ export function FeedbackButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={className}>
+      <button
+        type="button"
+        onClick={() => {
+          openedAt.current = Date.now();
+          setOpen(true);
+        }}
+        className={className}
+      >
         Feedback
       </button>
       {open &&
@@ -70,6 +102,35 @@ export function FeedbackButton({
                 aria-label="Feedback"
                 className="w-full rounded-md border border-foreground/20 bg-background p-3 text-sm"
               />
+              {!signedIn && (
+                <label className="block space-y-1 text-sm">
+                  <span className="opacity-70">
+                    Your email, if you&apos;d like a reply (optional)
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    maxLength={254}
+                    autoComplete="email"
+                    className="min-h-11 w-full rounded-md border border-foreground/20 bg-background px-3 text-sm"
+                  />
+                </label>
+              )}
+              {/* Spam trap: hidden from people and screen readers, skipped by Tab. Bots fill every box. */}
+              <div aria-hidden className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                <label>
+                  Website
+                  <input
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={trap}
+                    onChange={(e) => setTrap(e.target.value)}
+                  />
+                </label>
+              </div>
               {status !== "idle" && status !== "sending" && (
                 <p
                   className={`text-sm ${status === "sent" ? "text-green-700 dark:text-green-400" : "text-red-400"}`}

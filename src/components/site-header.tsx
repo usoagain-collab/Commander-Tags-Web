@@ -70,7 +70,10 @@ export async function SiteHeader() {
                 <Avatar url={look.avatarUrl} name={look.name} size={28} />
                 Settings
               </Link>
-              <FeedbackButton className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100" />
+              <FeedbackButton
+                signedIn
+                className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100"
+              />
               <form
                 action="/auth/signout"
                 method="post"
@@ -82,15 +85,18 @@ export async function SiteHeader() {
               </form>
             </>
           ) : (
-            <Link
-              href="/login"
-              className="flex min-h-11 items-center px-2 font-medium hover:text-gold"
-            >
-              Sign in
-            </Link>
+            <>
+              <FeedbackButton className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100" />
+              <Link
+                href="/login"
+                className="flex min-h-11 items-center px-2 font-medium hover:text-gold"
+              >
+                Sign in
+              </Link>
+            </>
           )}
         </nav>
-        {/* Phones: signed out there are only two links, which fit; signed in they fold into a menu. */}
+        {/* Phones: signed out there are only three short links, which fit; signed in they fold into a menu. */}
         {user ? (
           <nav aria-label="Main" className="sm:hidden">
             <HeaderMenu
@@ -103,7 +109,10 @@ export async function SiteHeader() {
               <Link href="/wishlist">♡ Wish list</Link>
               <Link href="/collection">Collection</Link>
               <Link href="/settings">Settings</Link>
-              <FeedbackButton className="text-left opacity-80 hover:bg-foreground/5" />
+              <FeedbackButton
+                signedIn
+                className="text-left opacity-80 hover:bg-foreground/5"
+              />
               <form
                 action="/auth/signout"
                 method="post"
@@ -126,6 +135,7 @@ export async function SiteHeader() {
             >
               Precons
             </Link>
+            <FeedbackButton className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100" />
             <Link
               href="/login"
               className="flex min-h-11 items-center px-2 font-medium hover:text-gold"
