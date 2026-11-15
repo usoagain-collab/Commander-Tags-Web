@@ -22,6 +22,7 @@ import {
   planBulk,
   planCategory,
   planMove,
+  parseKey,
   planPrinting,
   planSetQuantity,
   planTagCards,
@@ -92,6 +93,7 @@ import { estimateBracket, overTarget, type ComboRow } from "@/lib/brackets/evalu
 import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
+import { ComparePanel } from "./compare-panel";
 import { SharePanel } from "./share-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
@@ -432,7 +434,7 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
     if (panel !== "search" && panel !== "suggest") {
@@ -1468,6 +1470,7 @@ export function DeckEditor({
                 ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
                 { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
+                { key: "compare", label: "Compare with another deck", active: panel === "compare", onPick: () => setPanel("compare") },
                 ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
                 ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
@@ -1660,6 +1663,22 @@ export function DeckEditor({
             belowTarget.proceed();
             setBelowTarget(null);
           }}
+        />
+      )}
+      {panel === "compare" && (
+        <ComparePanel
+          deckId={deck.id}
+          deckName={deck.name}
+          userId={userId}
+          rows={Object.entries(entries).map(([k, quantity]) => ({ ...parseKey(k), quantity }))}
+          cards={cards}
+          commanderIds={commanders.map((l) => l.card.oracle_id)}
+          roles={roles}
+          roleCounts={counts}
+          rolesOfCard={visibleRoleKeys}
+          maybeIds={new Set(maybeLines.map((l) => l.card.oracle_id))}
+          onAddToMaybe={readOnly ? undefined : (card) => addWithNotice(card, "maybe")}
+          onClose={() => setPanel(null)}
         />
       )}
       {panel === "history" && !readOnly && (
