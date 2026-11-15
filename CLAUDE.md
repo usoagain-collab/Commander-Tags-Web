@@ -282,6 +282,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `supabase/migrations/0061_deck_suggestions.sql`: `deck_suggestions` (adds and cuts as uuid arrays, up to 30 each, a note, status open, applied, maybe or dismissed) with no direct grants. `deck_suggestions_for(p_deck)` gives the owner every suggestion and anyone else only their own; `suggest_deck_changes` (shared decks you don't own, cuts must be in the deck, about 5 an hour), `decide_deck_suggestion` (owner) and `withdraw_deck_suggestion` (author, open only).
 - `src/lib/deck/suggestions.ts`: `useSuggestions`, `planSuggestion` (one `planBulk` change, so Apply is one save and one Ctrl+Z), `cleanSuggestion`, `readSuggestions`. `suggestions-panel.tsx` is the menu panel for both sides; the visitor's Add box is `QuickAdd`.
 - The editor's `run` takes a card array too (the same change as Packages, PR 127), so cards a suggestion adds join the editor's card map.
+## Playgroups (V3, built Nov 15, 2026, migration 0062 not run yet)
+- `supabase/migrations/0062_playgroups.sql`: `playgroups` (name, owner, invite_code), `playgroup_members`, `playgroup_games`, `playgroup_game_players` (seat with a member user_id or a guest_name, optional deck_id of that player own deck and deck_name, won). No direct grants: `my_playgroups`, `playgroup_view`, `playgroup_invite`, `create_playgroup`, `join_playgroup`, `leave_playgroup` (not the owner), `manage_playgroup` (owner: rename, remove, new_invite, delete), `log_playgroup_game`, `delete_playgroup_game` (logger or owner). Names come from these functions; profiles stay private.
+- Pages: `/playgroups` (list and make), `/playgroups/join/[code]` (invite), `/playgroups/[id]` (`playgroup-view.tsx`). The middleware sends signed-out visitors to sign in and back. Helpers and standings in `src/lib/playgroups/playgroups.ts` (tested).
+- Not linked to a deck's Game log (PR 128) yet: a playgroup game doesn't add to the deck's log.
 
 ## Precons (v2, built Nov 8, 2026)
 
