@@ -14,6 +14,8 @@ import { CardLanguageSetting } from "./card-language-setting";
 import { readCardLang } from "@/lib/deck/card-language";
 import { RolesSetting } from "./roles-setting";
 import { PriceSetting } from "./price-setting";
+import { OwnedPrintingSetting } from "./owned-printing-setting";
+import { readOwnedPrintings } from "@/lib/deck/owned-printing";
 import { readPriceSource } from "@/lib/deck/store-prices";
 import { ThemeSetting } from "./theme-setting";
 
@@ -39,6 +41,7 @@ export default async function SettingsPage() {
       <PreviewSetting userId={user.id} initial={readPreviewMode((data?.tag_view ?? {}) as Record<string, unknown>)} />
       <CardLanguageSetting userId={user.id} initial={readCardLang((data?.tag_view ?? {}) as Record<string, unknown>)} />
       <PriceSetting userId={user.id} initial={readPriceSource((data?.tag_view ?? {}) as Record<string, unknown>)} />
+      <OwnedPrintingSetting userId={user.id} initial={readOwnedPrintings((data?.tag_view ?? {}) as Record<string, unknown>)} />
       <RolesSetting
         userId={user.id}
         initialTargets={withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...readTargets(data?.default_role_targets) })}
