@@ -36,16 +36,24 @@ export async function GET() {
       supabase.from("decks").select("id, name, visibility, target_bracket, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
     );
     const ids = decks.map((d) => d.id);
-    type Row = { deck_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
+    type Row = { deck_id: string; oracle_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
     const rows: Row[] = [];
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100);
       rows.push(
         ...(await all<Row>((a, b) =>
-          supabase.from("deck_cards").select("deck_id, board, quantity, foil, printing_info, cards(name)").in("deck_id", chunk).order("deck_id").order("oracle_id").order("board").range(a, b) as unknown as Page<Row>,
+          supabase.from("deck_cards").select("deck_id, oracle_id, board, quantity, foil, printing_info, cards(name)").in("deck_id", chunk).order("deck_id").order("oracle_id").order("board").range(a, b) as unknown as Page<Row>,
         )),
       );
     }
+    // Game log (V3, migration 0058); skipped quietly before that migration runs.
+    type Game = { deck_id: string; played_on: string; result: string; pod_size: number | null; opponents: string | null; note: string | null; standouts: string[]; flops: string[] };
+    const { data: gameRows, error: gameError } = await supabase
+      .from("deck_games")
+      .select("deck_id, played_on, result, pod_size, opponents, note, standouts, flops")
+      .order("played_on", { ascending: false })
+      .limit(5000);
+    const games = gameError ? [] : ((gameRows ?? []) as Game[]);
     const tags = await all<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>((a, b) =>
       supabase.from("user_tags").select("name, deck_id, user_tag_cards(cards(name))").eq("owner_id", uid).order("id").range(a, b) as unknown as Page<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>,
     );
@@ -60,6 +68,21 @@ export async function GET() {
     const byDeck = new Map<string, ExportDeck>(
       decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {} }]),
     );
+    const nameOfCard = new Map(rows.map((r) => [r.oracle_id, r.cards?.name ?? "Unknown card"]));
+    for (const g of games) {
+      const deck = byDeck.get(g.deck_id);
+      if (!deck) continue;
+      const names = (ids: string[]) => ids.map((id) => nameOfCard.get(id) ?? "a card no longer in the deck").join(", ");
+      const parts = [
+        `${g.played_on} ${g.result === "win" ? "Win" : g.result === "draw" ? "Draw" : "Loss"}`,
+        g.pod_size ? `${g.pod_size} players` : "",
+        g.opponents ? `against ${g.opponents}` : "",
+        g.standouts.length ? `stood out: ${names(g.standouts)}` : "",
+        g.flops.length ? `flopped: ${names(g.flops)}` : "",
+        g.note ? `note: ${g.note}` : "",
+      ].filter(Boolean);
+      (deck.games ??= []).push(parts.join(" · "));
+    }
     for (const r of rows) {
       const deck = byDeck.get(r.deck_id);
       const board = r.board as keyof ExportDeck["boards"];

@@ -16,6 +16,8 @@ export type ExportDeck = {
   created: string;
   updated: string;
   boards: Partial<Record<"commander" | "companion" | "main" | "maybe", ExportCardRow[]>>;
+  /** Game log (V3): one line per game, newest first, already written out. */
+  games?: string[];
 };
 export type ExportData = {
   name: string | null;
@@ -65,6 +67,7 @@ export function formatExport(d: ExportData, now = new Date()): string {
       if (!rows?.length) continue;
       out.push("", title, ...byName(rows).map(cardLine));
     }
+    if (deck.games?.length) out.push("", "Game log", ...deck.games);
     out.push("");
   }
 

@@ -95,6 +95,8 @@ import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
 import { ComparePanel } from "./compare-panel";
 import { SimilarPanel } from "./similar-panel";
+import { GameLogPanel } from "./game-log-panel";
+import { useGameLog } from "@/lib/deck/game-log";
 import { WelcomeTour } from "./welcome-tour";
 import { GUEST_KEY, guestSnapshot } from "@/lib/deck/guest-deck";
 import { shouldShowTour } from "@/lib/tour/steps";
@@ -334,6 +336,18 @@ export function DeckEditor({
       setNotice(`Couldn't save what this deck plays: ${error.message}`);
     }
   };
+  // Game log (V3): a game's flopped cards count as playtest flags, one each, like a flag from the playtester.
+  const flagFlops = useCallback(
+    async (ids: string[]) => {
+      for (const id of ids) {
+        const { data, error } = await createClient().rpc("flag_card", { p_deck: deck.id, p_oracle: id });
+        if (error) return setNotice(`Couldn't count a flopped card as a flag: ${error.message}`);
+        setFlags((f) => ({ ...f, [id]: typeof data === "number" ? data : (f[id] ?? 0) + 1 }));
+      }
+    },
+    [deck.id],
+  );
+  const gameLog = useGameLog(deck.id, !readOnly && !!userId, flagFlops);
   const clearFlags = async (oracleId: string) => {
     setFlags((f) => {
       const next = { ...f };
@@ -450,7 +464,7 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | "games" | null>(null);
   const [compareWith, setCompareWith] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
@@ -1531,6 +1545,7 @@ export function DeckEditor({
                   },
                 },
                 { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
+                ...(readOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
                 ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
@@ -1743,6 +1758,14 @@ export function DeckEditor({
           maybeIds={new Set(maybeLines.map((l) => l.card.oracle_id))}
           onAddToMaybe={readOnly ? undefined : (card) => addWithNotice(card, "maybe")}
           initialOther={compareWith}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "games" && !readOnly && (
+        <GameLogPanel
+          log={gameLog}
+          deckCards={[...commanders, ...mainLines].map((l) => ({ oracle_id: l.card.oracle_id, name: l.card.name })).sort((a, b) => a.name.localeCompare(b.name))}
+          nameOf={(id) => cards[id]?.name ?? "A card no longer in the deck"}
           onClose={() => setPanel(null)}
         />
       )}
