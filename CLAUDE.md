@@ -255,6 +255,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Deck descriptions, comments and likes (V3, built Nov 15, 2026, migration 0059 not run yet)
+- `supabase/migrations/0059_deck_social.sql`: `decks.comments_open` and a 1000-character check on `decks.description` (not valid, so old rows are left alone); `deck_comments` and `deck_likes` with no direct grants. Read with `deck_social(p_id)` (anon and signed in, null unless the deck is unlisted, public or yours); write with `add_deck_comment`, `delete_deck_comment` (author or deck owner) and `set_deck_like` (not your own deck). All security definer, because the decks policies hide other people's unlisted decks.
+- `src/lib/deck/deck-social.ts`: `useDeckSocial`, `cleanDescription`, `cleanComment`, `readSocial`, `friendlyError` (shows only our own raised sentences). Before 0059 the RPC fails, and the owner falls back to reading `decks.description` directly.
+- `src/app/decks/[id]/deck-social.tsx`: `DeckSocialSection`, rendered at the bottom of the editor's content (not for guest decks). It follows the editor's live `visibility`, so sharing the deck shows likes and comments straight away.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).

@@ -15,6 +15,7 @@ export type ExportDeck = {
   bracket: number | null;
   created: string;
   updated: string;
+  description?: string | null;
   boards: Partial<Record<"commander" | "companion" | "main" | "maybe", ExportCardRow[]>>;
 };
 export type ExportData = {
@@ -60,6 +61,7 @@ export function formatExport(d: ExportData, now = new Date()): string {
   for (const deck of byName(d.decks)) {
     out.push(`--- ${deck.name} ---`);
     out.push(`Sharing: ${deck.visibility} · Target bracket: ${deck.bracket ?? "none"} · Created ${day(deck.created)} · Last edited ${day(deck.updated)}`);
+    if (deck.description) out.push("", "About this deck", deck.description);
     for (const [key, title] of BOARD_TITLES) {
       const rows = deck.boards[key];
       if (!rows?.length) continue;

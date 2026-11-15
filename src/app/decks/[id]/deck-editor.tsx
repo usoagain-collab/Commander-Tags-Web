@@ -140,6 +140,7 @@ import { archetypeLabel, detectArchetypes } from "@/lib/cutter/archetype";
 import { ARCHETYPES, GENERAL_KEY } from "@/lib/cutter/archetypes";
 import { NO_PLAYS, playsTags, playsToSave, steerThemes, type Plays } from "@/lib/tags/plays";
 import { PlaysEditor, PlaysLine, type PlaysHeadline } from "./plays-line";
+import { DeckSocialSection } from "./deck-social";
 
 type State = {
   entries: Entries;
@@ -2009,6 +2010,7 @@ export function DeckEditor({
             />
           </div>
         </aside>}
+        {!guest && <DeckSocialSection deckId={deck.id} owner={!readOnly} signedIn={!!userId} visibility={visibility} />}
       </div>
       {previewMode === "float" && preview && !sheet && (
         <FloatingPreview

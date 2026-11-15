@@ -32,8 +32,8 @@ export async function GET() {
       supabase.auth.getUser(),
       supabase.from("profiles").select("display_name, created_at").eq("id", uid).single(),
     ]);
-    const decks = await all<{ id: string; name: string; visibility: string; target_bracket: number | null; created_at: string; updated_at: string }>((a, b) =>
-      supabase.from("decks").select("id, name, visibility, target_bracket, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
+    const decks = await all<{ id: string; name: string; visibility: string; target_bracket: number | null; description: string | null; created_at: string; updated_at: string }>((a, b) =>
+      supabase.from("decks").select("id, name, visibility, target_bracket, description, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
     );
     const ids = decks.map((d) => d.id);
     type Row = { deck_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
@@ -58,7 +58,7 @@ export async function GET() {
 
     const deckName = new Map(decks.map((d) => [d.id, d.name]));
     const byDeck = new Map<string, ExportDeck>(
-      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {} }]),
+      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, description: d.description, boards: {} }]),
     );
     for (const r of rows) {
       const deck = byDeck.get(r.deck_id);
