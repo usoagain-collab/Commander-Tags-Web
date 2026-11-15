@@ -28,6 +28,9 @@ import { tokenImage, useDeckTokens, type DeckToken } from "@/lib/deck/tokens";
 import { handStats, sampleHand } from "@/lib/deck/hand-stats";
 import { roleColor } from "@/lib/tags/pretty";
 import { GlassOverlay } from "./glass-overlay";
+import { isArtifactRamp, landAdvice, rampRisk, tappedLands } from "@/lib/deck/mana-checkup";
+import { deckHealth } from "@/lib/deck/health";
+import { useLandText } from "@/lib/deck/use-land-text";
 
 const COLOR_BAR: Record<Color, string> = {
   W: "bg-amber-200 dark:bg-amber-100",
@@ -91,7 +94,10 @@ export function StatsPanel({
   onOpenCard,
   onClose,
   history,
+  onSetLandTarget,
 }: {
+  /** Sets this deck's Lands target (the mana base checkup's button); absent on decks you can't edit. */
+  onSetLandTarget?: (n: number) => void;
   /** The deck's price line (v2): needs the deck, your price source and today's total. */
   history?: { deckId: string; source: PriceSource; total: number };
   lines: DeckLine[];
@@ -111,6 +117,25 @@ export function StatsPanel({
   // Clicking the selected bar again closes its list.
   const onSelect: Select = (s) => setSelection((cur) => (cur?.key === s.key && !s.another ? null : s));
   const shared: Shared = { lines, selected: selection?.key ?? null, onSelect };
+  const landIds = useMemo(() => lines.filter((l) => l.card.counts_as_land).map((l) => l.card.oracle_id), [lines]);
+  const landText = useLandText(landIds);
+  const isRamp = useCallback((l: DeckLine) => roleKeysOf(l).includes("ramp"), [roleKeysOf]);
+  const isHelper = useCallback((l: DeckLine) => roleKeysOf(l).some((k) => k === "ramp" || k === "draw"), [roleKeysOf]);
+  const checks = useMemo(() => {
+    const advice = landAdvice(lines, isHelper);
+    const tapped = landText ? tappedLands(lines, (id) => landText.get(id)) : null;
+    const risk = rampRisk(lines, isRamp);
+    const health = deckHealth({
+      roles: roles.filter((r) => r.key !== "lands").map((r) => ({ name: r.name, target: r.target, count: roleCounts[r.key] ?? 0 })),
+      lands: advice.lands,
+      recommendedLands: advice.recommended,
+      average: advice.average,
+      colors: colorBalance(lines, identity).rows,
+      tapped: tapped ? tapped.always.reduce((n, l) => n + l.quantity, 0) : null,
+    });
+    return { advice, tapped, risk, health };
+  }, [lines, isHelper, landText, isRamp, roles, roleCounts, identity]);
+  const landTarget = roles.find((r) => r.key === "lands")?.target;
 
   return (
     <GlassOverlay label="Stats" paused={paused} onClose={onClose} onEscape={selection ? clear : undefined}>
@@ -132,8 +157,10 @@ export function StatsPanel({
             <div className="min-w-0 space-y-6">
               <Overview {...shared} />
               <div className="grid gap-4 md:grid-cols-2">
+                <DeckHealth {...shared} health={checks.health} />
+                <ManaCheckup {...shared} checks={checks} isRamp={isRamp} isHelper={isHelper} landTarget={landTarget} onSetLandTarget={onSetLandTarget} />
                 <Curve {...shared} />
-                <OpeningHands {...shared} isRamp={(l) => roleKeysOf(l).includes("ramp")} />
+                <OpeningHands {...shared} isRamp={isRamp} />
                 <Roles {...shared} roles={roles} counts={roleCounts} roleKeysOf={roleKeysOf} />
                 <Colors {...shared} identity={identity} />
                 <Types {...shared} />
@@ -422,6 +449,134 @@ function Colors({ lines, selected, onSelect, identity }: Shared & { identity: Se
         {lands} lands (MDFCs included).
         {colorlessLands > 0 && ` ${colorlessLands} make no colored mana themselves (colorless lands and fetch lands like Evolving Wilds), so they aren't counted as sources.`}
       </p>
+    </Section>
+  );
+}
+
+type Checks = {
+  advice: ReturnType<typeof landAdvice>;
+  tapped: ReturnType<typeof tappedLands> | null;
+  risk: ReturnType<typeof rampRisk>;
+  health: ReturnType<typeof deckHealth>;
+};
+
+const healthTone = (n: number) => (n >= 80 ? "text-green-700 dark:text-green-400" : n >= 60 ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400");
+const healthBar = (n: number) => (n >= 80 ? "bg-green-600" : n >= 60 ? "bg-amber-500" : "bg-red-500");
+
+/** V3 deck health score: one number, and a bar per check so you can see where the points went. */
+function DeckHealth({ health }: Shared & { health: Checks["health"] }) {
+  return (
+    <Section title="Deck health" note="A rough guide built from your role targets, land count, curve, colors and tapped lands. Not a power rating.">
+      <p className="mb-3 flex items-baseline gap-2">
+        <span className={`display text-4xl tabular-nums ${healthTone(health.score)}`}>{health.score}</span>
+        <span className="opacity-70">out of 100</span>
+      </p>
+      <ul className="space-y-1">
+        {health.parts.map((p) => {
+          return (
+            <li key={p.key}>
+              <BarRow
+                label={p.label}
+                share={p.score / 100}
+                value={`${p.score}`}
+                barClass={healthBar(p.score)}
+                on={false}
+                disabled
+                onClick={() => {}}
+              />
+              <p className="px-1 text-xs opacity-70">{p.detail}</p>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
+
+/** V3 mana base checkup: a land count from the curve and cheap ramp, tapped lands, and artifact-heavy ramp. */
+function ManaCheckup({
+  lines,
+  selected,
+  onSelect,
+  checks,
+  isRamp,
+  isHelper,
+  landTarget,
+  onSetLandTarget,
+}: Shared & { checks: Checks; isRamp: (l: DeckLine) => boolean; isHelper: (l: DeckLine) => boolean; landTarget?: number; onSetLandTarget?: (n: number) => void }) {
+  const { advice, tapped, risk } = checks;
+  const gap = advice.lands - advice.recommended;
+  const copies = (ls: DeckLine[]) => ls.reduce((n, l) => n + l.quantity, 0);
+  const isCheap = (l: DeckLine) => isSpell(l) && l.card.mana_value <= 2;
+  return (
+    <Section title="Mana base checkup" note="Lands suggested from your curve and cheap ramp, using Frank Karsten's formula for 99-card decks.">
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span>
+          <span className="display text-3xl tabular-nums">{advice.recommended}</span> <span className="opacity-75">lands suggested</span>
+        </span>
+        <span className={gap === 0 ? "opacity-75" : "text-amber-700 dark:text-amber-400"}>
+          You have {advice.lands}
+          {gap !== 0 && ` (${Math.abs(gap)} ${gap < 0 ? "short" : "over"})`}
+        </span>
+      </div>
+      <p className="mb-2 text-xs opacity-70">
+        Average mana value {advice.average.toFixed(2)}, and {advice.cheap} cheap ramp or draw {advice.cheap === 1 ? "card" : "cards"} (mana value 2 or less), each worth about a quarter of a land.
+      </p>
+      {onSetLandTarget && landTarget !== undefined && landTarget !== advice.recommended && (
+        <button type="button" onClick={() => onSetLandTarget(advice.recommended)} className="btn mb-3">
+          Set Lands target to {advice.recommended} (now {landTarget})
+        </button>
+      )}
+      <BarRow
+        label="Cheap helpers"
+        share={advice.cheap / 15}
+        value={`${advice.cheap}`}
+        barClass="bg-foreground/50"
+        on={selected === "mana:cheap"}
+        disabled={!advice.cheap}
+        onClick={() => onSelect(matching("mana:cheap", "Cheap ramp and draw", (l) => isCheap(l) && isHelper(l), { note: "Ramp or card advantage at mana value 2 or less.", detail: (l) => `MV ${l.card.mana_value}` }))}
+      />
+      <div className="mt-3 border-t border-foreground/15 pt-3">
+        <h4 className="mb-1 font-medium">Lands that enter tapped</h4>
+        {!tapped ? (
+          <p className="text-xs opacity-70">Reading your lands…</p>
+        ) : (
+          <>
+            <BarRow
+              label="Always"
+              share={copies(tapped.always) / Math.max(1, advice.lands)}
+              value={`${copies(tapped.always)}`}
+              barClass={copies(tapped.always) > 2 ? "bg-amber-500" : "bg-foreground/50"}
+              on={selected === "mana:tapped"}
+              disabled={!tapped.always.length}
+              onClick={() => onSelect({ key: "mana:tapped", title: "Always enter tapped", note: "Each one costs you a turn's mana when you play it.", list: () => tapped.always.map((line) => ({ line })) })}
+            />
+            <BarRow
+              label="Sometimes"
+              share={copies(tapped.sometimes) / Math.max(1, advice.lands)}
+              value={`${copies(tapped.sometimes)}`}
+              barClass="bg-foreground/30"
+              on={selected === "mana:maybe-tapped"}
+              disabled={!tapped.sometimes.length}
+              onClick={() => onSelect({ key: "mana:maybe-tapped", title: "Sometimes enter tapped", note: "Check lands, shock lands, fast and slow lands: untapped when their condition is met.", list: () => tapped.sometimes.map((line) => ({ line })) })}
+            />
+          </>
+        )}
+      </div>
+      <div className="mt-3 border-t border-foreground/15 pt-3">
+        <h4 className="mb-1 font-medium">Ramp an artifact wipe would hit</h4>
+        <BarRow
+          label="Artifact ramp"
+          share={risk.ramp ? risk.artifacts / risk.ramp : 0}
+          value={`${risk.artifacts} / ${risk.ramp}`}
+          barClass={risk.risky ? "bg-amber-500" : "bg-foreground/50"}
+          on={selected === "mana:rocks"}
+          disabled={!risk.artifacts}
+          onClick={() => onSelect(matching("mana:rocks", "Artifact ramp", (l) => isRamp(l) && isArtifactRamp(l)))}
+        />
+        {risk.risky && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">⚠ Most of your ramp is artifacts, so one artifact wipe would take most of it. Land ramp or mana creatures spread the risk.</p>}
+      </div>
+      {lines.length < 60 && <p className="mt-3 text-xs opacity-70">The suggestion settles once the deck is close to 100 cards.</p>}
     </Section>
   );
 }

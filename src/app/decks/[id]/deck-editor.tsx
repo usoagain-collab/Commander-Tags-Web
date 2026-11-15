@@ -1612,6 +1612,7 @@ export function DeckEditor({
           paused={!!sheet}
           onOpenCard={openLine}
           onClose={closePanel}
+          onSetLandTarget={readOnly ? undefined : (n) => roleSettings.setTargets((t) => ({ ...t, lands: n }))}
         />
       )}
       {editingPlays && !readOnly && (
