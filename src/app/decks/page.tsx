@@ -6,13 +6,15 @@ import { DeckList } from "./deck-list";
 import { DropHint } from "./drop-hint";
 import { BRACKETS } from "@/lib/brackets/rules";
 import { printingImage } from "@/lib/deck/printing";
+import { byFolderName, folderCounts, inFolder, pickFolder, type Folder } from "@/lib/decks/folders";
+import { FolderBar } from "./folder-bar";
 
 export const metadata = { title: "My decks · Deck Genome" };
 
 type Summary = { oracle_id: string; name: string; image_art_crop: string | null; artist: string | null; color_identity: string[] };
 
-export default async function DecksPage() {
-  const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
+export default async function DecksPage({ searchParams }: { searchParams: Promise<{ folder?: string | string[] }> }) {
+  const [supabase, user, params] = await Promise.all([createClient(), getCurrentUser(), searchParams]);
 
   // RLS allows public decks plus the user's own; this page shows only their own.
   const { data: decks, error } = await supabase
@@ -20,6 +22,18 @@ export default async function DecksPage() {
     .select("id, name, updated_at, cover_oracle_id, deck_cards(quantity, board, oracle_id, printing_id, printing_info)")
     .eq("owner_id", user!.id)
     .order("updated_at", { ascending: false });
+
+  // Folders (V3, migration 0056). Read apart from the decks, so the page still works before that migration has run:
+  // the folder reads fail and no folder controls show.
+  const [folderRes, placeRes] = await Promise.all([
+    supabase.from("deck_folders").select("id, name"),
+    supabase.from("decks").select("id, folder_id").eq("owner_id", user!.id),
+  ]);
+  const foldersReady = !folderRes.error && !placeRes.error;
+  const folders: Folder[] = foldersReady ? byFolderName((folderRes.data ?? []) as Folder[]) : [];
+  const folderOf = new Map(foldersReady ? ((placeRes.data ?? []) as { id: string; folder_id: string | null }[]).map((d) => [d.id, d.folder_id]) : []);
+  const folderParam = Array.isArray(params.folder) ? params.folder[0] : params.folder;
+  const pick = pickFolder(folderParam, folders);
 
   // Your default printings, for the art on each tile.
   const { data: defaults } = await supabase.from("preferred_printings").select("oracle_id, printing_id, printing_info");
@@ -59,8 +73,12 @@ export default async function DecksPage() {
       artist: printedRow ? printedArtist(printedRow) : defaultArtist,
       commander: own.map((c) => c.name).join(" & ") || null,
       identity: [...new Set(own.flatMap((c) => c.color_identity))],
+      folder_id: folderOf.get(d.id as string) ?? null,
     };
   });
+  const counts = folderCounts(rows.map((r) => ({ folder_id: r.folder_id ?? null })));
+  const shown = inFolder(rows.map((r) => ({ ...r, folder_id: r.folder_id ?? null })), pick);
+  const openFolder = folders.find((f) => f.id === pick.id);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -92,6 +110,19 @@ export default async function DecksPage() {
                 ))}
               </select>
             </label>
+            {folders.length > 0 && (
+              <label className="flex items-center gap-2 text-sm">
+                <span className="opacity-80">Folder</span>
+                <select name="folder" defaultValue={pick.id ?? ""} aria-label="Folder" className="min-h-11 max-w-48 rounded-lg border border-foreground/20 bg-background px-2">
+                  <option value="">No folder</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button className="btn btn-gold min-h-11 px-5">New deck</button>
           </div>
         </div>
@@ -102,10 +133,16 @@ export default async function DecksPage() {
       {rows.length > 0 && (
         <>
           <div className="mt-8 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="display text-xl">My decks</h2>
+            <h2 className="display text-xl">{openFolder ? openFolder.name : pick.noFolder ? "Decks in no folder" : "My decks"}</h2>
             <DropHint />
           </div>
-          <DeckList decks={rows} />
+          {foldersReady && <FolderBar folders={folders} counts={counts} total={rows.length} current={pick.id} noFolder={pick.noFolder} />}
+          <DeckList
+            key={pick.id ?? (pick.noFolder ? "none" : "all")}
+            decks={shown}
+            folders={foldersReady ? folders : undefined}
+            empty={openFolder ? "No decks in this folder yet. Make one above, or use Folder on any deck to move it here." : "Every deck is in a folder."}
+          />
         </>
       )}
     </main>

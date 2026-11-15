@@ -16,6 +16,8 @@ export type ExportDeck = {
   created: string;
   updated: string;
   boards: Partial<Record<"commander" | "companion" | "main" | "maybe", ExportCardRow[]>>;
+  /** Folders (V3): the deck's folder name, if it's in one. */
+  folder?: string | null;
   /** Card notes (V3), listed after the boards so the lists above still paste into Import. */
   notes?: { name: string; note: string }[];
 };
@@ -62,6 +64,7 @@ export function formatExport(d: ExportData, now = new Date()): string {
   for (const deck of byName(d.decks)) {
     out.push(`--- ${deck.name} ---`);
     out.push(`Sharing: ${deck.visibility} · Target bracket: ${deck.bracket ?? "none"} · Created ${day(deck.created)} · Last edited ${day(deck.updated)}`);
+    if (deck.folder) out.push(`Folder: ${deck.folder}`);
     for (const [key, title] of BOARD_TITLES) {
       const rows = deck.boards[key];
       if (!rows?.length) continue;

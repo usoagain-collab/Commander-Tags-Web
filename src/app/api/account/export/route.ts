@@ -46,6 +46,18 @@ export async function GET() {
         )),
       );
     }
+    // Folders (V3, migration 0056); skipped quietly before that migration runs.
+    const folderOfDeck = new Map<string, string>();
+    {
+      const [{ data: fs, error: fe }, { data: ds, error: de }] = await Promise.all([
+        supabase.from("deck_folders").select("id, name"),
+        supabase.from("decks").select("id, folder_id").eq("owner_id", uid),
+      ]);
+      if (!fe && !de) {
+        const folderName = new Map((fs ?? []).map((f) => [f.id as string, f.name as string]));
+        for (const d of ds ?? []) if (d.folder_id && folderName.has(d.folder_id)) folderOfDeck.set(d.id as string, folderName.get(d.folder_id)!);
+      }
+    }
     // Card notes (V3, migration 0055). Before that migration runs the table isn't there, so its error is ignored.
     const notes: { deck_id: string; oracle_id: string; note: string }[] = [];
     for (let i = 0; i < ids.length; i += 100) {
@@ -65,7 +77,7 @@ export async function GET() {
 
     const deckName = new Map(decks.map((d) => [d.id, d.name]));
     const byDeck = new Map<string, ExportDeck>(
-      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {} }]),
+      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {}, folder: folderOfDeck.get(d.id) ?? null }]),
     );
     for (const r of rows) {
       const deck = byDeck.get(r.deck_id);
