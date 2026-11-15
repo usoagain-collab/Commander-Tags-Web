@@ -59,7 +59,7 @@ export function RoleProfile(props: Props) {
   const reorder = useDragReorder("role", roles.map((r) => r.key), props.onReorder, adjust);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-tour="roles">
       {(!props.hideTitle || !readOnly) && (
         <div className="flex items-baseline justify-between gap-2">
           {!props.hideTitle ? <h2 className="display text-lg">What this deck needs</h2> : <span />}
