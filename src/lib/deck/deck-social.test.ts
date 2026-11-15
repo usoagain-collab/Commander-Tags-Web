@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanComment, cleanDescription, DESCRIPTION_MAX, friendlyError, likeLabel, readSocial } from "./deck-social";
+import { cleanComment, cleanDescription, cleanHelpNote, HELP_NOTE_MAX, DESCRIPTION_MAX, friendlyError, likeLabel, readSocial } from "./deck-social";
 
 describe("cleanDescription", () => {
   it("keeps line breaks, folds blank runs and spaces, trims", () => {
@@ -38,7 +38,7 @@ describe("readSocial", () => {
   });
   it("returns null for no deck, and defaults the rest", () => {
     expect(readSocial(null)).toBeNull();
-    expect(readSocial({})).toEqual({ description: null, comments_open: true, likes: 0, liked: false, comments: [] });
+    expect(readSocial({})).toEqual({ description: null, comments_open: true, likes: 0, liked: false, comments: [], help: null });
   });
 });
 
@@ -51,5 +51,18 @@ describe("likeLabel and friendlyError", () => {
     expect(friendlyError("Comments are off for this deck.", "x")).toBe("Comments are off for this deck.");
     expect(friendlyError('function public.add_deck_comment does not exist', "Couldn't post.")).toBe("Couldn't post.");
     expect(friendlyError(undefined, "fallback")).toBe("fallback");
+  });
+});
+
+describe("needs help", () => {
+  it("reads the flag when the server sends it, and drops a note when not asking", () => {
+    expect(readSocial({ needs_help: true, help_note: "  more   draw " })!.help).toEqual({ on: true, note: "more draw" });
+    expect(readSocial({ needs_help: false, help_note: "old" })!.help).toEqual({ on: false, note: null });
+    expect(readSocial({ needs_help: "yes" })!.help).toBeNull();
+  });
+  it("cleans the note to one capped line", () => {
+    expect(cleanHelpNote("a\nb")).toBe("a b");
+    expect(cleanHelpNote("   ")).toBeNull();
+    expect(cleanHelpNote("x".repeat(HELP_NOTE_MAX + 9))!.length).toBe(HELP_NOTE_MAX);
   });
 });

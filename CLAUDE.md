@@ -260,6 +260,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/deck-social.ts`: `useDeckSocial`, `cleanDescription`, `cleanComment`, `readSocial`, `friendlyError` (shows only our own raised sentences). Before 0059 the RPC fails, and the owner falls back to reading `decks.description` directly.
 - `src/app/decks/[id]/deck-social.tsx`: `DeckSocialSection`, rendered at the bottom of the editor's content (not for guest decks). It follows the editor's live `visibility`, so sharing the deck shows likes and comments straight away.
 
+## Needs help flag (V3, built Nov 15, 2026, migration 0060 not run yet, after 0059)
+- `supabase/migrations/0060_needs_help.sql`: `decks.needs_help` and `decks.help_note` (200 characters), a partial index for public decks that want feedback, and `deck_social()` recreated to return both.
+- `useDeckSocial().setHelp(on, note)` writes them with a plain decks update and opens comments when asking. `data.help` is null until the server sends the fields, which hides the button before 0060.
+- Browse: `?help=1` (Wants feedback). `loadPublicDecks` retries without `needs_help` when the column is missing, so Browse keeps working before 0060.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).
