@@ -292,6 +292,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - src/lib/email/send.ts: the only file that talks to the email service (Resend's HTTP API). Off until EMAIL_API_KEY and EMAIL_FROM are set.
 - Pages: /checkin (answer), /checkin/stop (button; a visit alone changes nothing), POST /api/checkin/stop (one-click unsubscribe header), /admin/checkin (admin only: test to me, Send next 50, averages, notes). Nothing sends on a schedule.
 - Optional env: NEXT_PUBLIC_SITE_URL for the links (default https://deckgenome.com).
+## First deck guide (v3, built Nov 15, 2026)
+
+- `/guide` is a public page; its steps live in `src/lib/guide/guide.ts` (`GUIDE_STEPS`). The starting-targets table comes from `STANDARD_ROLES` (Tutors shows "Follows your bracket"), so it stays in step with new decks.
+- When a button label in the editor changes (Edit targets, ✦ Suggest cards, More menu items, Share options), update the guide's wording too. No migration.
 
 ## Precons (v2, built Nov 8, 2026)
 

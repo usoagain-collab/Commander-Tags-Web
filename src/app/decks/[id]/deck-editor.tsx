@@ -1592,6 +1592,7 @@ export function DeckEditor({
                     ]
                   : []),
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
+                { key: "guide", label: "How to build a deck", active: false, onPick: () => window.open("/guide", "_blank", "noopener") },
                 ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
                 ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
@@ -1938,6 +1939,9 @@ export function DeckEditor({
                 <button type="button" onClick={() => setPanel("import")} className="min-h-10 px-2 text-sm underline opacity-85 hover:opacity-100">
                   Or import a list you already have
                 </button>
+                <Link href="/guide" className="min-h-10 px-2 text-sm underline opacity-85 hover:opacity-100">
+                  New here? Read the guide
+                </Link>
               </div>
             </div>
           )}

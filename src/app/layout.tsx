@@ -53,6 +53,10 @@ export default async function RootLayout({
             </a>
             . Prices, legality and bracket estimates are for information only and come with no guarantee of accuracy. Deck Genome is free and
             provided as is; see the{" "}
+            <Link className="underline" href="/guide">
+              Guide
+            </Link>
+            ,{" "}
             <Link className="underline" href="/terms">
               Terms
             </Link>{" "}
