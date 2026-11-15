@@ -98,10 +98,14 @@ export const POWER = {
     /** A win route that needs the commander (a combo piece, a cheat enabler). */
     route: 3,
   },
-  /** Score at or above each value plays like that bracket. Retuned after the step 2 laptop check. */
+  /**
+   * Score at or above each value plays like that bracket. Step 2 laptop check (Nov 15): precons score higher with the
+   * new parts (median 34, 90th percentile 43), so 3 moved from 40 to 50 (82% of precons at 2, the rules floor caps it
+   * at 84%) and 4 from 60 to 70 so bracket 3 still spans 20 points.
+   */
   bands: [
-    [60, 4],
-    [40, 3],
+    [70, 4],
+    [50, 3],
     [10, 2],
     [0, 1],
   ] as [number, BracketNumber][],
@@ -109,9 +113,10 @@ export const POWER = {
 
 /** Tags the parts read. Each includes its subtree; slugs missing from the tag tree are skipped (the check script lists them). */
 export const POWER_TAGS = {
-  selection: ["cantrip", "scry", "surveil", "loot", "card-selection"],
-  stax: ["tax", "cast-tax", "hatebear", "hate-nonbasic-land", "rule-of-law", "stax"],
-  free: ["free-spell", "pitch-spell"],
+  // card-selection, stax and free-spell aren't Scryfall tags (laptop check, Nov 15), so they were dropped.
+  selection: ["cantrip", "scry", "surveil", "loot"],
+  stax: ["tax", "cast-tax", "hatebear", "hate-nonbasic-land", "rule-of-law"],
+  free: ["pitch-spell"],
   tokens: ["repeatable-creature-tokens"],
   costReducer: ["cost-reducer"],
 };
@@ -163,7 +168,7 @@ export const FREE_SPELLS = new Set([
   "Tibalt's Trickery",
 ]);
 
-/** "Under 10 plays like 1, 10-39 like 2, 40-59 like 3, 60+ like 4." from POWER.bands. */
+/** "Under 10 plays like 1, 10-49 like 2, 50-69 like 3, 70+ like 4." from POWER.bands. */
 export function bandWords() {
   const [four, three, two] = POWER.bands.map(([min]) => min);
   return `Under ${two} plays like 1, ${two}-${three - 1} like 2, ${three}-${four - 1} like 3, ${four}+ like 4.`;

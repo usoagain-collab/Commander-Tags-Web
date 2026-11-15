@@ -148,7 +148,7 @@ if (precons) {
   // Band sweep: share at 2 for other cutoffs (plays like = the higher of the rules floor and the band).
   const sweep: string[] = [];
   for (const low of [10, 15, 20, 25])
-    for (const high of [35, 40, 45, 50, 55]) {
+    for (const high of [45, 50, 55, 60]) {
       const twos = scores.filter((sc, i) => Math.max(floors[i], sc >= high ? 3 : sc >= low ? 2 : 1) === 2).length;
       sweep.push(`2 from ${low}, 3 from ${high}: ${Math.round((twos / ids.length) * 100)}%`);
     }

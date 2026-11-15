@@ -24,7 +24,7 @@ const tree = (tags: [string, number[]][]) =>
 
 describe("refined bracket estimate", () => {
   it("describes the bands from the constants", () => {
-    expect(bandWords()).toBe("Under 10 plays like 1, 10-39 like 2, 40-59 like 3, 60+ like 4.");
+    expect(bandWords()).toBe("Under 10 plays like 1, 10-49 like 2, 50-69 like 3, 70+ like 4.");
   });
 
   it("has Speed and five parts that add up to 100", () => {
