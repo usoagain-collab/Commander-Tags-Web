@@ -8,9 +8,11 @@ describe("browse query", () => {
       colors: "WUBG",
       bracket: 3,
       precons: true,
+      help: false,
       page: 2,
     });
-    expect(parseBrowseQuery({ colors: "xyz", bracket: "9", page: "-1" })).toEqual({ q: "", colors: "", bracket: null, precons: false, page: 1 });
+    expect(parseBrowseQuery({ colors: "xyz", bracket: "9", page: "-1" })).toEqual({ q: "", colors: "", bracket: null, precons: false, help: false, page: 1 });
+    expect(parseBrowseQuery({ help: "1" }).help).toBe(true);
     expect(parseBrowseQuery({ colors: "c" }).colors).toBe("C");
     expect(parseBrowseQuery({ colors: ["U", "B"] }).colors).toBe("UB");
   });
@@ -20,6 +22,7 @@ describe("browse query", () => {
     expect(browseHref(base, { bracket: 2 })).toBe("/browse?q=Krenko&colors=R&bracket=2");
     expect(browseHref(base, { page: 4 })).toBe("/browse?q=Krenko&colors=R&page=4");
     expect(browseHref(parseBrowseQuery({}), {})).toBe("/browse");
+    expect(browseHref(base, { help: true })).toBe("/browse?q=Krenko&colors=R&help=1");
   });
 });
 

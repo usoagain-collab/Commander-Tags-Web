@@ -10,13 +10,15 @@ export const PAGE_SIZE = 48;
 const SCAN = 300;
 const COLOR_ORDER = "WUBRG";
 
-export type BrowseQuery = { q: string; colors: string; bracket: number | null; precons: boolean; page: number };
+export type BrowseQuery = { q: string; colors: string; bracket: number | null; precons: boolean; page: number; help?: boolean };
 export type DeckTile = {
   id: string;
   name: string;
   updated_at: string;
   bracket: number | null;
   precon: boolean;
+  /** The owner asked for feedback (V3 Needs help flag, migration 0060). */
+  needsHelp: boolean;
   commanders: { oracle_id: string; name: string; art: string | null; artist: string | null }[];
   identity: string[];
 };
@@ -37,6 +39,7 @@ export function parseBrowseQuery(params: Record<string, string | string[] | unde
     colors: colors === "C" ? "C" : normalizeColors(colors),
     bracket: Number.isInteger(bracket) && bracket >= 1 && bracket <= 5 ? bracket : null,
     precons: one("precons") === "1",
+    help: one("help") === "1",
     page: Number.isInteger(page) && page > 1 ? page : 1,
   };
 }
@@ -62,6 +65,7 @@ export function browseHref(base: BrowseQuery, change: Partial<BrowseQuery>, path
   if (q.colors) sp.set("colors", q.colors);
   if (q.bracket) sp.set("bracket", String(q.bracket));
   if (q.precons) sp.set("precons", "1");
+  if (q.help) sp.set("help", "1");
   if (q.page > 1) sp.set("page", String(q.page));
   const s = sp.toString();
   return s ? `${path}?${s}` : path;
@@ -83,24 +87,33 @@ export async function commandersNamed(supabase: SupabaseClient, q: string): Prom
  */
 export async function loadPublicDecks(
   supabase: SupabaseClient,
-  query: Pick<BrowseQuery, "colors" | "bracket" | "precons" | "page">,
+  query: Pick<BrowseQuery, "colors" | "bracket" | "precons" | "page" | "help">,
   commanderIds: string[] | null,
 ): Promise<{ decks: DeckTile[]; more: boolean }> {
   if (commanderIds && commanderIds.length === 0) return { decks: [], more: false };
-  let req = supabase
-    .from("decks")
-    .select("id, name, updated_at, target_bracket, precon, deck_cards!inner(oracle_id)")
-    .eq("visibility", "public")
-    .eq("deck_cards.board", "commander")
-    .order("updated_at", { ascending: false })
-    .limit(SCAN);
-  if (!query.precons) req = req.is("precon", null);
-  if (query.bracket) req = req.eq("target_bracket", query.bracket);
-  if (commanderIds) req = req.in("deck_cards.oracle_id", commanderIds);
-  const { data, error } = await req;
+  const read = (withHelp: boolean) => {
+    let req = supabase
+      .from("decks")
+      .select(`id, name, updated_at, target_bracket, precon,${withHelp ? " needs_help," : ""} deck_cards!inner(oracle_id)`)
+      .eq("visibility", "public")
+      .eq("deck_cards.board", "commander")
+      .order("updated_at", { ascending: false })
+      .limit(SCAN);
+    if (!query.precons) req = req.is("precon", null);
+    if (query.bracket) req = req.eq("target_bracket", query.bracket);
+    if (withHelp && query.help) req = req.eq("needs_help", true);
+    if (commanderIds) req = req.in("deck_cards.oracle_id", commanderIds);
+    return req;
+  };
+  let { data, error } = await read(true);
+  // Before migration 0060 there is no needs_help column: read without it, and Wants feedback finds nothing.
+  if (error && /needs_help/.test(error.message)) {
+    if (query.help) return { decks: [], more: false };
+    ({ data, error } = await read(false));
+  }
   if (error) throw new Error(error.message);
-  type Row = { id: string; name: string; updated_at: string; target_bracket: number | null; precon: unknown };
-  const rows = (data ?? []) as Row[];
+  type Row = { id: string; name: string; updated_at: string; target_bracket: number | null; precon: unknown; needs_help?: boolean };
+  const rows = (data ?? []) as unknown as Row[];
   if (!rows.length) return { decks: [], more: false };
 
   // Every commander of these decks (a commander filter only returned the matching one), then their details.
@@ -136,6 +149,7 @@ export async function loadPublicDecks(
       updated_at: r.updated_at,
       bracket: r.target_bracket,
       precon: r.precon != null,
+      needsHelp: r.needs_help === true,
       commanders: own.map((c) => ({ oracle_id: c.oracle_id, name: c.name, art: c.image_art_crop, artist: c.artist })),
       identity: [...COLOR_ORDER].filter((c) => own.some((o) => o.color_identity.includes(c))),
     };
