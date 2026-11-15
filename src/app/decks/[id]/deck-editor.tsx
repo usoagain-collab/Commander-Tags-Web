@@ -952,10 +952,6 @@ export function DeckEditor({
           // Standard roles from the cards' tags, not this deck's role settings (hidden roles, categories).
           rolesOf: bracketRolesOf(tags.tree, (id) => tags.oracleTags[id] ?? []),
           tagsOf: (id) => tags.oracleTags[id] ?? [],
-          counterTags: tags.tree.descendants(["counterspell"].filter((t) => tags.tree!.has(t))),
-          // The commander's pinned tags lead the theme list but often only the commander has them.
-          topThemes: new Set(suggestThemes.filter((t) => !t.pinned).slice(0, 5).map((t) => t.key)),
-          themeKeysOf: (l) => cardKeys({ oracle: tags.oracleTags[l.card.oracle_id] ?? [], art: [], commander: false, land: false }, themeSettings.specific, trees),
           estimate,
           // The sample games check the routes this archetype plays (bracket rethink, step 1).
           tree: tags.tree,

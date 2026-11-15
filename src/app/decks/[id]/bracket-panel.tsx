@@ -432,6 +432,7 @@ function HowItPlays({
               : `Within your target of ${target}.`}{" "}
           {bandWords()}
         </p>
+        {power.whyNotHigher && <p className="mt-1 opacity-80">{power.whyNotHigher}</p>}
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {power.parts.map((p) => (
             <li key={p.key}>
