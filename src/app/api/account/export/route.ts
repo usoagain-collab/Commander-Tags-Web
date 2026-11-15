@@ -65,6 +65,15 @@ export async function GET() {
       if (error) break;
       notes.push(...((data ?? []) as typeof notes));
     }
+    // Packages (V3, migration 0057); skipped quietly before that migration runs.
+    type Pack = { name: string; card_package_cards: { quantity: number; cards: Named }[] };
+    const { data: packs, error: packError } = await supabase.from("card_packages").select("name, card_package_cards(quantity, cards(name))");
+    const packages = packError
+      ? []
+      : ((packs ?? []) as unknown as Pack[]).map((p) => ({
+          name: p.name,
+          cards: p.card_package_cards.map((c) => ({ quantity: c.quantity, name: c.cards?.name ?? "Unknown card" })),
+        }));
     const tags = await all<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>((a, b) =>
       supabase.from("user_tags").select("name, deck_id, user_tag_cards(cards(name))").eq("owner_id", uid).order("id").range(a, b) as unknown as Page<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>,
     );
@@ -104,6 +113,7 @@ export async function GET() {
         cards: t.user_tag_cards.map((c) => c.cards?.name ?? "Unknown card"),
       })),
       wishlist: wish.map((w) => ({ quantity: w.quantity, name: w.cards?.name ?? "Unknown card", foil: w.foil, note: w.note })),
+      packages,
       collection: owned.map((c) => ({
         quantity: c.quantity,
         name: c.cards?.name ?? "Unknown card",

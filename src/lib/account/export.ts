@@ -29,6 +29,8 @@ export type ExportData = {
   myTags: { name: string; scope: string; cards: string[] }[];
   wishlist: (ExportCardRow & { note?: string | null })[];
   collection: ExportCardRow[];
+  /** Packages (V3): saved groups of cards. */
+  packages?: { name: string; cards: ExportCardRow[] }[];
 };
 
 const BOARD_TITLES = [
@@ -81,6 +83,11 @@ export function formatExport(d: ExportData, now = new Date()): string {
   out.push(rule(`WISH LIST (${d.wishlist.length})`));
   if (!d.wishlist.length) out.push("Empty.");
   for (const w of byName(d.wishlist)) out.push(cardLine(w) + (w.note ? ` (note: ${w.note})` : ""));
+
+  if (d.packages?.length) {
+    out.push(rule(`PACKAGES (${d.packages.length})`));
+    for (const p of byName(d.packages)) out.push(`--- ${p.name} ---`, ...byName(p.cards).map(cardLine), "");
+  }
 
   out.push(rule("COLLECTION"));
   if (!d.collection.length) out.push("Empty.");
