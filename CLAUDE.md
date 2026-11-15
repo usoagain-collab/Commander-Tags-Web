@@ -263,6 +263,35 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Packages (V3, built Nov 15, 2026; migration 0057)
+- `card_packages` and `card_package_cards` (owner-only RLS). `src/lib/deck/packages.ts` (tested): `packageFromLines` (copies added up, commanders out), `planAddPackage` (one planBulk edit; cards already there go in `already`), `usePackages` (fails quietly before the migration; the panel then says packages aren't switched on).
+- `packages-panel.tsx`, menu › Packages for any signed-in viewer; Add to deck and To maybeboard only on your own deck. `run(plan, cards)` now takes an array of new cards.
+## Game log (V3, built Nov 15, 2026; migration 0058)
+- `deck_games` (date, result win/loss/draw, pod 2-8, opponents and note text, `standouts` and `flops` uuid arrays), owner-only RLS. `src/lib/deck/game-log.ts` (tested): `cleanGame`, `summarize`, `cardRecord`, `useGameLog` (fails quietly before the migration).
+- `game-log-panel.tsx`, menu › Game log for the owner. A flopped card calls `flag_card` once per game, so it shows as a playtest flag. The Smart Cutter doesn't read games yet.
+## Deck descriptions, comments and likes (V3, built Nov 15, 2026, migration 0059 not run yet)
+- `supabase/migrations/0059_deck_social.sql`: `decks.comments_open` and a 1000-character check on `decks.description` (not valid, so old rows are left alone); `deck_comments` and `deck_likes` with no direct grants. Read with `deck_social(p_id)` (anon and signed in, null unless the deck is unlisted, public or yours); write with `add_deck_comment`, `delete_deck_comment` (author or deck owner) and `set_deck_like` (not your own deck). All security definer, because the decks policies hide other people's unlisted decks.
+- `src/lib/deck/deck-social.ts`: `useDeckSocial`, `cleanDescription`, `cleanComment`, `readSocial`, `friendlyError` (shows only our own raised sentences). Before 0059 the RPC fails, and the owner falls back to reading `decks.description` directly.
+- `src/app/decks/[id]/deck-social.tsx`: `DeckSocialSection`, rendered at the bottom of the editor's content (not for guest decks). It follows the editor's live `visibility`, so sharing the deck shows likes and comments straight away.
+
+## Needs help flag (V3, built Nov 15, 2026, migration 0060 not run yet, after 0059)
+- `supabase/migrations/0060_needs_help.sql`: `decks.needs_help` and `decks.help_note` (200 characters), a partial index for public decks that want feedback, and `deck_social()` recreated to return both.
+- `useDeckSocial().setHelp(on, note)` writes them with a plain decks update and opens comments when asking. `data.help` is null until the server sends the fields, which hides the button before 0060.
+- Browse: `?help=1` (Wants feedback). `loadPublicDecks` retries without `needs_help` when the column is missing, so Browse keeps working before 0060.
+## Suggest changes (V3, built Nov 15, 2026, migration 0061 not run yet)
+- `supabase/migrations/0061_deck_suggestions.sql`: `deck_suggestions` (adds and cuts as uuid arrays, up to 30 each, a note, status open, applied, maybe or dismissed) with no direct grants. `deck_suggestions_for(p_deck)` gives the owner every suggestion and anyone else only their own; `suggest_deck_changes` (shared decks you don't own, cuts must be in the deck, about 5 an hour), `decide_deck_suggestion` (owner) and `withdraw_deck_suggestion` (author, open only).
+- `src/lib/deck/suggestions.ts`: `useSuggestions`, `planSuggestion` (one `planBulk` change, so Apply is one save and one Ctrl+Z), `cleanSuggestion`, `readSuggestions`. `suggestions-panel.tsx` is the menu panel for both sides; the visitor's Add box is `QuickAdd`.
+- The editor's `run` takes a card array too (the same change as Packages, PR 127), so cards a suggestion adds join the editor's card map.
+## Playgroups (V3, built Nov 15, 2026, migration 0062 not run yet)
+- `supabase/migrations/0062_playgroups.sql`: `playgroups` (name, owner, invite_code), `playgroup_members`, `playgroup_games`, `playgroup_game_players` (seat with a member user_id or a guest_name, optional deck_id of that player own deck and deck_name, won). No direct grants: `my_playgroups`, `playgroup_view`, `playgroup_invite`, `create_playgroup`, `join_playgroup`, `leave_playgroup` (not the owner), `manage_playgroup` (owner: rename, remove, new_invite, delete), `log_playgroup_game`, `delete_playgroup_game` (logger or owner). Names come from these functions; profiles stay private.
+- Pages: `/playgroups` (list and make), `/playgroups/join/[code]` (invite), `/playgroups/[id]` (`playgroup-view.tsx`). The middleware sends signed-out visitors to sign in and back. Helpers and standings in `src/lib/playgroups/playgroups.ts` (tested).
+- Not linked to a deck's Game log (PR 128) yet: a playgroup game doesn't add to the deck's log.
+## Monthly check-in email (V3, built Nov 15, 2026, migration 0063)
+- Tables checkin_sends and checkin_answers (no grants; service role only) and profiles.checkin_emails (default on).
+- src/lib/checkin/checkin.ts: questions, monthKey (Hawaii time), cleanAnswer, signed links (HMAC with CHECKIN_SECRET, else the service-role key), the email text and HTML, pickRecipients, summarize. audience.ts loads who gets this month's email.
+- src/lib/email/send.ts: the only file that talks to the email service (Resend's HTTP API). Off until EMAIL_API_KEY and EMAIL_FROM are set.
+- Pages: /checkin (answer), /checkin/stop (button; a visit alone changes nothing), POST /api/checkin/stop (one-click unsubscribe header), /admin/checkin (admin only: test to me, Send next 50, averages, notes). Nothing sends on a schedule.
+- Optional env: NEXT_PUBLIC_SITE_URL for the links (default https://deckgenome.com).
 ## First deck guide (v3, built Nov 15, 2026)
 
 - `/guide` is a public page; its steps live in `src/lib/guide/guide.ts` (`GUIDE_STEPS`). The starting-targets table comes from `STANDARD_ROLES` (Tutors shows "Follows your bracket"), so it stays in step with new decks.

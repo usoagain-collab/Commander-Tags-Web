@@ -95,6 +95,10 @@ import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
 import { ComparePanel } from "./compare-panel";
 import { SimilarPanel } from "./similar-panel";
+import { PackagesPanel, type PackageSource } from "./packages-panel";
+import { planAddPackage } from "@/lib/deck/packages";
+import { GameLogPanel } from "./game-log-panel";
+import { useGameLog } from "@/lib/deck/game-log";
 import { WelcomeTour } from "./welcome-tour";
 import { GUEST_KEY, guestSnapshot } from "@/lib/deck/guest-deck";
 import { shouldShowTour } from "@/lib/tour/steps";
@@ -142,6 +146,9 @@ import { archetypeLabel, detectArchetypes } from "@/lib/cutter/archetype";
 import { ARCHETYPES, GENERAL_KEY } from "@/lib/cutter/archetypes";
 import { NO_PLAYS, playsTags, playsToSave, steerThemes, type Plays } from "@/lib/tags/plays";
 import { PlaysEditor, PlaysLine, type PlaysHeadline } from "./plays-line";
+import { DeckSocialSection } from "./deck-social";
+import { SuggestionsPanel } from "./suggestions-panel";
+import { planSuggestion, useSuggestions } from "@/lib/deck/suggestions";
 
 type State = {
   entries: Entries;
@@ -336,6 +343,18 @@ export function DeckEditor({
       setNotice(`Couldn't save what this deck plays: ${error.message}`);
     }
   };
+  // Game log (V3): a game's flopped cards count as playtest flags, one each, like a flag from the playtester.
+  const flagFlops = useCallback(
+    async (ids: string[]) => {
+      for (const id of ids) {
+        const { data, error } = await createClient().rpc("flag_card", { p_deck: deck.id, p_oracle: id });
+        if (error) return setNotice(`Couldn't count a flopped card as a flag: ${error.message}`);
+        setFlags((f) => ({ ...f, [id]: typeof data === "number" ? data : (f[id] ?? 0) + 1 }));
+      }
+    },
+    [deck.id],
+  );
+  const gameLog = useGameLog(deck.id, !readOnly && !!userId, flagFlops);
   const clearFlags = async (oracleId: string) => {
     setFlags((f) => {
       const next = { ...f };
@@ -433,13 +452,13 @@ export function DeckEditor({
   // Use the printings I own (V3): set further down, once the collection and your default printings are known.
   const pinOwned = useRef<(change: Change) => Change>((c) => c);
   const run = useCallback(
-    (plan: Plan, card?: CardSummary): boolean => {
+    (plan: Plan, card?: CardSummary | CardSummary[]): boolean => {
       if (!plan.ok) {
         if (plan.reason !== "No change.") say(plan.reason);
         return false;
       }
       const change = pinOwned.current(keepPrintings(keepCategories(plan.change, state.categories), state.printings));
-      dispatch({ type: "apply", change, cards: card ? [card] : undefined });
+      dispatch({ type: "apply", change, cards: Array.isArray(card) ? card : card ? [card] : undefined });
       save(toSavePayload(change));
       return true;
     },
@@ -452,7 +471,7 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | "packages" | "games" | "suggestions" | null>(null);
   const [compareWith, setCompareWith] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
@@ -462,6 +481,8 @@ export function DeckEditor({
     }
   }, [panel]);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
+  // Suggest changes (V3, migration 0061): the owner's inbox, or a visitor's own suggestions on a shared deck.
+  const suggestions = useSuggestions(deck.id, !guest && !!userId && (!readOnly || visibility !== "private"));
   const [copying, setCopying] = useState(false);
   const wishlist = useWishlist(userId);
   const cardNotes = useCardNotes(deck.id, !readOnly && !!userId);
@@ -1370,6 +1391,29 @@ export function DeckEditor({
     }
   };
 
+  /** Packages (V3): the groups of this deck's cards that can be saved as a package. */
+  const packageSources = (): PackageSource[] => {
+    const lines: DeckLine[] = Object.entries(entries).flatMap(([k, quantity]) => {
+      const { board, oracle_id } = parseKey(k);
+      return quantity > 0 && cards[oracle_id] ? [{ board, quantity, card: cards[oracle_id] }] : [];
+    });
+    const main = lines.filter((l) => l.board === "main");
+    const out: PackageSource[] = [];
+    if (selectedLines.length) out.push({ key: "selected", label: "The cards you picked", lines: selectedLines });
+    for (const r of roles) {
+      const inRole = main.filter((l) => lineRoleKeys(l).includes(r.key));
+      if (inRole.length) out.push({ key: `role:${r.key}`, label: `Cards in ${r.name}`, lines: inRole });
+    }
+    for (const t of myTags.tags) {
+      const tagged = main.filter((l) => (tagCards[l.card.oracle_id] ?? []).includes(t.id));
+      if (tagged.length) out.push({ key: `tag:${t.id}`, label: `Cards with your tag ${t.name}`, lines: tagged });
+    }
+    if (main.length) out.push({ key: "main", label: "The whole mainboard", lines: main });
+    const maybe = lines.filter((l) => l.board === "maybe");
+    if (maybe.length) out.push({ key: "maybe", label: "The maybeboard", lines: maybe });
+    return out;
+  };
+
   /** Copy to my decks (v2): the server makes the copy and opens it; a signed-out viewer goes to sign in first. */
   function copy() {
     if (copying) return;
@@ -1535,6 +1579,18 @@ export function DeckEditor({
                   },
                 },
                 { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
+                ...(userId ? [{ key: "packages", label: "Packages", active: panel === "packages", onPick: () => setPanel("packages") }] : []),
+                ...(readOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
+                ...(suggestions.available && (!readOnly || visibility !== "private")
+                  ? [
+                      {
+                        key: "suggestions",
+                        label: readOnly ? "Suggest changes" : `Suggestions${suggestions.open.length ? ` (${suggestions.open.length})` : ""}`,
+                        active: panel === "suggestions",
+                        onPick: () => setPanel("suggestions"),
+                      },
+                    ]
+                  : []),
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
                 { key: "guide", label: "How to build a deck", active: false, onPick: () => window.open("/guide", "_blank", "noopener") },
                 ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
@@ -1748,6 +1804,49 @@ export function DeckEditor({
           maybeIds={new Set(maybeLines.map((l) => l.card.oracle_id))}
           onAddToMaybe={readOnly ? undefined : (card) => addWithNotice(card, "maybe")}
           initialOther={compareWith}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "packages" && (
+        <PackagesPanel
+          userId={userId}
+          readOnly={readOnly}
+          sources={packageSources()}
+          cards={cards}
+          onAdd={(items, board, name) => {
+            const r = planAddPackage(entries, items, board, name);
+            if (!run(r.plan, items.map((i) => i.card))) return;
+            const extra = [
+              r.already.length ? `${r.already.length === 1 ? "1 card was" : `${r.already.length} cards were`} already here` : "",
+              r.skipped.length ? `skipped ${r.skipped.length}: ${r.skipped[0]}` : "",
+            ].filter(Boolean);
+            say(`${r.plan.ok ? r.plan.change.label : ""}.${extra.length ? ` ${extra.join("; ")}.` : ""} Ctrl+Z undoes it.`, true);
+          }}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "suggestions" && suggestions.available !== false && (
+        <SuggestionsPanel
+          owner={!readOnly}
+          suggestions={suggestions}
+          entries={entries}
+          cards={cards}
+          identity={commanders.length ? identity : null}
+          onPreview={setPreview}
+          onUse={(adds, cuts, how) => {
+            const { plan, done, skipped } = planSuggestion(entries, adds, cuts, how);
+            if (!run(plan, adds)) return false;
+            say(`${how === "apply" ? "Applied" : "Added"} ${done} ${done === 1 ? "change" : "changes"}${skipped.length ? `; skipped ${skipped.length}` : ""}. Ctrl+Z undoes it.`, true);
+            return true;
+          }}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "games" && !readOnly && (
+        <GameLogPanel
+          log={gameLog}
+          deckCards={[...commanders, ...mainLines].map((l) => ({ oracle_id: l.card.oracle_id, name: l.card.name })).sort((a, b) => a.name.localeCompare(b.name))}
+          nameOf={(id) => cards[id]?.name ?? "A card no longer in the deck"}
           onClose={() => setPanel(null)}
         />
       )}
@@ -2017,6 +2116,7 @@ export function DeckEditor({
             />
           </div>
         </aside>}
+        {!guest && <DeckSocialSection deckId={deck.id} owner={!readOnly} signedIn={!!userId} visibility={visibility} />}
       </div>
       {previewMode === "float" && preview && !sheet && (
         <FloatingPreview

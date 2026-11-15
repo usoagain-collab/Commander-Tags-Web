@@ -7,6 +7,7 @@ import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { readCustomRoles, readTargets, withoutBracketTargets } from "@/lib/tags/role-settings";
 import { AccountSetting } from "./account-setting";
 import { AvatarSetting } from "./avatar-setting";
+import { CheckinSetting } from "./checkin-setting";
 import { CutterSetting } from "./cutter-setting";
 import { NameSetting } from "./name-setting";
 import { PreviewSetting } from "./preview-setting";
@@ -25,10 +26,12 @@ export default async function SettingsPage() {
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
   if (!user) redirect("/login?next=/settings");
 
-  const [{ data }, look, { data: auth }] = await Promise.all([
+  const [{ data }, look, { data: auth }, checkin] = await Promise.all([
     supabase.from("profiles").select("tag_view, cutter_prefs, default_role_targets, custom_roles").eq("id", user.id).single(),
     getProfileLook(),
     supabase.auth.getUser(),
+    // Read on its own: before migration 0063 the column is missing and the switch stays hidden.
+    supabase.from("profiles").select("checkin_emails").eq("id", user.id).maybeSingle(),
   ]);
   const hasPassword = (auth.user?.identities ?? []).some((i) => i.provider === "email");
 
@@ -48,6 +51,7 @@ export default async function SettingsPage() {
         initialCustom={readCustomRoles(data?.custom_roles)}
       />
       <CutterSetting userId={user.id} initial={data?.cutter_prefs} />
+      <CheckinSetting userId={user.id} initial={checkin.error ? null : checkin.data?.checkin_emails === true} />
       <AccountSetting hasPassword={hasPassword} />
     </main>
   );
