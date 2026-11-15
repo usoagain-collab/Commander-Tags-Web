@@ -1596,6 +1596,9 @@ export function DeckEditor({
           onTarget={bracket.setTarget}
           onOpenCard={openLine}
           onClose={closePanel}
+          identity={identity}
+          maybeIds={new Set(maybeLines.map((l) => l.card.oracle_id))}
+          onAddToMaybe={readOnly ? undefined : (card) => addWithNotice(card, "maybe")}
         />
       )}
       {panel === "stats" && (
