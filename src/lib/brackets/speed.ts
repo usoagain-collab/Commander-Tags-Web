@@ -21,10 +21,13 @@ export const SPEED = {
   /** Speed points: full at this turn or sooner, none at `none` or later (WotC: bracket 4 games end around turn 4). */
   points: { max: 40, full: 4, none: 10 },
   /**
-   * Board route: ready once this much mana has gone into creatures, planeswalkers and token makers. A precon has
-   * spent about 50 mana by turn 9, nearly half on threats, so fair decks land around turns 8-10 (to tune on precons).
+   * Board route: ready once the threats in play (creatures, planeswalkers, token makers) add up to this much. Each
+   * threat counts `threatBase` plus half its mana value, so a 2-drop counts 3 and a 4-drop 4: cheap threats aren't
+   * worth nothing next to big ones (with raw mana value, low-curve aggro decks never got there; laptop check, Nov 15).
+   * A precon gets about five 4-drops down by turn 9, so fair decks land around turns 8-10.
    */
-  boardThreat: 18,
+  boardPressure: 45,
+  threatBase: 2,
   /** Cards a draw spell draws while the deck digs for a combo or cheat piece (cantrips draw 1 and replace themselves). */
   drawCards: 2,
   /** Cards a self-mill card puts into the graveyard (Scryfall tags don't carry the amount). */
@@ -250,7 +253,7 @@ function kindsOf(input: SpeedInput, payoffs: Set<string>): Kind[] {
       mill: !land && has(tags, sets.mill),
       discard: !land && has(tags, sets.discard),
       draw: !land && roles.includes("draw") && !roles.includes("ramp") && !roles.includes("tutors") && !payoffs.has(c.oracle_id),
-      threat: !land && (creature || /\bPlaneswalker\b/.test(type) || has(tags, sets.tokens)) ? Math.max(1, c.mana_value) : 0,
+      threat: !land && (creature || /\bPlaneswalker\b/.test(type) || has(tags, sets.tokens)) ? SPEED.threatBase + c.mana_value / 2 : 0,
       commander: l.board === "commander",
     };
   });
@@ -362,6 +365,7 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
     let tapMana = 0;
     let pending = 0;
     let threat = 0;
+    let pressure = 0;
     const done: Record<RouteKey, number> = { combo: never, cheat: never, board: never };
 
     const take = (from: number[], i: number) => {
@@ -387,7 +391,7 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
         });
         if (ok) done.cheat = turn;
       }
-      if (done.board === never && threat >= SPEED.boardThreat) done.board = turn;
+      if (done.board === never && pressure >= SPEED.boardPressure) done.board = turn;
     };
 
     /** Cards a tutor could usefully find right now, most useful first: a combo piece, or a cheat piece. */
@@ -411,6 +415,8 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
       if (turn > 1 && lib.length) hand.push(lib.shift()!);
       tapMana += pending;
       pending = 0;
+      // Threats already in play attack: the board route adds up their pressure turn by turn.
+      pressure += threat;
       // Land drop: the land that makes the most.
       const lands = hand.filter((i) => kinds[i].land).sort((a, b) => kinds[b].landMana - kinds[a].landMana);
       if (lands.length) {
@@ -515,6 +521,24 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
         mana -= kinds[i].cost;
         threat += kinds[i].threat;
       }
+      // Mana left over goes into draw spells, so a deck that draws keeps finding threats (it used to draw only while
+      // digging for a combo or cheat piece). What it draws can be cast with whatever is still left.
+      let drew = false;
+      for (const i of hand.filter((x) => kinds[x].draw).sort((a, b) => kinds[a].cost - kinds[b].cost)) {
+        if (kinds[i].cost > mana) break;
+        take(hand, i);
+        mana -= kinds[i].cost;
+        hand.push(...lib.splice(0, SPEED.drawCards));
+        drew = true;
+      }
+      if (drew)
+        for (const i of hand.filter((x) => kinds[x].threat).sort((a, b) => kinds[b].cost - kinds[a].cost)) {
+          if (kinds[i].cost > mana) continue;
+          take(hand, i);
+          inPlay.add(i);
+          mana -= kinds[i].cost;
+          threat += kinds[i].threat;
+        }
       check(turn, mana);
     }
 

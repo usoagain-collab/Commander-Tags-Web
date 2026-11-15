@@ -93,6 +93,24 @@ describe("sample games (speed)", () => {
     expect(s.turn).toBeLessThanOrEqual(10);
   });
 
+  it("puts a low-curve creature deck with ramp and draw ahead of the fair deck, not behind it", () => {
+    // Laptop check, Nov 15: counting raw mana value left cheap-creature decks (Edgar, Lathril) with no win by turn 12.
+    const lines = [
+      commander,
+      ...many("guy", 28, 2, "Creature — Vampire"),
+      ...many("rock", 15, 2, "Artifact"),
+      ...many("draw", 8, 2, "Sorcery"),
+      ...many("spell", 13, 1, "Instant"),
+      ...lands(34),
+    ];
+    const aggro = estimateSpeed(input(lines, { rock: ["mana-rock"] }, { rock: ["ramp"], draw: ["draw"] }));
+    const fairLines = [commander, ...many("guy", 30, 4, "Creature — Soldier"), ...many("spell", 33, 3, "Instant"), ...lands(36)];
+    const fair = estimateSpeed(input(fairLines, {}));
+    expect(aggro.route.key).toBe("board");
+    expect(aggro.turn).toBeLessThanOrEqual(8);
+    expect(aggro.turn).toBeLessThan(fair.turn);
+  });
+
   it("counts fast mana and tutors toward a cheap two-card combo", () => {
     const a = card("pieceA", 2, "Creature — Wizard");
     const b = card("pieceB", 2, "Instant");

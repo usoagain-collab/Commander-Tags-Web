@@ -36,6 +36,7 @@ const ids: string[] = precons
 
 const tally = new Map<number, string[]>();
 const turns: number[] = [];
+const scores: number[] = [];
 const started = performance.now();
 for (const id of ids) {
   const b = (await db.query("select public.deck_bundle($1) as b", [id])).rows[0].b;
@@ -92,7 +93,10 @@ for (const id of ids) {
 
   const name = (oid: string) => cards.get(oid)?.name ?? oid;
   if (precons) {
-    console.log(`${String(power.playsLike).padStart(2)} ${String(power.score).padStart(3)}  ${turnWords(s.turn).padEnd(14)} ${s.route.label.padEnd(18)} ${b.deck.name}`);
+    // Bracket, points, rules floor, threat turn, route, then each part's points (for tuning the bands), deck name.
+    const short = power.parts.map((p) => `${p.key.slice(0, 5)} ${Math.round(p.points * 10) / 10}`).join(", ");
+    scores.push(power.score);
+    console.log(`${String(power.playsLike).padStart(2)} ${String(power.score).padStart(3)} floor ${estimate.floor}  ${turnWords(s.turn).padEnd(14)} ${s.route.label.padEnd(18)} ${b.deck.name}  [${short}]`);
     continue;
   }
   console.log(`\n━━ ${b.deck.name} ━━`);
@@ -109,6 +113,9 @@ if (precons) {
   const two = (tally.get(2)?.length ?? 0) / ids.length;
   console.log(`Precons at 2: ${Math.round(two * 100)}% (aim: 85% or more, none at 4)`);
   for (const n of [1, 3, 4]) if (tally.get(n)?.length) console.log(`  Plays like ${n}: ${tally.get(n)!.join("; ")}`);
+  const sc = scores.slice().sort((a, b) => a - b);
+  const at = (q: number) => sc[Math.min(sc.length - 1, Math.floor(q * sc.length))];
+  console.log(`Precon points: 5% ${at(0.05)} · 10% ${at(0.1)} · median ${at(0.5)} · 90% ${at(0.9)} · 95% ${at(0.95)} · highest ${sc.at(-1)}`);
 }
 const sorted = turns.slice().sort((a, b) => a - b);
 if (sorted.length) console.log(`Threat turn: median ${turnWords(sorted[Math.floor(sorted.length / 2)])}, fastest ${turnWords(sorted[0])}, slowest ${turnWords(sorted.at(-1)!)}`);
