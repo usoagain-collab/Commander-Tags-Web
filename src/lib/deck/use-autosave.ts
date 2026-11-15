@@ -9,13 +9,16 @@ import type { SavePayload } from "./model";
 
 export type SaveStatus = { state: "saved" | "saving" | "error"; error?: string; pending: number };
 
-/** `local`: a guest deck (V3 try-before-sign-in), kept in the browser by the editor, so nothing is sent. */
-export function useAutosave(deckId: string, local = false) {
+/** `local`: a guest deck (V3 try-before-sign-in), kept in the browser by the editor, so nothing is sent.
+ *  `onSaved` runs after each edit reaches the database (co-build tells the others then). */
+export function useAutosave(deckId: string, local = false, onSaved?: () => void) {
   const supabase = useMemo(() => createClient(), []);
   const queue = useRef<SavePayload[]>([]);
   const running = useRef(false);
   const failed = useRef(false);
   const [status, setStatus] = useState<SaveStatus>({ state: "saved", pending: 0 });
+  const saved = useRef(onSaved);
+  saved.current = onSaved;
 
   const flush = useCallback(async () => {
     if (running.current) return;
@@ -45,6 +48,7 @@ export function useAutosave(deckId: string, local = false) {
         return;
       }
       queue.current.shift();
+      saved.current?.();
     }
     running.current = false;
     setStatus({ state: "saved", pending: 0 });

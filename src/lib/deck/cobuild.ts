@@ -56,6 +56,11 @@ export function cobuildLink(code: string, origin: string) {
   return `${origin.replace(/\/$/, "")}/decks/cobuild/${encodeURIComponent(code)}`;
 }
 
+/** The Realtime channel that carries "someone saved" pings for a co-built deck (use-cobuild-live.ts). */
+export function cobuildChannel(deckId: string) {
+  return `deck-cobuild:${deckId}`;
+}
+
 /** A person's name as shown, with a stand-in when they haven't set one. */
 export function builderName(name: string | null) {
   return name ?? "A Deck Genome player";

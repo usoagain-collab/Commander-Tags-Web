@@ -13,6 +13,8 @@ export type Cobuild = {
   stopLink: () => Promise<string | null>;
   remove: (userId: string) => Promise<string | null>;
   leave: () => Promise<string | null>;
+  /** Asks again who builds the deck. */
+  reload: () => Promise<void>;
 };
 
 export function useCobuild(deckId: string, enabled: boolean): Cobuild {
@@ -54,5 +56,6 @@ export function useCobuild(deckId: string, enabled: boolean): Cobuild {
     stopLink: () => manage("stop_link", null, "Couldn't turn the link off."),
     remove: (userId: string) => manage("remove", userId, "Couldn't take them off this deck."),
     leave,
+    reload,
   };
 }

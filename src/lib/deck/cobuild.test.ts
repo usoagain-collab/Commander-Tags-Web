@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { builderName, cobuildError, cobuildLink, readCobuild, readCobuildDecks, readCobuildInvite } from "./cobuild";
+import { builderName, cobuildChannel, cobuildError, cobuildLink, readCobuild, readCobuildDecks, readCobuildInvite } from "./cobuild";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -65,6 +65,10 @@ describe("readCobuildInvite", () => {
 describe("helpers", () => {
   it("builds the invite link on this site", () => {
     expect(cobuildLink("abc", "https://deckgenome.com/")).toBe("https://deckgenome.com/decks/cobuild/abc");
+  });
+
+  it("names one live channel per deck", () => {
+    expect(cobuildChannel(A)).toBe(`deck-cobuild:${A}`);
   });
 
   it("shows a stand-in name", () => {

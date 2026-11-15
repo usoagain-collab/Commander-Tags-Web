@@ -8,7 +8,18 @@ import { builderName, cobuildLink, COBUILDERS_MAX } from "@/lib/deck/cobuild";
 import { useCobuild } from "@/lib/deck/use-cobuild";
 import { Panel } from "./deck-text-panel";
 
-export function CobuildPanel({ deckId, onClose, onLeft }: { deckId: string; onClose: () => void; onLeft: () => void }) {
+export function CobuildPanel({
+  deckId,
+  onClose,
+  onLeft,
+  onChanged,
+}: {
+  deckId: string;
+  onClose: () => void;
+  onLeft: () => void;
+  /** The link or the builders changed, so the editor knows whether to listen for others' edits. */
+  onChanged?: () => void;
+}) {
   const cobuild = useCobuild(deckId, true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,6 +31,7 @@ export function CobuildPanel({ deckId, onClose, onLeft }: { deckId: string; onCl
     const problem = await run();
     setBusy(false);
     setError(problem);
+    if (!problem) onChanged?.();
     return problem;
   }
 
@@ -39,7 +51,7 @@ export function CobuildPanel({ deckId, onClose, onLeft }: { deckId: string; onCl
               {info.isOwner
                 ? `Friends you invite can add, cut and move this deck's cards, the same way you do. The deck's name, image, sharing, roles, bracket and notes stay yours. Up to ${COBUILDERS_MAX} co-builders.`
                 : "You can add, cut and move this deck's cards. Its name, image, sharing, roles, bracket and notes stay with its owner."}{" "}
-              Changes save as you make them; reload the page to see what others changed.
+              Changes save as you make them, and what others change shows up here a moment after they save it.
             </p>
 
             <ul className="space-y-2">

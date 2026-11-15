@@ -104,6 +104,9 @@ import { GUEST_KEY, guestSnapshot } from "@/lib/deck/guest-deck";
 import { shouldShowTour } from "@/lib/tour/steps";
 import { SharePanel } from "./share-panel";
 import { CobuildPanel } from "./cobuild-panel";
+import { useRouter } from "next/navigation";
+import { useCobuild } from "@/lib/deck/use-cobuild";
+import { useCobuildLive } from "@/lib/deck/use-cobuild-live";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
 import { themeGroups, type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
@@ -166,7 +169,10 @@ type Action =
   | { type: "undo" }
   | { type: "redo" }
   | { type: "loadTagCards"; tagCards: TagCards }
-  | { type: "dropTag"; tagId: string };
+  | { type: "dropTag"; tagId: string }
+  /** Co-build: the deck as saved after someone else's edit. Undo and redo start over, since they would replay
+   *  your old edits on top of theirs. */
+  | { type: "remote"; entries: Entries; categories: Categories; printings: Printings; cards: Record<string, CardSummary> };
 
 const HISTORY_LIMIT = 200;
 
@@ -212,6 +218,16 @@ function reducer(state: State, action: Action): State {
     }
     case "loadTagCards":
       return { ...state, tagCards: action.tagCards };
+    case "remote":
+      return {
+        ...state,
+        entries: action.entries,
+        categories: action.categories,
+        printings: action.printings,
+        cards: { ...state.cards, ...action.cards },
+        past: [],
+        future: [],
+      };
     case "dropTag": {
       // A deleted tag comes off every card, and undo/redo must not try to put it back.
       const tagCards: TagCards = {};
@@ -307,7 +323,42 @@ export function DeckEditor({
     past: [],
     future: [],
   });
-  const { status, save, retry } = useAutosave(deck.id, guest);
+  // Co-build live updates (V3): while more than one person builds this deck, each save pings the others, and a
+  // ping from someone else fetches the deck again once your own edits have saved.
+  const router = useRouter();
+  const cobuildInfo = useCobuild(deck.id, !readOnly && !guest && !!userId && !cobuilder);
+  const shared = cobuilder || !!cobuildInfo.info?.code || (cobuildInfo.info?.builders.length ?? 0) > 0;
+  const wantFresh = useRef(false);
+  const fetching = useRef<{ mark: number; at: number } | null>(null);
+  const [freshTick, setFreshTick] = useState(0);
+  const live = useCobuildLive(deck.id, shared, () => {
+    wantFresh.current = true;
+    setFreshTick((t) => t + 1);
+  });
+  const { status, save, retry } = useAutosave(deck.id, guest, shared ? live.ping : undefined);
+  const editMark = state.past.length + state.future.length * 10000;
+  useEffect(() => {
+    if (!wantFresh.current || status.state !== "saved") return;
+    // One fetch at a time; a fetch that never came back stops blocking after 15 seconds.
+    if (fetching.current && Date.now() - fetching.current.at < 15000) return;
+    wantFresh.current = false;
+    fetching.current = { mark: editMark, at: Date.now() };
+    router.refresh();
+  }, [freshTick, status.state, editMark, router]);
+  useEffect(() => {
+    // The fresh page arrived. Use it only if you made no edit meanwhile; otherwise fetch again once that saves.
+    const started = fetching.current;
+    if (!started) return;
+    fetching.current = null;
+    if (status.state === "saved" && started.mark === editMark) {
+      dispatch({ type: "remote", entries: initialEntries, categories: initialCategories, printings: initialPrintings, cards: initialCards });
+    } else {
+      wantFresh.current = true;
+      setFreshTick((t) => t + 1);
+    }
+    // Runs only when the page's fresh props arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEntries]);
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<CardSummary | null>(null);
   const [previewSide, setPreviewSide] = useState<"left" | "right">("right");
@@ -1693,7 +1744,12 @@ export function DeckEditor({
         />
       )}
       {panel === "cobuild" && !readOnly && !guest && (
-        <CobuildPanel deckId={deck.id} onClose={() => setPanel(null)} onLeft={() => window.location.assign("/decks")} />
+        <CobuildPanel
+          deckId={deck.id}
+          onClose={() => setPanel(null)}
+          onLeft={() => window.location.assign("/decks")}
+          onChanged={() => void cobuildInfo.reload()}
+        />
       )}
       {panel === "lands" && !readOnly && (
         <LandBasePanel
