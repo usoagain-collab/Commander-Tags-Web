@@ -520,7 +520,7 @@ Default mode first, power user after. Each step ends usable.
 
 ### Future (not in V2)
 
-- **V3:** "Build your first deck" guide that explains every tool, including adjusting role target sliders.
+- **V3:** "Build your first deck" guide that explains every tool, including adjusting role target sliders. **Built Nov 15, 2026 (V3):** /guide walks through eleven steps, from New deck and picking a commander to Edit targets (sliders, Hide, + Add a role from a tag, Save as my defaults), Suggest, lands, the Smart Cutter, the bracket, playtesting and sharing. The starting-targets table is read from the code. Linked from My decks, an empty deck, More › How to build a deck, the footer and the sitemap.
 - **Later:** land count recommendations and land cuts; playtester flags (`decks.playtest_flags`, "dead card" feedback) feeding the keep score; an automatic version snapshot before applying cuts; collection-aware cuts (needs collection tracking).
 
 ## Technical architecture

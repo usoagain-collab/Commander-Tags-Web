@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { createDeck } from "./actions";
@@ -125,6 +126,13 @@ export default async function DecksPage({ searchParams }: { searchParams: Promis
             )}
             <button className="btn btn-gold min-h-11 px-5">New deck</button>
           </div>
+          <p className="mt-3 text-sm opacity-80">
+            New to Deck Genome?{" "}
+            <Link href="/guide" className="underline">
+              Read the step-by-step guide
+            </Link>
+            .
+          </p>
         </div>
       </form>
 
