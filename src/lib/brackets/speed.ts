@@ -179,9 +179,9 @@ type Kind = {
   payoff: boolean;
   mill: boolean;
   discard: boolean;
-  /** A draw spell (standard Draw role), not a payoff, tutor or ramp. */
+  /** A draw card (standard Draw role) that isn't a threat, payoff, tutor or ramp. */
   draw: boolean;
-  /** A draw permanent (Rhystic Study, Phyrexian Arena, Beast Whisperer): draws a card every turn once in play. */
+  /** A noncreature draw permanent (Rhystic Study, Phyrexian Arena): draws a card every turn once in play. */
   engine: boolean;
   /** Mana it adds to the board route (0 = not a threat). */
   threat: number;
@@ -233,6 +233,8 @@ function kindsOf(input: SpeedInput, payoffs: Set<string>): Kind[] {
       const to = has(tags, sets.toGraveyard) ? "graveyard" : has(tags, sets.toBattlefield) ? "battlefield" : has(tags, sets.toTop) ? "top" : "hand";
       tutor = { finds: (k) => !k.land && (!mine.length || mine.some((f) => f.type.test(k.type))), to };
     }
+    const threatType = creature || /\bPlaneswalker\b/.test(type);
+    const drawCard = !land && roles.includes("draw") && !roles.includes("ramp") && !roles.includes("tutors") && !payoffs.has(c.oracle_id);
     const reanimator = !land && enables(tags, reanimate);
     const sneak = !land && enables(tags, putIntoPlay);
     return {
@@ -254,8 +256,11 @@ function kindsOf(input: SpeedInput, payoffs: Set<string>): Kind[] {
       payoff: payoffs.has(c.oracle_id),
       mill: !land && has(tags, sets.mill),
       discard: !land && has(tags, sets.discard),
-      draw: !land && roles.includes("draw") && !roles.includes("ramp") && !roles.includes("tutors") && !payoffs.has(c.oracle_id),
-      engine: !land && permanent && roles.includes("draw") && !roles.includes("ramp") && !roles.includes("tutors") && !payoffs.has(c.oracle_id),
+      // Draw cards that aren't threats: a spell draws once, a noncreature permanent (Rhystic Study) every turn.
+      // Creatures and planeswalkers that draw are cast as threats instead (laptop check, Nov 15: casting them as draw
+      // spells cost decks their board).
+      draw: drawCard && !threatType,
+      engine: drawCard && !threatType && permanent,
       threat: !land && (creature || /\bPlaneswalker\b/.test(type) || has(tags, sets.tokens)) ? SPEED.threatBase + c.mana_value / 2 : 0,
       commander: l.board === "commander",
     };

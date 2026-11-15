@@ -56,12 +56,20 @@ export const POWER = {
   cohesion: { max: 8, low: 0.15, high: 0.6 },
   /** Score at or above each value plays like that bracket. */
   bands: [
+    // Step 1 tune (laptop band sweep, Nov 15): 2 from 10 (was 15) brings the weakest precons up to 2; 3 from 40 (was
+    // 35) gains little past 40. The rules floor keeps about 16% of precons at 3 or 4 whatever the points.
     [60, 4],
-    [35, 3],
-    [15, 2],
+    [40, 3],
+    [10, 2],
     [0, 1],
   ] as [number, BracketNumber][],
 };
+
+/** "Under 10 plays like 1, 10-39 like 2, 40-59 like 3, 60+ like 4." from POWER.bands. */
+export function bandWords() {
+  const [four, three, two] = POWER.bands.map(([min]) => min);
+  return `Under ${two} plays like 1, ${two}-${three - 1} like 2, ${three}-${four - 1} like 3, ${four}+ like 4.`;
+}
 
 const isLandFront = (l: DeckLine) => /\bLand\b/.test(l.card.type_line.split(" // ")[0]);
 

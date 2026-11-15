@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
-import { bracketRolesOf, estimatePower, type PowerInput } from "./power";
+import { bandWords, bracketRolesOf, estimatePower, type PowerInput } from "./power";
 import { TagTree } from "@/lib/tags/tree";
 
 const line = (id: string, mv: number, over: Partial<CardSummary> = {}, quantity = 1): DeckLine => ({
@@ -21,6 +21,10 @@ const base = (lines: DeckLine[], roles: Record<string, string[]> = {}, over: Par
 });
 
 describe("refined bracket estimate", () => {
+  it("describes the bands from the constants", () => {
+    expect(bandWords()).toBe("Under 10 plays like 1, 10-39 like 2, 40-59 like 3, 60+ like 4.");
+  });
+
   it("scores a slow, unfocused deck low", () => {
     const lines = Array.from({ length: 60 }, (_, i) => line(`c${i}`, 5));
     const p = estimatePower(base(lines));

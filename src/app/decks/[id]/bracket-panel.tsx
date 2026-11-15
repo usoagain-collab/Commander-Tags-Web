@@ -8,7 +8,7 @@ import { BRACKETS, COMBO_TAG_NAMES, type BracketNumber } from "@/lib/brackets/ru
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
 import { useCombosOneAway } from "@/lib/brackets/use-one-away";
 import { GlassOverlay } from "./glass-overlay";
-import type { PowerEstimate } from "@/lib/brackets/power";
+import { bandWords, type PowerEstimate } from "@/lib/brackets/power";
 import { SPEED, turnWords } from "@/lib/brackets/speed";
 
 /** Below this many cards, "on target" says more than the cards can prove (stress test, Nov 2026). */
@@ -430,7 +430,7 @@ function HowItPlays({
             : ahead
               ? `Stronger than your target of ${target}: the parts below show where the power comes from.`
               : `Within your target of ${target}.`}{" "}
-          Under 15 plays like 1, 15-34 like 2, 35-59 like 3, 60+ like 4.
+          {bandWords()}
         </p>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {power.parts.map((p) => (
