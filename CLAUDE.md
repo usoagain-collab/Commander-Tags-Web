@@ -263,6 +263,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Playgroups (V3, built Nov 15, 2026, migration 0062 not run yet)
+- `supabase/migrations/0062_playgroups.sql`: `playgroups` (name, owner, invite_code), `playgroup_members`, `playgroup_games`, `playgroup_game_players` (seat with a member user_id or a guest_name, optional deck_id of that player own deck and deck_name, won). No direct grants: `my_playgroups`, `playgroup_view`, `playgroup_invite`, `create_playgroup`, `join_playgroup`, `leave_playgroup` (not the owner), `manage_playgroup` (owner: rename, remove, new_invite, delete), `log_playgroup_game`, `delete_playgroup_game` (logger or owner). Names come from these functions; profiles stay private.
+- Pages: `/playgroups` (list and make), `/playgroups/join/[code]` (invite), `/playgroups/[id]` (`playgroup-view.tsx`). The middleware sends signed-out visitors to sign in and back. Helpers and standings in `src/lib/playgroups/playgroups.ts` (tested).
+- Not linked to a deck's Game log (PR 128) yet: a playgroup game doesn't add to the deck's log.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).

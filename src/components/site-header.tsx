@@ -71,6 +71,13 @@ export async function SiteHeader() {
                 Collection
               </Link>
               <Link
+                href="/playgroups"
+                className="flex min-h-11 items-center px-2 hover:text-gold"
+                title="The people you play with, and your games together"
+              >
+                Playgroups
+              </Link>
+              <Link
                 href="/settings"
                 className="flex min-h-11 items-center gap-2 px-2 hover:text-gold"
               >
@@ -116,6 +123,7 @@ export async function SiteHeader() {
               <Link href="/browse">Browse decks</Link>
               <Link href="/wishlist">♡ Wish list</Link>
               <Link href="/collection">Collection</Link>
+              <Link href="/playgroups">Playgroups</Link>
               <Link href="/settings">Settings</Link>
               <FeedbackButton
                 signedIn
