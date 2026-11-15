@@ -255,6 +255,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `deck_folders` (owner-only RLS, names unique per person ignoring case) and `decks.folder_id` (on delete set null); a trigger keeps a deck out of another person's folder. Helpers in `src/lib/decks/folders.ts` (tested), actions in `src/app/decks/folder-actions.ts`.
 - My decks reads folders apart from the deck query, so before the migration the folder reads fail and the page looks as it did. `?folder=<id>` opens a folder, `?folder=none` the decks in no folder. `FolderBar` has the chips and New, Rename, Delete; a tile's Folder button moves it; createDeck takes `folder`.
 
+## Similar decks (V3, built Nov 15, 2026)
+- `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
+- `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).
@@ -267,6 +271,12 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - Steps and helpers in `src/lib/tour/steps.ts` (tested): role bars, Suggest, bracket, Playtest, each pointing at a `data-tour` attribute in the editor (`roles` on RoleProfile's root, `suggest`, `bracket` on a span around BracketBadge, `playtest`). `findTarget` takes the first match that is on screen; a step with nothing on screen still shows its card.
 - `welcome-tour.tsx`: a gold ring over the target (box-shadow dims the rest) and a card at the bottom with Back, Next, Skip tour; Escape skips. Starts once when a signed-in owner opens a deck with a commander and `tag_view.tourSeen` isn't true; finishing or skipping sets it. Menu › **Take the quick tour** shows it again. No migration.
 
+## Try the builder (V3, built Nov 15, 2026)
+- `/try` mounts `DeckEditor` with `guest`: deck id `GUEST_DECK_ID`, no user, default role targets, bracket 3. `useAutosave(id, true)` never writes to Supabase; instead the editor keeps `guestSnapshot(...)` in localStorage under `GUEST_KEY` (`src/lib/deck/guest-deck.ts`, read back with `readGuestDeck`, which drops anything malformed).
+- Signed out, the home page's Start building and a shared deck's Build your own go to `/try`. Signed in, `/try` goes to `/try/save`.
+- `/try/save` (signed in) creates the deck and adds every card in one `apply_deck_changes` call (`guestSavePayload`), clears the browser copy and opens the deck; with nothing kept it goes to `/decks`. If the cards fail, the new empty deck is removed and the browser copy stays.
+- Guests don't get Playtest, Share, History, My tags, the collection, the wishlist or the tour; those need a saved deck or an account.
+
 ## Store prices from MTGJSON (v2, built Nov 11, 2026)
 
 - **David's choices:** option A of "Prices from MTGJSON" in `docs/spec.md`, all four stores. TCGplayer stays Scryfall's `price_usd` (it is TCGplayer's price) and the default; MTGJSON adds Card Kingdom (`ck`), Mana Pool (`mp`), Cardmarket (`cm`, euros, shown in lists only, never a total).
@@ -274,6 +284,12 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `npm run import:prices` (`scripts/import-prices.mts` through `run-ts.mjs`, nightly after the Scryfall import with `continue-on-error`, so a failure never stops combos or precons; `--no-trend` skips the 90-day file): `csv/cardIdentifiers.csv.gz` (MTGJSON uuid to Scryfall ids), `AllPricesToday` (parsed whole), `AllPrices` (148 MB, streamed with stream-json for the trend, about 9 minutes), then cards, printings (touch trigger off, like the reprice), deck totals for every source (precons left out, same math as the deck page via `src/lib/deck/deck-totals.ts`), and `vacuum (analyze)` of cards and deck_cards (rewritten rows break `suggestion_pool`'s index-only scan until vacuumed). Workflow timeout is 45 minutes.
 - Logic: `src/lib/deck/store-prices.ts` (`readPriceSource` from `tag_view.priceSource`, `priceFrom` falls back to TCGplayer, `priceCard` / `priceCards` replace `price_usd` and keep `tcg_usd`, safe to run twice; `pricePrinting(s)`, `storeList`, `trendMark` 20% and 50 cents, `historyLine`), `src/lib/prices/mtgjson.ts` (file parsing, tested). **Prices are applied where a page loads cards**, never saved: the deck editor builds `pricedCards` / `pricedPrintings` / `pricedSplits` for lines and totals, but the card sheet gets the row's own printing so the printing picker never saves store-priced numbers. Suggest, land base and Search price their rows on arrival; collection uses `rowUnitPrice(r, fallback, source)`; the wish list prices on the server.
 - UI: Settings → Prices (`price-setting.tsx`); `src/components/store-prices.tsx` (`StorePriceList` in the card sheet and collection sheet, `TrendChip` on Text rows and the card preview); `price-history.tsx` in Stats (owners only). Labeled "TCGplayer": the printing picker, Search's price filter (Scryfall answers it) and the precons page.
+
+## Browse public decks and Commander pages (V3, built Nov 15, 2026)
+- `src/lib/browse/public-decks.ts` (query parsing and color match tested): `loadPublicDecks` reads public decks with `deck_cards!inner` on the commander board (decks with no commander drop out), newest change first, 300 at most, then their commanders and card details; colors (exact identity, "C" = colorless) and pages of 48 are done in memory. `commandersNamed` finds commander ids by name for the search box.
+- `/browse` (`src/app/browse/page.tsx`): GET form, signed-out Supabase client, `unstable_cache` 5 minutes per query. Precons only with Include precons. Header has a Browse link.
+- `/commanders/[id]` (oracle id): card, its oracle tags (rarest first, labels from `tags`), precons and public decks it leads, **Build a deck with …** (createDeck takes a `commander` field and adds it to the commander board). Cached an hour. Sitemap lists a page per commander of a public deck.
+- No migration. Builder names aren't on the tiles: profiles are private and `deck_builder` is one call per deck.
 
 ## Card language (v2, built Nov 8, 2026)
 

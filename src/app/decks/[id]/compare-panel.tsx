@@ -12,7 +12,7 @@ import type { CardSummary } from "@/lib/deck/model";
 import { useTagData } from "@/lib/tags/use-tag-data";
 import { Panel } from "./deck-text-panel";
 
-type Option = { id: string; name: string; group: "precon-match" | "mine" | "precon"; note?: string };
+type Option = { id: string; name: string; group: "precon-match" | "mine" | "precon" | "public"; note?: string };
 type OtherRow = CompareRow & { category: string | null };
 
 type Props = {
@@ -28,10 +28,12 @@ type Props = {
   rolesOfCard: (card: CardSummary, slugs: string[] | undefined) => string[];
   onAddToMaybe?: (card: CardSummary) => void;
   maybeIds: Set<string>;
+  /** A deck to compare with straight away, such as one picked in Similar decks; listed under Public decks if it isn't yours or a precon. */
+  initialOther?: { id: string; name: string } | null;
   onClose: () => void;
 };
 
-export function ComparePanel({ deckId, deckName, userId, rows, cards, commanderIds, roles, roleCounts, rolesOfCard, onAddToMaybe, maybeIds, onClose }: Props) {
+export function ComparePanel({ deckId, deckName, userId, rows, cards, commanderIds, roles, roleCounts, rolesOfCard, onAddToMaybe, maybeIds, initialOther, onClose }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [options, setOptions] = useState<Option[] | null>(null);
   const [otherId, setOtherId] = useState("");
@@ -71,12 +73,15 @@ export function ComparePanel({ deckId, deckName, userId, rows, cards, commanderI
         ...((mine.data ?? []) as { id: string; name: string }[]).map((d) => ({ id: d.id, name: d.name, group: "mine" as const })),
         ...pre.filter((p) => !matched.has(p.id)).map((p) => ({ id: p.id, name: p.name, group: "precon" as const, note: note(p) })),
       ];
+      if (initialOther && !list.some((o) => o.id === initialOther.id)) list.push({ id: initialOther.id, name: initialOther.name, group: "public" });
       setOptions(list);
-      setOtherId((cur) => cur || (list[0]?.group === "precon-match" ? list[0].id : ""));
+      setOtherId((cur) => cur || initialOther?.id || (list[0]?.group === "precon-match" ? list[0].id : ""));
     })();
     return () => {
       live = false;
     };
+    // initialOther is only read when the panel opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, deckId, userId, commanderKey]);
 
   // The picked deck's cards, and details for any card this deck doesn't have.
@@ -143,11 +148,11 @@ export function ComparePanel({ deckId, deckName, userId, rows, cards, commanderI
           className="min-h-11 min-w-0 max-w-full flex-1 rounded-md border border-foreground/20 bg-background px-2"
         >
           <option value="">{options ? "Pick a deck" : "Loading decks…"}</option>
-          {(["precon-match", "mine", "precon"] as const).map((g) => {
+          {(["precon-match", "mine", "precon", "public"] as const).map((g) => {
             const list = options?.filter((o) => o.group === g) ?? [];
             if (!list.length) return null;
             return (
-              <optgroup key={g} label={g === "precon-match" ? "Precons with your commander" : g === "mine" ? "Your decks" : "Precons"}>
+              <optgroup key={g} label={g === "precon-match" ? "Precons with your commander" : g === "mine" ? "Your decks" : g === "precon" ? "Precons" : "Public decks"}>
                 {list.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.note ? `${o.name} (${o.note})` : o.name}

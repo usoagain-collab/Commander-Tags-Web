@@ -9,7 +9,8 @@ import type { SavePayload } from "./model";
 
 export type SaveStatus = { state: "saved" | "saving" | "error"; error?: string; pending: number };
 
-export function useAutosave(deckId: string) {
+/** `local`: a guest deck (V3 try-before-sign-in), kept in the browser by the editor, so nothing is sent. */
+export function useAutosave(deckId: string, local = false) {
   const supabase = useMemo(() => createClient(), []);
   const queue = useRef<SavePayload[]>([]);
   const running = useRef(false);
@@ -51,6 +52,7 @@ export function useAutosave(deckId: string) {
 
   const save = useCallback(
     (payload: SavePayload) => {
+      if (local) return;
       queue.current.push(payload);
       if (failed.current) {
         // While a save is failing, keep queueing but wait for Retry, so edits stay in order.
@@ -59,7 +61,7 @@ export function useAutosave(deckId: string) {
         void flush();
       }
     },
-    [flush],
+    [flush, local],
   );
 
   // Warn before leaving the page with unsaved edits.
