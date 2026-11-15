@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { bracketSections, estimateLabel, overTarget, type BracketEstimate, type Finding } from "@/lib/brackets/evaluate";
 import { BRACKETS, COMBO_TAG_NAMES, type BracketNumber } from "@/lib/brackets/rules";
-import type { DeckLine } from "@/lib/deck/model";
+import type { CardSummary, DeckLine } from "@/lib/deck/model";
+import { useCombosOneAway } from "@/lib/brackets/use-one-away";
 import { GlassOverlay } from "./glass-overlay";
 import type { PowerEstimate } from "@/lib/brackets/power";
 
@@ -65,7 +66,16 @@ export function BracketPanel({
   onTarget,
   onOpenCard,
   onClose,
+  identity = null,
+  maybeIds,
+  onAddToMaybe,
 }: {
+  /** The commander's colors, so "Combos one card away" only offers cards the deck can play. */
+  identity?: Set<string> | null;
+  /** Cards already on the maybeboard. */
+  maybeIds?: Set<string>;
+  /** Puts a missing combo piece on the maybeboard; absent on decks you can't edit. */
+  onAddToMaybe?: (card: CardSummary) => void;
   /** Refined estimate (v2): how the deck is likely to play, with the points behind it. */
   power?: PowerEstimate | null;
   target: BracketNumber;
@@ -82,6 +92,11 @@ export function BracketPanel({
   onClose: () => void;
 }) {
   const lineOf = new Map(lines.map((l) => [l.card.oracle_id, l]));
+  const oneAway = useCombosOneAway(
+    lines.map((l) => l.card.oracle_id),
+    identity,
+    true,
+  );
   const linesIn = (ids: string[]) => ids.flatMap((id) => lineOf.get(id) ?? []);
   const combos = estimate?.findings.filter((f) => f.combo) ?? [];
   const over = estimate ? estimate.floor > target : false;
@@ -233,6 +248,56 @@ export function BracketPanel({
                       <a href={`https://commanderspellbook.com/combo/${c.id}/`} target="_blank" rel="noreferrer" className="underline opacity-80 hover:opacity-100">
                         What else it needs ↗
                       </a>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {(oneAway.groups.length > 0 || oneAway.error) && (
+          <section>
+            <SectionHeading title="Combos one card away" count={oneAway.groups.length} note="Two-card combos you have half of" over={false} />
+            <p className="mb-2 opacity-80">
+              Each card here would finish a two-card combo with a card already in your deck. Adding one makes the combo real, which can raise your bracket, so they go to the maybeboard first.
+            </p>
+            {oneAway.error && <p className="mb-2 text-amber-700 dark:text-amber-400">{oneAway.error}</p>}
+            <ul className="grid gap-2 lg:grid-cols-2">
+              {oneAway.groups.map((g) => {
+                const card = oneAway.cards.get(g.missing);
+                if (!card) return null;
+                const onMaybe = maybeIds?.has(g.missing);
+                return (
+                  <li key={g.missing} className="panel flex items-start gap-3 p-3">
+                    <div className="w-16 shrink-0">
+                      {card.image_normal ? (
+                        <img src={card.image_normal} alt={card.name} loading="lazy" width={244} height={340} className="w-full rounded-[5%/3.6%]" />
+                      ) : (
+                        <span className="flex aspect-[63/88] items-center justify-center rounded-lg border border-foreground/20 p-1 text-center text-xs">{card.name}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{card.name}</p>
+                      <ul className="mt-1 space-y-1 opacity-85">
+                        {g.combos.slice(0, 3).map(({ combo, have }) => (
+                          <li key={combo.id}>
+                            with {lineOf.get(have)?.card.name ?? "a card in your deck"}: {combo.results.slice(0, 2).join(" · ") || "Combo"} ·{" "}
+                            <a href={`https://commanderspellbook.com/combo/${combo.id}/`} target="_blank" rel="noreferrer" className="underline opacity-80 hover:opacity-100">
+                              How ↗
+                            </a>
+                          </li>
+                        ))}
+                        {g.combos.length > 3 && <li className="opacity-70">and {g.combos.length - 3} more</li>}
+                      </ul>
+                      {onAddToMaybe &&
+                        (onMaybe ? (
+                          <p className="mt-2 text-xs opacity-70">On your maybeboard</p>
+                        ) : (
+                          <button type="button" onClick={() => onAddToMaybe(card)} className="btn mt-2">
+                            + Add to maybeboard
+                          </button>
+                        ))}
                     </div>
                   </li>
                 );
