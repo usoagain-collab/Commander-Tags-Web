@@ -7,6 +7,7 @@ import type { DeckItem } from "./deck-views";
 import { MyTagChips } from "./my-tags-ui";
 import { roleColor } from "@/lib/tags/pretty";
 import { TutorChip } from "./tutor-label";
+import { shortNote } from "@/lib/deck/card-notes";
 
 type Props = {
   item: DeckItem;
@@ -106,6 +107,11 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
         )}
         {tutor && <TutorChip />}
         {item.owned && <OwnedBadge owned={item.owned} chip />}
+        {item.note && (
+          <span title={`Note: ${item.note}`} className="max-w-40 shrink truncate rounded bg-foreground/10 px-1.5 py-0.5 text-xs opacity-80">
+            ✎<span className="hidden lg:inline"> {shortNote(item.note, 30)}</span>
+          </span>
+        )}
         {item.locked && (
           <span title="Locked: the Smart Cutter never suggests cutting it" className="shrink-0 text-xs">
             🔒

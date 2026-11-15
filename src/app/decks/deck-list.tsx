@@ -3,13 +3,14 @@
 // My decks: the tiles, with search and sort once the list is long enough to need them (stress test, Nov 2026).
 import { useEffect, useState } from "react";
 import { DeckRow, type DeckTile } from "./deck-row";
+import type { Folder } from "@/lib/decks/folders";
 
 type Sort = "recent" | "name" | "size";
 const SORT_KEY = "decks:sort";
 /** Fewer decks than this fit on a screen or two; the controls would only be clutter. */
 const CONTROLS_FROM = 7;
 
-export function DeckList({ decks }: { decks: DeckTile[] }) {
+export function DeckList({ decks, folders, empty }: { decks: DeckTile[]; folders?: Folder[]; empty?: string }) {
   const [query, setQuery] = useState("");
   const [sort, setSortState] = useState<Sort>("recent");
   useEffect(() => {
@@ -54,10 +55,10 @@ export function DeckList({ decks }: { decks: DeckTile[] }) {
           {q && <span className="text-sm opacity-70">{shown.length} of {decks.length}</span>}
         </div>
       )}
-      {shown.length === 0 && <p className="mt-4 opacity-70">No deck matches “{query}”.</p>}
+      {shown.length === 0 && <p className="mt-4 opacity-70">{q ? <>No deck matches “{query}”.</> : empty}</p>}
       <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {shown.map((d) => (
-          <DeckRow key={d.id} deck={d} />
+          <DeckRow key={d.id} deck={d} folders={folders} />
         ))}
       </ul>
     </>

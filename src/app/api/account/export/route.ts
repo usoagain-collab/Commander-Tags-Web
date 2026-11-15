@@ -46,6 +46,34 @@ export async function GET() {
         )),
       );
     }
+    // Folders (V3, migration 0056); skipped quietly before that migration runs.
+    const folderOfDeck = new Map<string, string>();
+    {
+      const [{ data: fs, error: fe }, { data: ds, error: de }] = await Promise.all([
+        supabase.from("deck_folders").select("id, name"),
+        supabase.from("decks").select("id, folder_id").eq("owner_id", uid),
+      ]);
+      if (!fe && !de) {
+        const folderName = new Map((fs ?? []).map((f) => [f.id as string, f.name as string]));
+        for (const d of ds ?? []) if (d.folder_id && folderName.has(d.folder_id)) folderOfDeck.set(d.id as string, folderName.get(d.folder_id)!);
+      }
+    }
+    // Card notes (V3, migration 0055). Before that migration runs the table isn't there, so its error is ignored.
+    const notes: { deck_id: string; oracle_id: string; note: string }[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await supabase.from("deck_card_notes").select("deck_id, oracle_id, note").in("deck_id", ids.slice(i, i + 100));
+      if (error) break;
+      notes.push(...((data ?? []) as typeof notes));
+    }
+    // Packages (V3, migration 0057); skipped quietly before that migration runs.
+    type Pack = { name: string; card_package_cards: { quantity: number; cards: Named }[] };
+    const { data: packs, error: packError } = await supabase.from("card_packages").select("name, card_package_cards(quantity, cards(name))");
+    const packages = packError
+      ? []
+      : ((packs ?? []) as unknown as Pack[]).map((p) => ({
+          name: p.name,
+          cards: p.card_package_cards.map((c) => ({ quantity: c.quantity, name: c.cards?.name ?? "Unknown card" })),
+        }));
     // Game log (V3, migration 0058); skipped quietly before that migration runs.
     type Game = { deck_id: string; played_on: string; result: string; pod_size: number | null; opponents: string | null; note: string | null; standouts: string[]; flops: string[] };
     const { data: gameRows, error: gameError } = await supabase
@@ -66,7 +94,7 @@ export async function GET() {
 
     const deckName = new Map(decks.map((d) => [d.id, d.name]));
     const byDeck = new Map<string, ExportDeck>(
-      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {} }]),
+      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {}, folder: folderOfDeck.get(d.id) ?? null }]),
     );
     const nameOfCard = new Map(rows.map((r) => [r.oracle_id, r.cards?.name ?? "Unknown card"]));
     for (const g of games) {
@@ -89,6 +117,13 @@ export async function GET() {
       if (!deck) continue;
       (deck.boards[board] ??= []).push({ quantity: r.quantity, name: r.cards?.name ?? "Unknown card", foil: r.foil, ...printed(r.printing_info) });
     }
+    const cardName = new Map(rows.map((r) => [r.oracle_id, r.cards?.name ?? "Unknown card"]));
+    for (const n of notes) {
+      const deck = byDeck.get(n.deck_id);
+      // A note stays when its card leaves the deck (it comes back if the card does); only cards in the deck are listed.
+      const name = cardName.get(n.oracle_id);
+      if (deck && name) (deck.notes ??= []).push({ name, note: n.note });
+    }
 
     const text = formatExport({
       name: profile?.display_name ?? null,
@@ -101,6 +136,7 @@ export async function GET() {
         cards: t.user_tag_cards.map((c) => c.cards?.name ?? "Unknown card"),
       })),
       wishlist: wish.map((w) => ({ quantity: w.quantity, name: w.cards?.name ?? "Unknown card", foil: w.foil, note: w.note })),
+      packages,
       collection: owned.map((c) => ({
         quantity: c.quantity,
         name: c.cards?.name ?? "Unknown card",

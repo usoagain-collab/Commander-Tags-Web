@@ -16,6 +16,10 @@ export type ExportDeck = {
   created: string;
   updated: string;
   boards: Partial<Record<"commander" | "companion" | "main" | "maybe", ExportCardRow[]>>;
+  /** Folders (V3): the deck's folder name, if it's in one. */
+  folder?: string | null;
+  /** Card notes (V3), listed after the boards so the lists above still paste into Import. */
+  notes?: { name: string; note: string }[];
   /** Game log (V3): one line per game, newest first, already written out. */
   games?: string[];
 };
@@ -27,6 +31,8 @@ export type ExportData = {
   myTags: { name: string; scope: string; cards: string[] }[];
   wishlist: (ExportCardRow & { note?: string | null })[];
   collection: ExportCardRow[];
+  /** Packages (V3): saved groups of cards. */
+  packages?: { name: string; cards: ExportCardRow[] }[];
 };
 
 const BOARD_TITLES = [
@@ -62,11 +68,13 @@ export function formatExport(d: ExportData, now = new Date()): string {
   for (const deck of byName(d.decks)) {
     out.push(`--- ${deck.name} ---`);
     out.push(`Sharing: ${deck.visibility} · Target bracket: ${deck.bracket ?? "none"} · Created ${day(deck.created)} · Last edited ${day(deck.updated)}`);
+    if (deck.folder) out.push(`Folder: ${deck.folder}`);
     for (const [key, title] of BOARD_TITLES) {
       const rows = deck.boards[key];
       if (!rows?.length) continue;
       out.push("", title, ...byName(rows).map(cardLine));
     }
+    if (deck.notes?.length) out.push("", "Card notes", ...byName(deck.notes).map((n) => `${n.name}: ${n.note}`));
     if (deck.games?.length) out.push("", "Game log", ...deck.games);
     out.push("");
   }
@@ -78,6 +86,11 @@ export function formatExport(d: ExportData, now = new Date()): string {
   out.push(rule(`WISH LIST (${d.wishlist.length})`));
   if (!d.wishlist.length) out.push("Empty.");
   for (const w of byName(d.wishlist)) out.push(cardLine(w) + (w.note ? ` (note: ${w.note})` : ""));
+
+  if (d.packages?.length) {
+    out.push(rule(`PACKAGES (${d.packages.length})`));
+    for (const p of byName(d.packages)) out.push(`--- ${p.name} ---`, ...byName(p.cards).map(cardLine), "");
+  }
 
   out.push(rule("COLLECTION"));
   if (!d.collection.length) out.push("Empty.");
