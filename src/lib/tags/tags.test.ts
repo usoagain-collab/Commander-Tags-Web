@@ -28,6 +28,10 @@ const payload: TagTreePayload = {
     ["tutor-land-basic", "tutor-land-basic", 440, [17, 14]], // 18: land tutors are also land ramp
     ["tutor-to-hand", "tutor-to-hand", 640, [16]], // 19
     ["tutor-card", "tutor-card", 110, [15]], // 20: what is fetched
+    ["alternate-win-condition", "alternate win condition", 60, []], // 21
+    ["extra-combat-phase", "extra combat phase", 120, []], // 22
+    ["graveyard-hate", "graveyard hate", 200, []], // 23
+    ["graveyard-seal", "graveyard seal", 30, [23]], // 24
   ],
 };
 const tree = new TagTree(payload);
@@ -115,6 +119,18 @@ describe("roles", () => {
 
   it("returns no roles for an untagged card", () => {
     expect(rolesOf(card("Creature — Bear"), undefined, roles)).toEqual([]);
+  });
+});
+
+describe("Finishers and Graveyard hate roles (V3)", () => {
+  const card = (type_line: string) => ({ type_line });
+  it("count game-ending cards as Finishers and graveyard exile as Graveyard hate, with sub-tags", () => {
+    expect(rolesOf(card("Enchantment"), ["alternate-win-condition"], roles)).toEqual(["finishers"]); // Thassa's Oracle-style
+    expect(rolesOf(card("Sorcery"), ["extra-combat-phase"], roles)).toEqual(["finishers"]); // Relentless Assault
+    expect(rolesOf(card("Artifact"), ["graveyard-seal"], roles)).toEqual(["gravehate"]); // Rest in Peace-style
+  });
+  it("report a slug missing from the data instead of failing", () => {
+    expect(roles.find((r) => r.key === "finishers")!.missing).toEqual(["automatic-win"]);
   });
 });
 

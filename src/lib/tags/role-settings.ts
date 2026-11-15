@@ -14,9 +14,10 @@ export const customKey = (slug: string) => `c:${slug}`;
 const HIDE_PREFIX = "hide:";
 /**
  * Roles hidden until the user shows them, which is stored as "hide:<key>": 0. Tutors (David, Nov 8, 2026): a target
- * of 3 put every existing deck under target, so the role is opt-in.
+ * of 3 put every existing deck under target, so the role is opt-in. Finishers and Graveyard hate (V3, Nov 15, 2026)
+ * are opt-in for the same reason.
  */
-export const HIDDEN_BY_DEFAULT = ["tutors"];
+export const HIDDEN_BY_DEFAULT = ["tutors", "finishers", "gravehate"];
 export const hiddenRoleKeys = (targets: Record<string, number>) =>
   new Set([
     ...Object.keys(targets).filter((k) => k.startsWith(HIDE_PREFIX) && targets[k]).map((k) => k.slice(HIDE_PREFIX.length)),
