@@ -233,6 +233,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Mixed copies (0039):** `deck_cards.printing_split` jsonb, rows return it as `split`. `src/lib/deck/splits.ts` (`splitParts`, `rowPrice`, `totalPriceWithSplits`, `expandLines` for exports, `artCount`; tested). Card sheet `MixedPrintings` reuses `PrintingPicker`; saved with a direct `deck_cards` update.
 - 0036 and 0039 each redefine `deck_bundle` and `shared_deck`; 0039 is the current definition.
 
+## Use the printings I own (V3, built Nov 15, 2026)
+- `src/lib/deck/owned-printing.ts` (tested): `ownedPrintingFor` picks the known printing you own most copies of (nonfoil, then first added, on a tie; unknown printings don't count). `pinOwnedPrintings` adds it to each new row of a Change that has no printing, skipping your own default printing (`preferred_printings` wins), rows the change already pins (an import line with a set code), extra copies, and moves between boards.
+- The editor runs every change through `pinOwned` (a ref set once the collection and defaults are loaded) in `run`, `applyImport` and `applyLandBase`, so it is one undo step with the add. Version restores and undo/redo don't go through it.
+- Settings › **Printings you own** (`owned-printing-setting.tsx`) saves `profiles.tag_view.ownedPrintings`; on unless false. No migration.
+
 ## Collection by printing (v2, built Nov 8, 2026)
 
 - **Why:** 0038 kept one row per card, so imports threw away set codes and decks couldn't tell printings apart. Migration **0040** `collection_cards` (id, owner, oracle_id, printing_id: null = printing unknown, finish nonfoil / foil / etched, quantity 1-9999, printing_info jsonb like deck rows, added_at), unique `nulls not distinct (owner_id, oracle_id, printing_id, finish)` so upserts use `onConflict` on those columns. 0038 rows were copied over as printing unknown.

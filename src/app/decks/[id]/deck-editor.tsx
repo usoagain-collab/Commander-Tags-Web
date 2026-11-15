@@ -120,6 +120,7 @@ import { useWishlist } from "@/lib/deck/use-wishlist";
 import { isFoilFinish, ownedCopies, ownedMatch, unownedPrice } from "@/lib/deck/collection";
 import { markOwnedChanges, shownParts, targetFor, type ShownPart } from "@/lib/deck/collection-targets";
 import { useCollection } from "@/lib/deck/use-collection";
+import { pinOwnedPrintings, readOwnedPrintings } from "@/lib/deck/owned-printing";
 import { readCardLang } from "@/lib/deck/card-language";
 import { useLocalized } from "@/lib/deck/use-localized";
 import { artCount, totalPriceWithSplits, type SplitPart, type Splits } from "@/lib/deck/splits";
@@ -414,13 +415,15 @@ export function DeckEditor({
   }, []);
 
   /** Run a planned edit: update the screen, remember it for undo, queue it for saving. */
+  // Use the printings I own (V3): set further down, once the collection and your default printings are known.
+  const pinOwned = useRef<(change: Change) => Change>((c) => c);
   const run = useCallback(
     (plan: Plan, card?: CardSummary): boolean => {
       if (!plan.ok) {
         if (plan.reason !== "No change.") say(plan.reason);
         return false;
       }
-      const change = keepPrintings(keepCategories(plan.change, state.categories), state.printings);
+      const change = pinOwned.current(keepPrintings(keepCategories(plan.change, state.categories), state.printings));
       dispatch({ type: "apply", change, cards: card ? [card] : undefined });
       save(toSavePayload(change));
       return true;
@@ -473,7 +476,7 @@ export function DeckEditor({
   /** A whole import is one change: one save call, one undo step. */
   const applyImport = useCallback(
     (plain: Change, newCards: CardSummary[]) => {
-      const change = keepPrintings(keepCategories(plain, state.categories), state.printings);
+      const change = pinOwned.current(keepPrintings(keepCategories(plain, state.categories), state.printings));
       dispatch({ type: "apply", change, cards: newCards });
       save(toSavePayload(change));
       setPanel(null);
@@ -485,7 +488,7 @@ export function DeckEditor({
   /** Auto build land base (v2): one Change, so one Ctrl+Z takes every added land back. */
   const applyLandBase = useCallback(
     (plan: LandBasePlan, basicCards: Record<string, CardSummary>, newCards: CardSummary[]) => {
-      const change = keepPrintings(keepCategories(landBaseChange(state.entries, plan, basicCards), state.categories), state.printings);
+      const change = pinOwned.current(keepPrintings(keepCategories(landBaseChange(state.entries, plan, basicCards), state.categories), state.printings));
       if (change.rows.length === 0) return;
       dispatch({ type: "apply", change, cards: newCards });
       save(toSavePayload(change));
@@ -545,6 +548,8 @@ export function DeckEditor({
   // What each row shows: its own pick, else your default. Edits and undo work on the picks alone.
   const { preferred, setDefault } = usePreferredPrintings(initialPreferred);
   const shownPrintings = useMemo(() => effectivePrintings(entries, printings, preferred), [entries, printings, preferred]);
+  const ownedFirst = !readOnly && collection.loaded && readOwnedPrintings(savedTagView);
+  pinOwned.current = (change) => (ownedFirst ? pinOwnedPrintings(change, state.printings, preferred, collection.owned) : change);
   // Prices from your chosen store (v2, Settings → Prices). Everything priced below reads these; edits keep the
   // printings' own prices, so nothing priced here is ever saved.
   const priceSource = readPriceSource(prefs);
