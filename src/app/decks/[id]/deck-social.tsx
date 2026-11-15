@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { timeAgo } from "@/lib/deck/change-log";
-import { COMMENT_MAX, DESCRIPTION_MAX, likeLabel, useDeckSocial } from "@/lib/deck/deck-social";
+import { COMMENT_MAX, DESCRIPTION_MAX, HELP_NOTE_MAX, likeLabel, useDeckSocial } from "@/lib/deck/deck-social";
 import type { Visibility } from "./deck-editor";
 
 export function DeckSocialSection({
@@ -25,6 +25,7 @@ export function DeckSocialSection({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [comment, setComment] = useState("");
+  const [helpDraft, setHelpDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,6 +132,71 @@ export function DeckSocialSection({
           Add a description
         </button>
       ) : null}
+
+      {available && shared && !owner && data.help?.on && (
+        <div className="rounded-lg border border-gold/50 bg-gold/10 p-3">
+          <p className="font-semibold">The builder wants feedback on this deck.</p>
+          {data.help.note && <p className="mt-1 whitespace-pre-line">{data.help.note}</p>}
+          <p className="mt-1 opacity-80">Leave a comment below with a card to try or what you noticed.</p>
+        </div>
+      )}
+
+      {available && owner && shared && data.help && (
+        <div className="space-y-2 rounded-lg border border-foreground/15 p-3">
+          {helpDraft !== null ? (
+            <form
+              className="space-y-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!(await act(() => social.setHelp(true, helpDraft)))) setHelpDraft(null);
+              }}
+            >
+              <label className="block">
+                <span className="font-semibold">What would you like help with?</span>
+                <input
+                  value={helpDraft}
+                  maxLength={HELP_NOTE_MAX}
+                  autoFocus
+                  onChange={(e) => setHelpDraft(e.target.value)}
+                  placeholder="Optional, e.g. more card draw under $5"
+                  className="mt-1 min-h-11 w-full rounded-md border border-foreground/20 bg-transparent px-3"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" disabled={busy} className="btn btn-gold min-h-11 px-4">
+                  {data.help.on ? "Save" : "Ask for feedback"}
+                </button>
+                <button type="button" onClick={() => setHelpDraft(null)} className="btn min-h-11 px-4">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : data.help.on ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1">
+                <span className="font-semibold">You&apos;re asking for feedback.</span>
+                {data.help.note && <span className="opacity-85"> {data.help.note}</span>}
+                {visibility === "unlisted" && <span className="block opacity-75">Only public decks are listed in Browse, so people with the link will see it.</span>}
+              </p>
+              <button type="button" onClick={() => setHelpDraft(data.help?.note ?? "")} className="btn min-h-11 px-4">
+                Edit
+              </button>
+              <button type="button" disabled={busy} onClick={() => act(() => social.setHelp(false, ""))} className="btn min-h-11 px-4">
+                Stop asking
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1 opacity-85">
+                Want other players&apos; ideas? Ask for feedback and the deck shows under Wants feedback in Browse{visibility === "unlisted" ? " once it's public" : ""}.
+              </p>
+              <button type="button" onClick={() => setHelpDraft("")} className="btn min-h-11 px-4">
+                Ask for feedback
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {available && owner && !shared && (
         <p className="opacity-75">Share the deck by link or make it public, and people who open it can like it and leave comments.</p>

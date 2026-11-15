@@ -79,6 +79,10 @@ export default async function BrowsePage({ searchParams }: { searchParams: Promi
           <input type="checkbox" name="precons" value="1" defaultChecked={query.precons} className="h-4 w-4 accent-gold" />
           Include precons
         </label>
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" name="help" value="1" defaultChecked={query.help} className="h-4 w-4 accent-gold" />
+          Wants feedback
+        </label>
         <button className="btn btn-gold min-h-11">Search</button>
       </form>
 
@@ -86,8 +90,8 @@ export default async function BrowsePage({ searchParams }: { searchParams: Promi
         <p className="mt-6 text-sm text-red-400">Couldn&rsquo;t load decks just now. Try again in a moment.</p>
       ) : result.decks.length === 0 ? (
         <p className="mt-6 text-sm opacity-70">
-          No public decks match.{" "}
-          {query.q || query.colors || query.bracket ? (
+          {query.help ? "No public decks are asking for feedback right now." : "No public decks match."}{" "}
+          {query.q || query.colors || query.bracket || query.help ? (
             <Link href="/browse" className="underline">
               Clear the filters
             </Link>
@@ -139,6 +143,7 @@ function Tile({ deck }: { deck: DeckTile }) {
             </span>
             {bracket && <span>Bracket {bracket.n}</span>}
             {deck.precon && <span>Precon</span>}
+            {deck.needsHelp && <span className="rounded bg-gold px-1.5 text-gold-ink">Wants feedback</span>}
           </p>
         </div>
       </Link>

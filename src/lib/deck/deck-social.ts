@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export const DESCRIPTION_MAX = 1000;
 export const COMMENT_MAX = 1000;
+export const HELP_NOTE_MAX = 200;
 
 export type DeckComment = {
   id: string;
@@ -25,6 +26,8 @@ export type DeckSocialData = {
   likes: number;
   liked: boolean;
   comments: DeckComment[];
+  /** Needs help flag (migration 0060). null when the server doesn't send it yet. */
+  help: { on: boolean; note: string | null } | null;
 };
 
 /** A description ready to save: line ends kept, runs of blank lines folded to one, trimmed, capped. Empty is none. */
@@ -75,7 +78,17 @@ export function readSocial(raw: unknown): DeckSocialData | null {
     likes: Math.max(0, Number(r.likes) || 0),
     liked: r.liked === true,
     comments,
+    help:
+      typeof r.needs_help === "boolean"
+        ? { on: r.needs_help, note: r.needs_help ? cleanHelpNote(typeof r.help_note === "string" ? r.help_note : null) : null }
+        : null,
   };
+}
+
+/** The ask beside a feedback request: one line, trimmed, capped. Empty is none. */
+export function cleanHelpNote(raw: string | null | undefined): string | null {
+  const t = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, HELP_NOTE_MAX).trim();
+  return t || null;
 }
 
 /** "1 like", "12 likes". */
@@ -96,12 +109,14 @@ export type DeckSocial = {
   data: DeckSocialData;
   saveDescription: (text: string) => Promise<string | null>;
   setCommentsOpen: (open: boolean) => Promise<string | null>;
+  /** Ask for feedback (opens comments too) or stop asking. */
+  setHelp: (on: boolean, note: string) => Promise<string | null>;
   toggleLike: () => Promise<string | null>;
   addComment: (text: string) => Promise<string | null>;
   removeComment: (id: string) => Promise<string | null>;
 };
 
-const EMPTY: DeckSocialData = { description: null, comments_open: true, likes: 0, liked: false, comments: [] };
+const EMPTY: DeckSocialData = { description: null, comments_open: true, likes: 0, liked: false, comments: [], help: null };
 
 export function useDeckSocial(deckId: string, owner: boolean, enabled: boolean): DeckSocial {
   const supabase = useMemo(() => createClient(), []);
@@ -148,6 +163,18 @@ export function useDeckSocial(deckId: string, owner: boolean, enabled: boolean):
     [supabase, deckId],
   );
 
+  const setHelp = useCallback(
+    async (on: boolean, raw: string) => {
+      const note = on ? cleanHelpNote(raw) : null;
+      const change = on ? { needs_help: true, help_note: note, comments_open: true } : { needs_help: false, help_note: null };
+      const { error } = await supabase.from("decks").update(change).eq("id", deckId);
+      if (error) return `Couldn't save: ${error.message}`;
+      setData((d) => ({ ...d, help: { on, note }, comments_open: on ? true : d.comments_open }));
+      return null;
+    },
+    [supabase, deckId],
+  );
+
   const toggleLike = useCallback(async () => {
     const on = !data.liked;
     setData((d) => ({ ...d, liked: on, likes: Math.max(0, d.likes + (on ? 1 : -1)) }));
@@ -182,5 +209,5 @@ export function useDeckSocial(deckId: string, owner: boolean, enabled: boolean):
     [supabase],
   );
 
-  return { available, data, saveDescription, setCommentsOpen, toggleLike, addComment, removeComment };
+  return { available, data, saveDescription, setCommentsOpen, setHelp, toggleLike, addComment, removeComment };
 }
