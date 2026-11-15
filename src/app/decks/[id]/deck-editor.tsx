@@ -123,6 +123,8 @@ import { deckAccentVars } from "@/lib/ui/deck-colors";
 import { bracketRolesOf, estimatePower } from "@/lib/brackets/power";
 import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
 import { useWishlist } from "@/lib/deck/use-wishlist";
+import { useCardNotes } from "@/lib/deck/card-notes";
+import { CardNoteField } from "./card-note-field";
 import { isFoilFinish, ownedCopies, ownedMatch, unownedPrice } from "@/lib/deck/collection";
 import { markOwnedChanges, shownParts, targetFor, type ShownPart } from "@/lib/deck/collection-targets";
 import { useCollection } from "@/lib/deck/use-collection";
@@ -464,6 +466,7 @@ export function DeckEditor({
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   const [copying, setCopying] = useState(false);
   const wishlist = useWishlist(userId);
+  const cardNotes = useCardNotes(deck.id, !readOnly && !!userId);
   const collection = useCollection(userId);
   // Mixed copies (v2): saved straight to the row (deck_cards.printing_split), not through Ctrl+Z.
   const [splits, setSplits] = useState<Splits>(initialSplits ?? {});
@@ -714,6 +717,7 @@ export function DeckEditor({
       manual: !!categories[entryKey(line.board, id)],
       selected: selecting ? selected.has(entryKey(line.board, id)) : undefined,
       owned: collection.tracking ? ownedMatch(collection.owned, id, shownParts(line, splits, cards[id])) : undefined,
+      note: cardNotes.notes[id],
       arts: (() => {
         const n = splits[entryKey(line.board, id)] ? artCount(line.quantity, line.printing, splits[entryKey(line.board, id)]) : 0;
         return n > 1 ? n : undefined;
@@ -2121,6 +2125,13 @@ export function DeckEditor({
           extra={
             readOnly ? null : (
               <>
+                {cardNotes.available && (
+                  <CardNoteField
+                    key={sheetLine.card.oracle_id}
+                    note={cardNotes.notes[sheetLine.card.oracle_id] ?? ""}
+                    onSave={(text) => cardNotes.save(sheetLine.card.oracle_id, text)}
+                  />
+                )}
                 {(sheetLine.board === "main" || sheetLine.board === "commander") && roles.length > 0 && (
                   <CategoryPicker
                     value={categories[entryKey(sheetLine.board, sheetLine.card.oracle_id)] ?? null}

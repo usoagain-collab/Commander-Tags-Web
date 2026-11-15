@@ -251,6 +251,14 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Logic:** `src/lib/deck/compare.ts` (tested): `compareDecks` counts commander, companion and mainboard only (no maybeboard) and splits cards into both / only mine / only theirs with copies; `overlap` is the share of this deck's non-basic cards the other runs. `compareRoles` keeps this deck's visible role order.
 - **Other deck's roles:** its manual category wins (as in the editor, "none" counts nothing), otherwise its tags through the editor's `visibleRoleKeys`, so hidden roles stay hidden. Its tags come from its own `useTagData` call. Cards only the other deck runs get **+ Maybeboard** (not for basics or viewers).
 
+## Folders on My decks (V3, built Nov 15, 2026; migration 0056)
+- `deck_folders` (owner-only RLS, names unique per person ignoring case) and `decks.folder_id` (on delete set null); a trigger keeps a deck out of another person's folder. Helpers in `src/lib/decks/folders.ts` (tested), actions in `src/app/decks/folder-actions.ts`.
+- My decks reads folders apart from the deck query, so before the migration the folder reads fail and the page looks as it did. `?folder=<id>` opens a folder, `?folder=none` the decks in no folder. `FolderBar` has the chips and New, Rename, Delete; a tile's Folder button moves it; createDeck takes `folder`.
+
+## Card notes (V3, built Nov 15, 2026; migration 0055)
+- `deck_card_notes` (deck_id, oracle_id, note up to 280 characters), owner-only RLS for every action, so notes never show on shared or public decks and `deck_bundle` is unchanged.
+- `useCardNotes(deckId, owner)` in `src/lib/deck/card-notes.ts` loads them apart from the bundle; if the table isn't there yet the load fails quietly and the editor shows no note box. `CardNoteField` sits first in the sheet's owner extras and saves on blur; `DeckItem.note` drives the ✎ mark. Download my data lists notes under each deck, after the boards.
+
 ## Similar decks (V3, built Nov 15, 2026)
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.

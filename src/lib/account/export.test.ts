@@ -21,9 +21,11 @@ describe("formatExport", () => {
             name: "Omo",
             visibility: "private",
             bracket: 3,
+            folder: "Casual",
             created: "2026-10-18T00:00:00Z",
             updated: "2026-11-01T00:00:00Z",
             boards: { main: [{ quantity: 1, name: "Sol Ring" }], commander: [{ quantity: 1, name: "Omo, Queen of Vesuva" }] },
+            notes: [{ name: "Sol Ring", note: "always" }],
           },
         ],
         myTags: [{ name: "Pet cards", scope: "all decks", cards: ["Sol Ring"] }],
@@ -35,9 +37,11 @@ describe("formatExport", () => {
     );
     expect(text).toContain("Downloaded 2026-11-09");
     expect(text).toContain("--- Omo ---");
+    expect(text).toContain("Folder: Casual");
     expect(text.indexOf("Commander\n1 Omo")).toBeLessThan(text.indexOf("Deck\n1 Sol Ring"));
     expect(text).toContain("Pet cards (all decks): Sol Ring");
     expect(text).toContain("1 Mana Crypt (note: someday)");
+    expect(text).toContain("Card notes\nSol Ring: always");
     expect(text).toContain("4 cards in your collection");
     expect(text).toContain("--- Ramp suite ---\n1 Sol Ring");
   });

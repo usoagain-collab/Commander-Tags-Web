@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import type { Folder } from "@/lib/decks/folders";
+import { moveDeckToFolder } from "./folder-actions";
 import { ManaSymbol } from "@/components/mana-cost";
 import { ArtCredit } from "@/components/art-credit";
 import { deleteDeck, renameDeck } from "./actions";
@@ -17,6 +20,8 @@ export type DeckTile = {
   artist?: string | null;
   commander: string | null;
   identity: string[];
+  /** Folders (V3): the deck's folder, or null for none. */
+  folder_id?: string | null;
 };
 
 /** "3 days ago": easier to take in than a full date. */
@@ -33,8 +38,11 @@ function ago(iso: string) {
 
 const WUBRG = ["W", "U", "B", "R", "G"];
 
-export function DeckRow({ deck }: { deck: DeckTile }) {
-  const [mode, setMode] = useState<"view" | "rename" | "confirm-delete">("view");
+export function DeckRow({ deck, folders }: { deck: DeckTile; folders?: Folder[] }) {
+  const [mode, setMode] = useState<"view" | "rename" | "confirm-delete" | "folder">("view");
+  const router = useRouter();
+  const [moving, startMove] = useTransition();
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [renameNote, setRenameNote] = useState<string | null>(null);
   const drop = useDeckDrop(deck.id);
   const pips = WUBRG.filter((c) => deck.identity.includes(c));
@@ -75,6 +83,11 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
         </span>
         {mode === "view" && (
           <span className="ml-auto flex shrink-0 gap-1">
+            {folders && folders.length > 0 && (
+              <button onClick={() => setMode("folder")} className="min-h-9 px-1.5 opacity-75 hover:opacity-100" title="Move to a folder">
+                Folder
+              </button>
+            )}
             <button onClick={() => setMode("rename")} className="min-h-9 px-1.5 opacity-75 hover:opacity-100">
               Rename
             </button>
@@ -129,6 +142,41 @@ export function DeckRow({ deck }: { deck: DeckTile }) {
           </button>
           {renameNote && <p role="alert" className="basis-full text-sm text-amber-400">{renameNote}</p>}
         </form>
+      )}
+
+      {mode === "folder" && folders && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm">
+          <label className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="shrink-0">Folder</span>
+            <select
+              defaultValue={deck.folder_id ?? ""}
+              disabled={moving}
+              autoFocus
+              onChange={(e) => {
+                const to = e.target.value || null;
+                startMove(async () => {
+                  const res = await moveDeckToFolder(deck.id, to);
+                  if ("error" in res) return setMoveError(res.error);
+                  setMoveError(null);
+                  setMode("view");
+                  router.refresh();
+                });
+              }}
+              className="min-h-10 min-w-0 flex-1 rounded-lg border border-foreground/20 bg-background px-2"
+            >
+              <option value="">No folder</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={() => { setMode("view"); setMoveError(null); }} className="min-h-10 px-2 opacity-80">
+            Done
+          </button>
+          {moveError && <p role="alert" className="basis-full text-amber-400">{moveError}</p>}
+        </div>
       )}
 
       {mode === "confirm-delete" && (

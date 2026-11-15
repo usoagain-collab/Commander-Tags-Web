@@ -36,15 +36,34 @@ export async function GET() {
       supabase.from("decks").select("id, name, visibility, target_bracket, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
     );
     const ids = decks.map((d) => d.id);
-    type Row = { deck_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
+    type Row = { deck_id: string; oracle_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
     const rows: Row[] = [];
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100);
       rows.push(
         ...(await all<Row>((a, b) =>
-          supabase.from("deck_cards").select("deck_id, board, quantity, foil, printing_info, cards(name)").in("deck_id", chunk).order("deck_id").order("oracle_id").order("board").range(a, b) as unknown as Page<Row>,
+          supabase.from("deck_cards").select("deck_id, oracle_id, board, quantity, foil, printing_info, cards(name)").in("deck_id", chunk).order("deck_id").order("oracle_id").order("board").range(a, b) as unknown as Page<Row>,
         )),
       );
+    }
+    // Folders (V3, migration 0056); skipped quietly before that migration runs.
+    const folderOfDeck = new Map<string, string>();
+    {
+      const [{ data: fs, error: fe }, { data: ds, error: de }] = await Promise.all([
+        supabase.from("deck_folders").select("id, name"),
+        supabase.from("decks").select("id, folder_id").eq("owner_id", uid),
+      ]);
+      if (!fe && !de) {
+        const folderName = new Map((fs ?? []).map((f) => [f.id as string, f.name as string]));
+        for (const d of ds ?? []) if (d.folder_id && folderName.has(d.folder_id)) folderOfDeck.set(d.id as string, folderName.get(d.folder_id)!);
+      }
+    }
+    // Card notes (V3, migration 0055). Before that migration runs the table isn't there, so its error is ignored.
+    const notes: { deck_id: string; oracle_id: string; note: string }[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await supabase.from("deck_card_notes").select("deck_id, oracle_id, note").in("deck_id", ids.slice(i, i + 100));
+      if (error) break;
+      notes.push(...((data ?? []) as typeof notes));
     }
     // Packages (V3, migration 0057); skipped quietly before that migration runs.
     type Pack = { name: string; card_package_cards: { quantity: number; cards: Named }[] };
@@ -67,13 +86,20 @@ export async function GET() {
 
     const deckName = new Map(decks.map((d) => [d.id, d.name]));
     const byDeck = new Map<string, ExportDeck>(
-      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {} }]),
+      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {}, folder: folderOfDeck.get(d.id) ?? null }]),
     );
     for (const r of rows) {
       const deck = byDeck.get(r.deck_id);
       const board = r.board as keyof ExportDeck["boards"];
       if (!deck) continue;
       (deck.boards[board] ??= []).push({ quantity: r.quantity, name: r.cards?.name ?? "Unknown card", foil: r.foil, ...printed(r.printing_info) });
+    }
+    const cardName = new Map(rows.map((r) => [r.oracle_id, r.cards?.name ?? "Unknown card"]));
+    for (const n of notes) {
+      const deck = byDeck.get(n.deck_id);
+      // A note stays when its card leaves the deck (it comes back if the card does); only cards in the deck are listed.
+      const name = cardName.get(n.oracle_id);
+      if (deck && name) (deck.notes ??= []).push({ name, note: n.note });
     }
 
     const text = formatExport({
