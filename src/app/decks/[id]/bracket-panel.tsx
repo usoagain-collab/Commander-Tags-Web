@@ -8,7 +8,8 @@ import { BRACKETS, COMBO_TAG_NAMES, type BracketNumber } from "@/lib/brackets/ru
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
 import { useCombosOneAway } from "@/lib/brackets/use-one-away";
 import { GlassOverlay } from "./glass-overlay";
-import type { PowerEstimate } from "@/lib/brackets/power";
+import { bandWords, type PowerEstimate } from "@/lib/brackets/power";
+import { SPEED, turnWords } from "@/lib/brackets/speed";
 
 /** Below this many cards, "on target" says more than the cards can prove (stress test, Nov 2026). */
 export const BRACKET_VERDICT_MIN = 60;
@@ -411,13 +412,25 @@ function HowItPlays({
           <span className={`display text-2xl ${ahead ? "text-amber-300" : ""}`}>Plays like bracket {power.playsLike}</span>
           <span className="ml-2 opacity-80">power {power.score} / 100</span>
         </p>
+        {power.speed && (
+          <p className="mt-1">
+            {power.speed.turn > SPEED.maxTurn ? `No win route ready by turn ${SPEED.maxTurn}` : `Threatens a win around ${turnWords(power.speed.turn)}`} · route:{" "}
+            {power.speed.route.label}
+            {power.speed.archetype && (
+              <span className="opacity-70">
+                {" "}
+                ({power.speed.archetype.picked ? "routes from your pick" : "routes from the likely archetype"}: {power.speed.archetype.name})
+              </span>
+            )}
+          </p>
+        )}
         <p className="mt-1 opacity-80">
           {power.playsLike > power.mapped
             ? `The points alone say ${power.mapped}, but its cards already put it at ${floor} or higher.`
             : ahead
               ? `Stronger than your target of ${target}: the parts below show where the power comes from.`
               : `Within your target of ${target}.`}{" "}
-          Under 15 plays like 1, 15-34 like 2, 35-59 like 3, 60+ like 4.
+          {bandWords()}
         </p>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {power.parts.map((p) => (

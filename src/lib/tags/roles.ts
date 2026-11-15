@@ -5,6 +5,12 @@ import { BRACKET_RULES } from "@/lib/brackets/rules";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import type { TagTree } from "./tree";
 
+/**
+ * Scryfall tags for counterspells that only hit creature spells (Essence Scatter), left out of Protection. Slugs not
+ * in the tag tree are skipped; npm run bracket:check prints which of these exist.
+ */
+export const CREATURE_ONLY_COUNTERS = ["counterspell-creature", "creature-counterspell", "counter-creature"];
+
 export type RoleDef = {
   key: string;
   name: string;
@@ -63,9 +69,10 @@ export const STANDARD_ROLES: RoleDef[] = [
     key: "removal",
     name: "Targeted removal",
     target: DEFAULT_ROLE_TARGETS.removal,
-    slugs: ["removal", "spot-removal"],
+    // Counterspells count too: they remove a spell (David, Nov 15, 2026).
+    slugs: ["removal", "spot-removal", "counterspell"],
     exclude: "wipes",
-    about: "Cards that remove a specific permanent or spell. Board wipes are counted under Board wipes instead.",
+    about: "Cards that remove a specific permanent or spell, counterspells included. Board wipes are counted under Board wipes instead.",
   },
   {
     key: "wipes",
@@ -78,8 +85,12 @@ export const STANDARD_ROLES: RoleDef[] = [
     key: "protection",
     name: "Protection",
     target: DEFAULT_ROLE_TARGETS.protection,
-    slugs: ["protection", "gives-protection", "protects-permanent", "gives-hexproof", "gives-indestructible"],
-    about: "Cards that protect your permanents: hexproof, indestructible, protection and similar.",
+    // Counterspells protect too, by stopping removal (David, Nov 15, 2026), except ones that only counter creature
+    // spells, which can't stop a removal spell.
+    slugs: ["protection", "gives-protection", "protects-permanent", "gives-hexproof", "gives-indestructible", "counterspell"],
+    except: [...CREATURE_ONLY_COUNTERS],
+    about:
+      "Cards that protect your permanents: hexproof, indestructible, protection and similar, plus counterspells that can stop removal (not ones that only counter creature spells, like Essence Scatter).",
   },
   {
     key: "recursion",

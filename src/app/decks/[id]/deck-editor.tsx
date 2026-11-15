@@ -848,21 +848,6 @@ export function DeckEditor({
       .map((l) => ({ id: l.card.oracle_id, keys: new Set(cardKeys({ oracle: tags.oracleTags[l.card.oracle_id] ?? [], art: [], commander: false, land: false }, themeSettings.specific, trees)) }));
     return themeGroups(suggestThemes, (key) => new Set(lineKeys.filter((l) => l.keys.has(key)).map((l) => l.id)));
   })();
-  // Refined bracket estimate (v2): how the deck plays, on top of the rules floor. Shown on the Bracket screen.
-  const power =
-    estimate && trees && tags.tree
-      ? estimatePower({
-          lines: [...commanders, ...companions, ...mainLines],
-          // Standard roles from the cards' tags, not this deck's role settings (hidden roles, categories).
-          rolesOf: bracketRolesOf(tags.tree, (id) => tags.oracleTags[id] ?? []),
-          tagsOf: (id) => tags.oracleTags[id] ?? [],
-          counterTags: tags.tree.descendants(["counterspell"].filter((t) => tags.tree!.has(t))),
-          // The commander's pinned tags lead the theme list but often only the commander has them.
-          topThemes: new Set(suggestThemes.filter((t) => !t.pinned).slice(0, 5).map((t) => t.key)),
-          themeKeysOf: (l) => cardKeys({ oracle: tags.oracleTags[l.card.oracle_id] ?? [], art: [], commander: false, land: false }, themeSettings.specific, trees),
-          estimate,
-        })
-      : null;
   const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
   const suggestStyle = useSuggestSettings(deck.id, suggestSettings, readOnly);
   const dismissed = useDismissed(deck.id, dismissedSuggestions, readOnly);
@@ -901,6 +886,29 @@ export function DeckEditor({
     const guess = ranked[0];
     return guess && guess.archetype.key !== GENERAL_KEY ? { label: archetypeLabel(guess), guessed: true } : null;
   })();
+  // Refined bracket estimate (v2): how the deck plays, on top of the rules floor. Shown on the Bracket screen.
+  const power =
+    estimate && trees && tags.tree
+      ? estimatePower({
+          lines: [...commanders, ...companions, ...mainLines],
+          // Standard roles from the cards' tags, not this deck's role settings (hidden roles, categories).
+          rolesOf: bracketRolesOf(tags.tree, (id) => tags.oracleTags[id] ?? []),
+          tagsOf: (id) => tags.oracleTags[id] ?? [],
+          counterTags: tags.tree.descendants(["counterspell"].filter((t) => tags.tree!.has(t))),
+          // The commander's pinned tags lead the theme list but often only the commander has them.
+          topThemes: new Set(suggestThemes.filter((t) => !t.pinned).slice(0, 5).map((t) => t.key)),
+          themeKeysOf: (l) => cardKeys({ oracle: tags.oracleTags[l.card.oracle_id] ?? [], art: [], commander: false, land: false }, themeSettings.specific, trees),
+          estimate,
+          // The sample games check the routes this archetype plays (bracket rethink, step 1).
+          tree: tags.tree,
+          archetype: (() => {
+            const set = settledArchetype ? ranked.find((d) => d.archetype.key === settledArchetype) : undefined;
+            if (set) return { archetype: set.archetype, picked: true };
+            const guess = ranked[0];
+            return guess && guess.archetype.key !== GENERAL_KEY ? { archetype: guess.archetype, picked: false } : null;
+          })(),
+        })
+      : null;
   // Answering Yes or picking an archetype in the Smart Cutter updates the Plays line too, so the two always agree.
   const lastCutterArchetype = useRef(cutterArchetype);
   useEffect(() => {
