@@ -94,6 +94,7 @@ import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
 import { ComparePanel } from "./compare-panel";
+import { SimilarPanel } from "./similar-panel";
 import { WelcomeTour } from "./welcome-tour";
 import { GUEST_KEY, guestSnapshot } from "@/lib/deck/guest-deck";
 import { shouldShowTour } from "@/lib/tour/steps";
@@ -449,7 +450,8 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | null>(null);
+  const [compareWith, setCompareWith] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
     if (panel !== "search" && panel !== "suggest") {
@@ -1519,7 +1521,16 @@ export function DeckEditor({
                 ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
                 { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
-                { key: "compare", label: "Compare with another deck", active: panel === "compare", onPick: () => setPanel("compare") },
+                {
+                  key: "compare",
+                  label: "Compare with another deck",
+                  active: panel === "compare",
+                  onPick: () => {
+                    setCompareWith(null);
+                    setPanel("compare");
+                  },
+                },
+                { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
                 ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
@@ -1731,6 +1742,20 @@ export function DeckEditor({
           rolesOfCard={visibleRoleKeys}
           maybeIds={new Set(maybeLines.map((l) => l.card.oracle_id))}
           onAddToMaybe={readOnly ? undefined : (card) => addWithNotice(card, "maybe")}
+          initialOther={compareWith}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "similar" && (
+        <SimilarPanel
+          deckId={deck.id}
+          rows={Object.entries(entries).map(([k, quantity]) => ({ ...parseKey(k), quantity }))}
+          cards={cards}
+          commanders={commanders.map((l) => ({ oracle_id: l.card.oracle_id, name: l.card.name }))}
+          onCompare={(d) => {
+            setCompareWith(d);
+            setPanel("compare");
+          }}
           onClose={() => setPanel(null)}
         />
       )}
