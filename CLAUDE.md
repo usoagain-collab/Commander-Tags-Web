@@ -251,6 +251,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Logic:** `src/lib/deck/compare.ts` (tested): `compareDecks` counts commander, companion and mainboard only (no maybeboard) and splits cards into both / only mine / only theirs with copies; `overlap` is the share of this deck's non-basic cards the other runs. `compareRoles` keeps this deck's visible role order.
 - **Other deck's roles:** its manual category wins (as in the editor, "none" counts nothing), otherwise its tags through the editor's `visibleRoleKeys`, so hidden roles stay hidden. Its tags come from its own `useTagData` call. Cards only the other deck runs get **+ Maybeboard** (not for basics or viewers).
 
+## Folders on My decks (V3, built Nov 15, 2026; migration 0056)
+- `deck_folders` (owner-only RLS, names unique per person ignoring case) and `decks.folder_id` (on delete set null); a trigger keeps a deck out of another person's folder. Helpers in `src/lib/decks/folders.ts` (tested), actions in `src/app/decks/folder-actions.ts`.
+- My decks reads folders apart from the deck query, so before the migration the folder reads fail and the page looks as it did. `?folder=<id>` opens a folder, `?folder=none` the decks in no folder. `FolderBar` has the chips and New, Rename, Delete; a tile's Folder button moves it; createDeck takes `folder`.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).

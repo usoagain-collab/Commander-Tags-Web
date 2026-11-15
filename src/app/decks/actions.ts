@@ -31,11 +31,16 @@ export async function createDeck(formData: FormData) {
     .eq("id", user.id)
     .single();
 
+  // Folders (V3): the form sends a folder only once folders exist, so this stays out until migration 0056 has run.
+  const folder = String(formData.get("folder") ?? "");
+  const folder_id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(folder) ? folder : null;
+
   const { data, error } = await supabase
     .from("decks")
     .insert({
       name,
       target_bracket,
+      ...(folder_id ? { folder_id } : {}),
       // No Tutors number: a new deck follows its bracket for that one.
       role_targets: withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...(profile?.default_role_targets ?? {}) }),
       custom_roles: profile?.custom_roles ?? [],
