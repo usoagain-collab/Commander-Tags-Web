@@ -286,6 +286,12 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `supabase/migrations/0062_playgroups.sql`: `playgroups` (name, owner, invite_code), `playgroup_members`, `playgroup_games`, `playgroup_game_players` (seat with a member user_id or a guest_name, optional deck_id of that player own deck and deck_name, won). No direct grants: `my_playgroups`, `playgroup_view`, `playgroup_invite`, `create_playgroup`, `join_playgroup`, `leave_playgroup` (not the owner), `manage_playgroup` (owner: rename, remove, new_invite, delete), `log_playgroup_game`, `delete_playgroup_game` (logger or owner). Names come from these functions; profiles stay private.
 - Pages: `/playgroups` (list and make), `/playgroups/join/[code]` (invite), `/playgroups/[id]` (`playgroup-view.tsx`). The middleware sends signed-out visitors to sign in and back. Helpers and standings in `src/lib/playgroups/playgroups.ts` (tested).
 - Not linked to a deck's Game log (PR 128) yet: a playgroup game doesn't add to the deck's log.
+## Monthly check-in email (V3, built Nov 15, 2026, migration 0063)
+- Tables checkin_sends and checkin_answers (no grants; service role only) and profiles.checkin_emails (default on).
+- src/lib/checkin/checkin.ts: questions, monthKey (Hawaii time), cleanAnswer, signed links (HMAC with CHECKIN_SECRET, else the service-role key), the email text and HTML, pickRecipients, summarize. audience.ts loads who gets this month's email.
+- src/lib/email/send.ts: the only file that talks to the email service (Resend's HTTP API). Off until EMAIL_API_KEY and EMAIL_FROM are set.
+- Pages: /checkin (answer), /checkin/stop (button; a visit alone changes nothing), POST /api/checkin/stop (one-click unsubscribe header), /admin/checkin (admin only: test to me, Send next 50, averages, notes). Nothing sends on a schedule.
+- Optional env: NEXT_PUBLIC_SITE_URL for the links (default https://deckgenome.com).
 
 ## Precons (v2, built Nov 8, 2026)
 
