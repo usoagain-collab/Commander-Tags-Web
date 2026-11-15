@@ -269,6 +269,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 ## Game log (V3, built Nov 15, 2026; migration 0058)
 - `deck_games` (date, result win/loss/draw, pod 2-8, opponents and note text, `standouts` and `flops` uuid arrays), owner-only RLS. `src/lib/deck/game-log.ts` (tested): `cleanGame`, `summarize`, `cardRecord`, `useGameLog` (fails quietly before the migration).
 - `game-log-panel.tsx`, menu › Game log for the owner. A flopped card calls `flag_card` once per game, so it shows as a playtest flag. The Smart Cutter doesn't read games yet.
+## Deck descriptions, comments and likes (V3, built Nov 15, 2026, migration 0059 not run yet)
+- `supabase/migrations/0059_deck_social.sql`: `decks.comments_open` and a 1000-character check on `decks.description` (not valid, so old rows are left alone); `deck_comments` and `deck_likes` with no direct grants. Read with `deck_social(p_id)` (anon and signed in, null unless the deck is unlisted, public or yours); write with `add_deck_comment`, `delete_deck_comment` (author or deck owner) and `set_deck_like` (not your own deck). All security definer, because the decks policies hide other people's unlisted decks.
+- `src/lib/deck/deck-social.ts`: `useDeckSocial`, `cleanDescription`, `cleanComment`, `readSocial`, `friendlyError` (shows only our own raised sentences). Before 0059 the RPC fails, and the owner falls back to reading `decks.description` directly.
+- `src/app/decks/[id]/deck-social.tsx`: `DeckSocialSection`, rendered at the bottom of the editor's content (not for guest decks). It follows the editor's live `visibility`, so sharing the deck shows likes and comments straight away.
 
 ## Precons (v2, built Nov 8, 2026)
 

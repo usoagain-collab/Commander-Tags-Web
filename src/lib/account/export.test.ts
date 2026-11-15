@@ -24,6 +24,7 @@ describe("formatExport", () => {
             folder: "Casual",
             created: "2026-10-18T00:00:00Z",
             updated: "2026-11-01T00:00:00Z",
+            description: "Lands matter.",
             boards: { main: [{ quantity: 1, name: "Sol Ring" }], commander: [{ quantity: 1, name: "Omo, Queen of Vesuva" }] },
             notes: [{ name: "Sol Ring", note: "always" }],
             games: ["2026-11-10 Win · 4 players"],
@@ -40,6 +41,7 @@ describe("formatExport", () => {
     expect(text).toContain("--- Omo ---");
     expect(text).toContain("Folder: Casual");
     expect(text).toContain("Game log\n2026-11-10 Win · 4 players");
+    expect(text).toContain("About this deck\nLands matter.");
     expect(text.indexOf("Commander\n1 Omo")).toBeLessThan(text.indexOf("Deck\n1 Sol Ring"));
     expect(text).toContain("Pet cards (all decks): Sol Ring");
     expect(text).toContain("1 Mana Crypt (note: someday)");
