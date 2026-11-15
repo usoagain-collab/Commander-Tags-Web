@@ -89,6 +89,24 @@ export const STANDARD_ROLES: RoleDef[] = [
     about: "Cards that get cards back from your graveyard: reanimation, regrowth and similar.",
   },
   {
+    key: "finishers",
+    name: "Finishers",
+    target: DEFAULT_ROLE_TARGETS.finishers,
+    // V3 (Nov 15, 2026): cards that close the game out. Scryfall has no single "win condition" tag, so this starts
+    // from the tags that plainly end games; slugs missing from the data are reported in the role panel, not fatal.
+    slugs: ["alternate-win-condition", "automatic-win", "extra-combat-phase"],
+    about:
+      "Cards that win or close out the game: alternate win conditions (\"you win the game\"), extra combat phases and similar. Hidden until you show it, so existing decks aren't marked under target.",
+  },
+  {
+    key: "gravehate",
+    name: "Graveyard hate",
+    target: DEFAULT_ROLE_TARGETS.gravehate,
+    slugs: ["graveyard-hate", "graveyard-seal"],
+    about:
+      "Cards that exile graveyards or stop cards from being used there, to answer reanimator and recursion decks. Hidden until you show it.",
+  },
+  {
     key: "tutors",
     name: "Tutors",
     // Follows the deck's target bracket until the slider is moved (buildRoleDefs); this is bracket 3's.

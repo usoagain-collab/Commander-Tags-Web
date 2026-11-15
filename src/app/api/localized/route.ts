@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       const answers = new Map<string, Localized>(batch.map((id) => [id, null]));
       let complete = true;
       for (let i = 0; i < prints.length; i += PER_SEARCH) {
-        await sleep(i ? 520 : 120); // Scryfall allows about 2 searches a second
+        await sleep(520); // Scryfall allows 2 collection or search requests a second, and the collection call just ran
         const q = `lang:${lang} (${prints
           .slice(i, i + PER_SEARCH)
           .map((p) => `(e:${p.set} cn:"${p.collector_number}")`)

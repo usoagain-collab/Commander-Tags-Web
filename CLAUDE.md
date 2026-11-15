@@ -199,6 +199,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - `src/app/settings/roles-setting.tsx`: every standard role (slider, Hide / Show) plus custom roles (slider, Remove, + Add a role from a tag, reusing the exported `AddRole` from `role-profile.tsx`). Saves `profiles.default_role_targets` and `custom_roles` on **Save defaults**, the same values a deck's "Save as my defaults" writes; Tutors has no slider (follows each deck's bracket). Only new decks use them.
 
+## Finishers and Graveyard hate roles (V3, built Nov 15, 2026)
+
+- Two standard roles in `src/lib/tags/roles.ts` (keys `finishers`, `gravehate`, target 2 in `src/lib/roles.ts`), in `HIDDEN_BY_DEFAULT` with Tutors so existing decks aren't marked under target. The editor drops hidden roles before the bars, Suggest and the Cutter; the power estimate counts only named roles, so it doesn't change. Slugs missing from the data show the role panel's "None of these tags exist" note.
+
 ## Reorder the left column (v2, built Nov 8, 2026)
 
 - **Edit targets** (was "Adjust targets", now shared state in the editor) turns on sliders, Hide and dragging for roles and top tags. Drag = `src/lib/ui/use-drag-reorder.ts` (pointer events, whole row is the handle; a mouse drags after 6 px, a finger only after resting 0.4 s on the row, otherwise the touch scrolls (rows are `touch-action: pan-y`; an armed drag stops scrolling with a native non-passive touchmove listener; David, Nov 8, 2026: dragging on a phone was too easy and blocked scrolling); live reorder by `elementFromPoint` over `data-reorder` rows, sliders and `data-no-drag` keep their gestures, the click after a drag is swallowed). Order in `tag_view.roleOrder` / `tagOrder` (`src/lib/tags/order.ts`: `applyOrder`, `moveKey`, `mergeOrder` keeps keys from other decks, capped at 200), used by the role profile, top tags and the narrow rail only; hero, suggestions and Group by Role keep their usual order. **Testing note:** with an emulated viewport the browser tool's drag lands off target (it moved a slider once); test with dispatched PointerEvents, rows scrolled into view.
