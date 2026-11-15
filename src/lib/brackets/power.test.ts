@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
-import { bracketRolesOf, estimatePower, type PowerInput } from "./power";
+import { bandWords, bracketRolesOf, estimatePower, type PowerInput } from "./power";
 import { TagTree } from "@/lib/tags/tree";
 
 const line = (id: string, mv: number, over: Partial<CardSummary> = {}, quantity = 1): DeckLine => ({
@@ -21,6 +21,10 @@ const base = (lines: DeckLine[], roles: Record<string, string[]> = {}, over: Par
 });
 
 describe("refined bracket estimate", () => {
+  it("describes the bands from the constants", () => {
+    expect(bandWords()).toBe("Under 10 plays like 1, 10-39 like 2, 40-59 like 3, 60+ like 4.");
+  });
+
   it("scores a slow, unfocused deck low", () => {
     const lines = Array.from({ length: 60 }, (_, i) => line(`c${i}`, 5));
     const p = estimatePower(base(lines));
@@ -28,7 +32,7 @@ describe("refined bracket estimate", () => {
     expect(p.playsLike).toBe(1);
   });
 
-  it("adds up fast mana, tutors, interaction, Game Changers, curve and cohesion", () => {
+  it("adds up fast mana, tutors, interaction, Game Changers and cohesion, with Speed unchecked without a tag tree", () => {
     const lines = [
       ...Array.from({ length: 10 }, (_, i) => line(`rock${i}`, 1)),
       ...Array.from({ length: 6 }, (_, i) => line(`tutor${i}`, 2)),
@@ -45,9 +49,12 @@ describe("refined bracket estimate", () => {
     });
     const p = estimatePower(base(lines, roles, { themeKeysOf: () => ["o:tokens"] }));
     const pts = Object.fromEntries(p.parts.map((x) => [x.key, x.points]));
-    expect(pts).toMatchObject({ fast: 20, tutors: 15, interaction: 15, gc: 2, curve: 10, cohesion: 10 });
-    expect(p.score).toBe(72);
-    expect(p.playsLike).toBe(4);
+    expect(pts).toMatchObject({ speed: 0, fast: 12, tutors: 9, interaction: 10, gc: 1.5, cohesion: 8 });
+    expect(pts.curve).toBeUndefined(); // Low curve is gone: the sample games use real costs instead
+    expect(p.parts.reduce((n, x) => n + x.max, 0)).toBe(100);
+    expect(p.score).toBe(41);
+    expect(p.playsLike).toBe(3);
+    expect(p.speed).toBeNull();
   });
 
   it("never goes below the floor and ignores exhibition combos", () => {
@@ -63,7 +70,7 @@ describe("refined bracket estimate", () => {
 
   it("counts a counterspell as cheap interaction", () => {
     const p = estimatePower(base([line("cs", 2)], {}, { tagsOf: () => ["counterspell"] }));
-    expect(p.parts.find((x) => x.key === "interaction")!.points).toBe(1.5);
+    expect(p.parts.find((x) => x.key === "interaction")!.points).toBe(1);
   });
 
   it("finds tutors from card tags alone, whatever the deck's role settings", () => {
