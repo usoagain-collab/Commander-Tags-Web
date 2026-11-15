@@ -18,6 +18,8 @@ export type ExportDeck = {
   boards: Partial<Record<"commander" | "companion" | "main" | "maybe", ExportCardRow[]>>;
   /** Folders (V3): the deck's folder name, if it's in one. */
   folder?: string | null;
+  /** Card notes (V3), listed after the boards so the lists above still paste into Import. */
+  notes?: { name: string; note: string }[];
 };
 export type ExportData = {
   name: string | null;
@@ -68,6 +70,7 @@ export function formatExport(d: ExportData, now = new Date()): string {
       if (!rows?.length) continue;
       out.push("", title, ...byName(rows).map(cardLine));
     }
+    if (deck.notes?.length) out.push("", "Card notes", ...byName(deck.notes).map((n) => `${n.name}: ${n.note}`));
     out.push("");
   }
 
