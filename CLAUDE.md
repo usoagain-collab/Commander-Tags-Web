@@ -191,6 +191,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - A shared deck's header says "Built by <picture> <name>" to everyone but the owner, and the link preview adds "by <name>". SQL `deck_builder(id)` (migration 0035, security definer: name and picture only, for unlisted / public / own decks) runs beside `deck_bundle` in `loadDeck`; if it fails, the old "A deck shared with you" line shows. Settings → **Your name** edits `profiles.display_name` (starts as the sign-in name; at most 40 characters, checked in 0035).
 
+## Combos one card away (V3, built Nov 15, 2026)
+
+- `src/lib/brackets/one-away.ts` (`combosOneAway`, tested) groups `combos` rows with `requires = 0` where exactly one card is in the 100-card deck by the missing card. `use-one-away.ts` reads the public `combos` table directly (card_a and card_b in batches of 100 ids, 400 rows each, most popular first), then `fetchSummaries` for the missing cards to keep Commander-legal ones in the commander's colors. Shown in `bracket-panel.tsx` with **+ Add to maybeboard** (`addWithNotice(card, "maybe")`; hidden on read-only decks). No migration.
+
 ## Copy to my decks (v2, built Nov 8, 2026)
 
 - `copyDeck(id)` server action in `src/app/decks/actions.ts`: reads through `shared_deck` (so only decks you may open), inserts a private deck plus its `deck_cards` rows (printing, foil, category), deletes the new deck if the rows fail, then opens it. Shared viewers get a gold **Copy to my decks**; owners get **More → Make a copy** (named "… (copy)"), which waits until edits are saved.
