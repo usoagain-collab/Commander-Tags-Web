@@ -94,6 +94,8 @@ import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
 import { ComparePanel } from "./compare-panel";
+import { WelcomeTour } from "./welcome-tour";
+import { shouldShowTour } from "@/lib/tour/steps";
 import { SharePanel } from "./share-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
@@ -348,6 +350,12 @@ export function DeckEditor({
   // Remembered per user: View / Group / Sort and the top-tags switches (one writer), plus hidden tags.
   // A friend opening a shared deck sees the cards first, whatever they last used themselves.
   const [prefs, updatePrefs] = useTagViewPrefs(readOnly ? { ...savedTagView, view: "grid" } : savedTagView, userId);
+  // Welcome tour (V3): once, on a signed-in builder's own deck that has its commander; the menu can show it again.
+  const [touring, setTouring] = useState(false);
+  const endTour = useCallback(() => {
+    setTouring(false);
+    updatePrefs({ tourSeen: true });
+  }, [updatePrefs]);
   const view = readViewSettings(prefs);
   const setView = (v: ViewSettings) => updatePrefs(v);
   // The left column: dragging changes the width directly (no re-render of the deck); the stage only when it crosses a size.
@@ -631,6 +639,13 @@ export function DeckEditor({
   const cardLang = readCardLang(prefs);
   const localize = useLocalized(cardLang, rawLines.flat().map((l) => printingIdFromImage(l.card.image_normal)));
   const [commanders, companions, mainLines, maybeLines] = rawLines.map((ls) => (cardLang === "en" ? ls : ls.map((l) => ({ ...l, card: localize(l.card) }))));
+  const hasCommander = commanders.length > 0;
+  const tourOffered = useRef(false);
+  useEffect(() => {
+    if (tourOffered.current || !userId || !hasCommander || !shouldShowTour(prefs, readOnly)) return;
+    tourOffered.current = true;
+    setTouring(true);
+  }, [userId, hasCommander, prefs, readOnly]);
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
   // The deck as the bracket check sees it (also used to screen suggestions, 5c).
@@ -1413,6 +1428,7 @@ export function DeckEditor({
         }
         status={
           <>
+            <span data-tour="bracket" className="inline-flex">
             <BracketBadge
               target={bracket.target}
               estimate={estimate}
@@ -1420,6 +1436,7 @@ export function DeckEditor({
               active={panel === "bracket"}
               onClick={() => setPanel(panel === "bracket" ? null : "bracket")}
             />
+            </span>
           </>
         }
         actions={
@@ -1438,6 +1455,7 @@ export function DeckEditor({
               <button
                 type="button"
                 className="btn btn-gold"
+                data-tour="suggest"
                 aria-pressed={panel === "suggest"}
                 onClick={() => (panel === "suggest" ? setPanel(null) : suggestOverall())}
               >
@@ -1455,6 +1473,7 @@ export function DeckEditor({
             )}
             <Link
               href={`/decks/${deck.id}/playtest`}
+              data-tour="playtest"
               title="Goldfish this deck: shuffle, draw, mulligan and play"
               className="btn"
             >
@@ -1476,6 +1495,7 @@ export function DeckEditor({
                 { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
                 { key: "compare", label: "Compare with another deck", active: panel === "compare", onPick: () => setPanel("compare") },
+                ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
                 ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
                 ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
@@ -1705,6 +1725,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
+      {touring && !readOnly && <WelcomeTour onDone={endTour} />}
       {panel === "export" && <ExportPanel deckName={deck.name} entries={entries} printings={shownPrintings} cards={cards} splits={splits} onClose={() => setPanel(null)} />}
 
       <div ref={editorGrid} style={{ "--rail": `${railWidth}px` } as React.CSSProperties} className={`mt-6 grid gap-6 ${EDITOR_COLUMNS[previewMode === "docked" ? "docked" : "none"]}`}>
