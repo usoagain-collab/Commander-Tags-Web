@@ -181,6 +181,8 @@ type Kind = {
   discard: boolean;
   /** A draw spell (standard Draw role), not a payoff, tutor or ramp. */
   draw: boolean;
+  /** A draw permanent (Rhystic Study, Phyrexian Arena, Beast Whisperer): draws a card every turn once in play. */
+  engine: boolean;
   /** Mana it adds to the board route (0 = not a threat). */
   threat: number;
   commander: boolean;
@@ -253,6 +255,7 @@ function kindsOf(input: SpeedInput, payoffs: Set<string>): Kind[] {
       mill: !land && has(tags, sets.mill),
       discard: !land && has(tags, sets.discard),
       draw: !land && roles.includes("draw") && !roles.includes("ramp") && !roles.includes("tutors") && !payoffs.has(c.oracle_id),
+      engine: !land && permanent && roles.includes("draw") && !roles.includes("ramp") && !roles.includes("tutors") && !payoffs.has(c.oracle_id),
       threat: !land && (creature || /\bPlaneswalker\b/.test(type) || has(tags, sets.tokens)) ? SPEED.threatBase + c.mana_value / 2 : 0,
       commander: l.board === "commander",
     };
@@ -366,6 +369,7 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
     let pending = 0;
     let threat = 0;
     let pressure = 0;
+    let engines = 0;
     const done: Record<RouteKey, number> = { combo: never, cheat: never, board: never };
 
     const take = (from: number[], i: number) => {
@@ -375,6 +379,17 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
     };
     const handMana = () => hand.reduce((n, i) => n + Math.max(0, kinds[i].once), 0);
     const available = (i: number) => inPlay.has(i) || hand.includes(i) || zone.has(i);
+    /** Casts these draw cards, cheapest first, while mana lasts: a spell draws now, an engine every turn after. */
+    const castDraw = (cards: number[], mana: number) => {
+      for (const i of cards.sort((a, b) => kinds[a].cost - kinds[b].cost)) {
+        if (kinds[i].cost > mana) break;
+        take(hand, i);
+        mana -= kinds[i].cost;
+        if (kinds[i].engine) engines += 1;
+        else hand.push(...lib.splice(0, SPEED.drawCards));
+      }
+      return mana;
+    };
     const costToFinish = (c: Combo) => c.pieces.reduce((n, i) => n + (inPlay.has(i) ? 0 : kinds[i].cost), 0);
 
     const check = (turn: number, mana: number) => {
@@ -413,6 +428,8 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
 
     for (let turn = 1; turn <= SPEED.maxTurn && routes.some((r) => done[r] === never); turn++) {
       if (turn > 1 && lib.length) hand.push(lib.shift()!);
+      // Draw engines in play draw one more each.
+      if (engines) hand.push(...lib.splice(0, engines));
       tapMana += pending;
       pending = 0;
       // Threats already in play attack: the board route adds up their pressure turn by turn.
@@ -480,14 +497,12 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
 
       // Digging: while a combo or cheat route is still missing pieces, cheap draw spells come before threats.
       if ((routes.includes("combo") && done.combo === never) || (routes.includes("cheat") && done.cheat === never)) {
-        for (const i of hand.filter((x) => kinds[x].draw).sort((a, b) => kinds[a].cost - kinds[b].cost)) {
-          if (kinds[i].cost > mana) break;
-          take(hand, i);
-          mana -= kinds[i].cost;
-          hand.push(...lib.splice(0, SPEED.drawCards));
-        }
+        mana = castDraw(hand.filter((x) => kinds[x].draw), mana);
         check(turn, mana);
       }
+
+      // Draw engines go down before threats: they pay off every turn after.
+      mana = castDraw(hand.filter((x) => kinds[x].engine), mana);
 
       // Combo pieces that are permanents go down when there's spare mana.
       for (const c of combos)
@@ -523,15 +538,9 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
       }
       // Mana left over goes into draw spells, so a deck that draws keeps finding threats (it used to draw only while
       // digging for a combo or cheat piece). What it draws can be cast with whatever is still left.
-      let drew = false;
-      for (const i of hand.filter((x) => kinds[x].draw).sort((a, b) => kinds[a].cost - kinds[b].cost)) {
-        if (kinds[i].cost > mana) break;
-        take(hand, i);
-        mana -= kinds[i].cost;
-        hand.push(...lib.splice(0, SPEED.drawCards));
-        drew = true;
-      }
-      if (drew)
+      const before = hand.length;
+      mana = castDraw(hand.filter((x) => kinds[x].draw), mana);
+      if (hand.length !== before)
         for (const i of hand.filter((x) => kinds[x].threat).sort((a, b) => kinds[b].cost - kinds[a].cost)) {
           if (kinds[i].cost > mana) continue;
           take(hand, i);

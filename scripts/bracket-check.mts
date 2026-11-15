@@ -37,6 +37,7 @@ const ids: string[] = precons
 const tally = new Map<number, string[]>();
 const turns: number[] = [];
 const scores: number[] = [];
+const floors: number[] = [];
 const started = performance.now();
 for (const id of ids) {
   const b = (await db.query("select public.deck_bundle($1) as b", [id])).rows[0].b;
@@ -96,6 +97,7 @@ for (const id of ids) {
     // Bracket, points, rules floor, threat turn, route, then each part's points (for tuning the bands), deck name.
     const short = power.parts.map((p) => `${p.key.slice(0, 5)} ${Math.round(p.points * 10) / 10}`).join(", ");
     scores.push(power.score);
+    floors.push(estimate.floor);
     console.log(`${String(power.playsLike).padStart(2)} ${String(power.score).padStart(3)} floor ${estimate.floor}  ${turnWords(s.turn).padEnd(14)} ${s.route.label.padEnd(18)} ${b.deck.name}  [${short}]`);
     continue;
   }
@@ -115,6 +117,16 @@ if (precons) {
   for (const n of [1, 3, 4]) if (tally.get(n)?.length) console.log(`  Plays like ${n}: ${tally.get(n)!.join("; ")}`);
   const sc = scores.slice().sort((a, b) => a - b);
   const at = (q: number) => sc[Math.min(sc.length - 1, Math.floor(q * sc.length))];
+  const fromRules = floors.filter((f) => f >= 3).length;
+  console.log(`Rules floor alone puts ${fromRules} of ${ids.length} precons at 3 or 4 (${Math.round((fromRules / ids.length) * 100)}%), whatever the points`);
+  // Band sweep: share at 2 for other cutoffs (plays like = the higher of the rules floor and the band).
+  const sweep: string[] = [];
+  for (const low of [8, 10, 12, 15])
+    for (const high of [35, 40, 45, 50]) {
+      const twos = scores.filter((sc, i) => Math.max(floors[i], sc >= high ? 3 : sc >= low ? 2 : 1) === 2).length;
+      sweep.push(`2 from ${low}, 3 from ${high}: ${Math.round((twos / ids.length) * 100)}%`);
+    }
+  console.log(`Band sweep (share of precons at 2): ${sweep.join(" · ")}`);
   console.log(`Precon points: 5% ${at(0.05)} · 10% ${at(0.1)} · median ${at(0.5)} · 90% ${at(0.9)} · 95% ${at(0.95)} · highest ${sc.at(-1)}`);
 }
 const sorted = turns.slice().sort((a, b) => a - b);
