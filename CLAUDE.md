@@ -251,6 +251,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - **Logic:** `src/lib/deck/compare.ts` (tested): `compareDecks` counts commander, companion and mainboard only (no maybeboard) and splits cards into both / only mine / only theirs with copies; `overlap` is the share of this deck's non-basic cards the other runs. `compareRoles` keeps this deck's visible role order.
 - **Other deck's roles:** its manual category wins (as in the editor, "none" counts nothing), otherwise its tags through the editor's `visibleRoleKeys`, so hidden roles stay hidden. Its tags come from its own `useTagData` call. Cards only the other deck runs get **+ Maybeboard** (not for basics or viewers).
 
+## Card notes (V3, built Nov 15, 2026; migration 0055)
+- `deck_card_notes` (deck_id, oracle_id, note up to 280 characters), owner-only RLS for every action, so notes never show on shared or public decks and `deck_bundle` is unchanged.
+- `useCardNotes(deckId, owner)` in `src/lib/deck/card-notes.ts` loads them apart from the bundle; if the table isn't there yet the load fails quietly and the editor shows no note box. `CardNoteField` sits first in the sheet's owner extras and saves on blur; `DeckItem.note` drives the ✎ mark. Download my data lists notes under each deck, after the boards.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).
