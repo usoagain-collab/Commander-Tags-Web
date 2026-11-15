@@ -88,6 +88,9 @@ function effectPhrases(clause: string): string[] {
       taken.push(w);
     }
     const phrase = trimTrailing(taken);
+    // A verb plus only a pronoun says nothing on its own ("put the rest", "return it", "exile them").
+    if (phrase.length === 2 && /^(it|them|the rest|those|that)$/.test(phrase[1])) continue;
+    if (phrase.length === 3 && phrase.slice(1).join(" ") === "the rest") continue;
     if (phrase.length >= 2 || SOLO.has(phrase[0])) found.push(phrase.join(" "));
   }
   return found;
