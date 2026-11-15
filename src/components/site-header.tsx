@@ -40,6 +40,13 @@ export async function SiteHeader() {
           >
             Precons
           </Link>
+          <Link
+            href="/browse"
+            className="flex min-h-11 items-center px-2 hover:text-gold"
+            title="Public decks by commander, colors and bracket"
+          >
+            Browse
+          </Link>
           {user ? (
             <>
               <Link
@@ -106,6 +113,7 @@ export async function SiteHeader() {
                 My decks
               </Link>
               <Link href="/precons">Precons</Link>
+              <Link href="/browse">Browse decks</Link>
               <Link href="/wishlist">♡ Wish list</Link>
               <Link href="/collection">Collection</Link>
               <Link href="/settings">Settings</Link>
@@ -134,6 +142,12 @@ export async function SiteHeader() {
               className="flex min-h-11 items-center px-2 hover:text-gold"
             >
               Precons
+            </Link>
+            <Link
+              href="/browse"
+              className="flex min-h-11 items-center px-2 hover:text-gold"
+            >
+              Browse
             </Link>
             <FeedbackButton className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100" />
             <Link
