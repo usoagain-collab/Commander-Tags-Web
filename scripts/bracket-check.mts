@@ -12,7 +12,7 @@ import { detectArchetypes, type CutterCard } from "@/lib/cutter/archetype";
 import { ARCHETYPES, GENERAL_KEY } from "@/lib/cutter/archetypes";
 import type { CardSummary, DeckLine } from "@/lib/deck/model";
 import { readPlays } from "@/lib/tags/plays";
-import { isLand } from "@/lib/tags/roles";
+import { CREATURE_ONLY_COUNTERS, isLand, resolveRoles, rolesOf as roleKeys, STANDARD_ROLES } from "@/lib/tags/roles";
 import { cardKeys, themeTags, type ThemeCard } from "@/lib/tags/themes";
 import { TagTree } from "@/lib/tags/tree";
 
@@ -25,6 +25,17 @@ await db.connect();
 const tree = new TagTree((await db.query("select public.oracle_tag_tree() as t")).rows[0].t);
 const missing = speedSlugs().filter((s) => !tree.has(s));
 console.log(missing.length ? `⚠ Sample-game tags not in the tag tree: ${missing.join(", ")}` : "All sample-game tags exist in the tag tree.");
+
+// Counterspells in Targeted removal and Protection (David, Nov 15): which creature-only counter tags exist, and the
+// roles three test cards get.
+console.log(`Creature-only counter tags in the tree: ${CREATURE_ONLY_COUNTERS.filter((t) => tree.has(t)).join(", ") || "none (check the slug)"}`);
+{
+  const names = ["Counterspell", "Negate", "Essence Scatter", "Swords to Plowshares"];
+  const rows = (await db.query("select oracle_id, name, type_line from cards where name = any($1)", [names])).rows;
+  const tagsBy = (await db.query("select public.card_tags_for($1) as t", [rows.map((r) => r.oracle_id)])).rows[0].t?.o ?? {};
+  const roles = resolveRoles(STANDARD_ROLES, tree);
+  for (const r of rows) console.log(`  ${r.name}: roles ${roleKeys(r, tagsBy[r.oracle_id] ?? [], roles).join(", ") || "none"} · tags ${(tagsBy[r.oracle_id] ?? []).filter((t: string) => /counter/.test(t)).join(", ")}`);
+}
 
 const args = process.argv.slice(2);
 const precons = args.includes("--precons");
