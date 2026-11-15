@@ -29,6 +29,7 @@ describe("formatExport", () => {
         myTags: [{ name: "Pet cards", scope: "all decks", cards: ["Sol Ring"] }],
         wishlist: [{ quantity: 1, name: "Mana Crypt", note: "someday" }],
         collection: [{ quantity: 4, name: "Forest" }],
+        packages: [{ name: "Ramp suite", cards: [{ quantity: 1, name: "Sol Ring" }] }],
       },
       new Date("2026-11-09T00:00:00Z"),
     );
@@ -38,6 +39,7 @@ describe("formatExport", () => {
     expect(text).toContain("Pet cards (all decks): Sol Ring");
     expect(text).toContain("1 Mana Crypt (note: someday)");
     expect(text).toContain("4 cards in your collection");
+    expect(text).toContain("--- Ramp suite ---\n1 Sol Ring");
   });
   it("says when sections are empty", () => {
     const text = formatExport({ name: null, email: null, joined: null, decks: [], myTags: [], wishlist: [], collection: [] });

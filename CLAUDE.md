@@ -255,6 +255,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Packages (V3, built Nov 15, 2026; migration 0057)
+- `card_packages` and `card_package_cards` (owner-only RLS). `src/lib/deck/packages.ts` (tested): `packageFromLines` (copies added up, commanders out), `planAddPackage` (one planBulk edit; cards already there go in `already`), `usePackages` (fails quietly before the migration; the panel then says packages aren't switched on).
+- `packages-panel.tsx`, menu › Packages for any signed-in viewer; Add to deck and To maybeboard only on your own deck. `run(plan, cards)` now takes an array of new cards.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).
