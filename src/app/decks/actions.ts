@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
 import { withoutBracketTargets } from "@/lib/tags/role-settings";
+import { cobuildError } from "@/lib/deck/cobuild";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -147,4 +148,13 @@ export async function copyDeck(id: string) {
 
   revalidatePath("/decks");
   redirect(`/decks/${deck.id}`);
+}
+
+/** Co-build (V3, migration 0064): join a deck from its invite link. The database checks the link and the limits. */
+export async function joinCobuild(formData: FormData) {
+  const supabase = await createClient();
+  const code = String(formData.get("code") ?? "").slice(0, 64);
+  const { data, error } = await supabase.rpc("join_cobuild", { p_code: code });
+  if (error) redirect(`/decks/cobuild/${encodeURIComponent(code)}?error=${encodeURIComponent(cobuildError(error.message, "Couldn't join this deck."))}`);
+  redirect(`/decks/${data as string}`);
 }
