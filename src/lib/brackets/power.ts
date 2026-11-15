@@ -1,13 +1,18 @@
 // Refined bracket estimate (v2): a transparent points model on top of v1's floor. v1 only proves a minimum from
 // rule-breaking cards (Game Changers, mass land denial, extra turns, combos). This adds how the deck is likely to
-// play: fast mana, tutors, cheap interaction, combos, Game Changers, a low curve and theme cohesion, each with its
-// own points so the reason is always visible. The result never goes below the floor and never claims 5 (cEDH is
-// intent, not a card list).
+// play, each part with its own points so the reason is always visible. The result never goes below the floor and
+// never claims 5 (cEDH is intent, not a card list).
+// Bracket rethink, step 1 (David, Nov 15, 2026): Speed is the heaviest part, 40 of 100, from the turn the deck
+// threatens to win in 1,000 sample games (speed.ts). It replaces Low curve. The six older parts share the other 60
+// at two-thirds of their old weight until step 2 replaces them with Consistency, Interaction, Resilience, Card
+// quality and Commander.
 import type { BracketNumber } from "./rules";
 import type { DeckLine } from "@/lib/deck/model";
 import type { BracketEstimate } from "./evaluate";
 import { resolveRoles, rolesOf, STANDARD_ROLES } from "@/lib/tags/roles";
 import type { TagTree } from "@/lib/tags/tree";
+import type { Archetype } from "@/lib/cutter/archetypes";
+import { estimateSpeed, SPEED, turnWords, type SpeedEstimate } from "./speed";
 
 /**
  * The roles the power estimate counts with: the STANDARD role definitions only, read straight from each card's
@@ -20,7 +25,7 @@ export function bracketRolesOf(tree: TagTree, tagsOf: (oracleId: string) => stri
 }
 
 export type PowerPart = { key: string; label: string; points: number; max: number; detail: string; cards: string[] };
-export type PowerEstimate = { score: number; playsLike: BracketNumber; mapped: BracketNumber; parts: PowerPart[] };
+export type PowerEstimate = { score: number; playsLike: BracketNumber; mapped: BracketNumber; parts: PowerPart[]; speed: SpeedEstimate | null };
 
 export type PowerInput = {
   /** The 100-card deck (commander, companion, mainboard). */
@@ -34,17 +39,21 @@ export type PowerInput = {
   topThemes: Set<string>;
   themeKeysOf: (line: DeckLine) => string[];
   estimate: BracketEstimate;
+  /** The tag tree, for the sample games. Without it Speed scores 0 ("not checked"). */
+  tree?: TagTree;
+  /** The Plays line's archetype when picked, otherwise the detected one; it decides which win routes are checked. */
+  archetype?: { archetype: Archetype; picked: boolean } | null;
 };
 
 /** Points scale: tuned so a precon lands around 2, an upgraded deck around 3, a tuned one at 4 (Omo and QA decks). */
 export const POWER = {
-  fastMana: { per: 2, max: 20, maxManaValue: 2 },
-  tutors: { per: 2.5, max: 20 },
-  interaction: { per: 1.5, max: 15, maxManaValue: 2 },
-  combos: { one: 8, more: 15 },
-  gameChangers: { per: 2, max: 10 },
-  curve: { max: 10, best: 2.5, worst: 4 },
-  cohesion: { max: 10, low: 0.15, high: 0.6 },
+  // Speed's 40 points live in speed.ts (SPEED.points). These six share the other 60 until step 2 replaces them.
+  fastMana: { per: 1.25, max: 12, maxManaValue: 2 },
+  tutors: { per: 1.5, max: 12 },
+  interaction: { per: 1, max: 10, maxManaValue: 2 },
+  combos: { one: 5, more: 10 },
+  gameChangers: { per: 1.5, max: 8 },
+  cohesion: { max: 8, low: 0.15, high: 0.6 },
   /** Score at or above each value plays like that bracket. */
   bands: [
     [60, 4],
@@ -61,6 +70,8 @@ export function estimatePower(input: PowerInput): PowerEstimate {
   const sumQ = (ls: DeckLine[]) => ls.reduce((n, l) => n + l.quantity, 0);
   const ids = (ls: DeckLine[]) => ls.map((l) => l.card.oracle_id);
   const parts: PowerPart[] = [];
+  const speed = input.tree ? estimateSpeed({ lines: input.lines, tagsOf: input.tagsOf, rolesOf: input.rolesOf, tree: input.tree, estimate: input.estimate, archetype: input.archetype }) : null;
+  parts.push(speedPart(speed));
   const capped = (n: number, per: number, max: number) => Math.min(max, n * per);
 
   const fast = spells.filter((l) => l.card.mana_value <= POWER.fastMana.maxManaValue && (input.rolesOf(l).includes("ramp") || input.tagsOf(l.card.oracle_id).includes("ritual")));
@@ -98,11 +109,6 @@ export function estimatePower(input: PowerInput): PowerEstimate {
   const gc = input.lines.filter((l) => l.card.game_changer);
   parts.push({ key: "gc", label: "Game Changers", points: capped(gc.length, POWER.gameChangers.per, POWER.gameChangers.max), max: POWER.gameChangers.max, detail: `${gc.length} on the official list`, cards: ids(gc) });
 
-  const avg = sumQ(spells) ? spells.reduce((s, l) => s + l.card.mana_value * l.quantity, 0) / sumQ(spells) : 0;
-  const { best, worst } = POWER.curve;
-  const curvePoints = sumQ(spells) ? POWER.curve.max * Math.min(1, Math.max(0, (worst - avg) / (worst - best))) : 0;
-  parts.push({ key: "curve", label: "Low curve", points: curvePoints, max: POWER.curve.max, detail: `Average mana value ${avg.toFixed(2)} (full points at ${best} or less, none at ${worst}+)`, cards: [] });
-
   const onTheme = spells.filter((l) => input.themeKeysOf(l).some((k) => input.topThemes.has(k)));
   const share = sumQ(spells) ? sumQ(onTheme) / sumQ(spells) : 0;
   const { low, high } = POWER.cohesion;
@@ -118,5 +124,18 @@ export function estimatePower(input: PowerInput): PowerEstimate {
   const score = Math.round(parts.reduce((s, p) => s + p.points, 0));
   const mapped = POWER.bands.find(([min]) => score >= min)![1];
   const playsLike = Math.min(4, Math.max(input.estimate.floor, mapped)) as BracketNumber;
-  return { score, playsLike, mapped, parts: parts.map((p) => ({ ...p, points: Math.round(p.points * 10) / 10 })) };
+  return { score, playsLike, mapped, parts: parts.map((p) => ({ ...p, points: Math.round(p.points * 10) / 10 })), speed };
+}
+
+/** The Speed part: points from the threat turn, the route that gets there first and its cards. */
+function speedPart(speed: SpeedEstimate | null): PowerPart {
+  const max = SPEED.points.max;
+  if (!speed) return { key: "speed", label: "Speed", points: 0, max, detail: "Not checked yet (the tag tree is still loading)", cards: [] };
+  const r = speed.route;
+  const by = r.key === "board" ? "by building a board" : `through a ${r.label} (${r.pieces})`;
+  const detail =
+    speed.turn > SPEED.maxTurn
+      ? `No win route ready by turn ${SPEED.maxTurn} in ${speed.games.toLocaleString("en-US")} sample games`
+      : `Threatens a win around ${turnWords(speed.turn)} in half of ${speed.games.toLocaleString("en-US")} sample games (${turnWords(speed.fast)} in the fastest quarter), ${by}. Full points at turn ${SPEED.points.full}, none at turn ${SPEED.points.none}+`;
+  return { key: "speed", label: "Speed", points: speed.points, max, detail, cards: r.cards };
 }
