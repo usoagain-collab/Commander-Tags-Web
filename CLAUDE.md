@@ -278,6 +278,10 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `supabase/migrations/0060_needs_help.sql`: `decks.needs_help` and `decks.help_note` (200 characters), a partial index for public decks that want feedback, and `deck_social()` recreated to return both.
 - `useDeckSocial().setHelp(on, note)` writes them with a plain decks update and opens comments when asking. `data.help` is null until the server sends the fields, which hides the button before 0060.
 - Browse: `?help=1` (Wants feedback). `loadPublicDecks` retries without `needs_help` when the column is missing, so Browse keeps working before 0060.
+## Suggest changes (V3, built Nov 15, 2026, migration 0061 not run yet)
+- `supabase/migrations/0061_deck_suggestions.sql`: `deck_suggestions` (adds and cuts as uuid arrays, up to 30 each, a note, status open, applied, maybe or dismissed) with no direct grants. `deck_suggestions_for(p_deck)` gives the owner every suggestion and anyone else only their own; `suggest_deck_changes` (shared decks you don't own, cuts must be in the deck, about 5 an hour), `decide_deck_suggestion` (owner) and `withdraw_deck_suggestion` (author, open only).
+- `src/lib/deck/suggestions.ts`: `useSuggestions`, `planSuggestion` (one `planBulk` change, so Apply is one save and one Ctrl+Z), `cleanSuggestion`, `readSuggestions`. `suggestions-panel.tsx` is the menu panel for both sides; the visitor's Add box is `QuickAdd`.
+- The editor's `run` takes a card array too (the same change as Packages, PR 127), so cards a suggestion adds join the editor's card map.
 
 ## Precons (v2, built Nov 8, 2026)
 

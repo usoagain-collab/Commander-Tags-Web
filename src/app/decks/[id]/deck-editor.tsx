@@ -147,6 +147,8 @@ import { ARCHETYPES, GENERAL_KEY } from "@/lib/cutter/archetypes";
 import { NO_PLAYS, playsTags, playsToSave, steerThemes, type Plays } from "@/lib/tags/plays";
 import { PlaysEditor, PlaysLine, type PlaysHeadline } from "./plays-line";
 import { DeckSocialSection } from "./deck-social";
+import { SuggestionsPanel } from "./suggestions-panel";
+import { planSuggestion, useSuggestions } from "@/lib/deck/suggestions";
 
 type State = {
   entries: Entries;
@@ -469,7 +471,7 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | "packages" | "games" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | "packages" | "games" | "suggestions" | null>(null);
   const [compareWith, setCompareWith] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
@@ -479,6 +481,8 @@ export function DeckEditor({
     }
   }, [panel]);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
+  // Suggest changes (V3, migration 0061): the owner's inbox, or a visitor's own suggestions on a shared deck.
+  const suggestions = useSuggestions(deck.id, !guest && !!userId && (!readOnly || visibility !== "private"));
   const [copying, setCopying] = useState(false);
   const wishlist = useWishlist(userId);
   const cardNotes = useCardNotes(deck.id, !readOnly && !!userId);
@@ -1577,6 +1581,16 @@ export function DeckEditor({
                 { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
                 ...(userId ? [{ key: "packages", label: "Packages", active: panel === "packages", onPick: () => setPanel("packages") }] : []),
                 ...(readOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
+                ...(suggestions.available && (!readOnly || visibility !== "private")
+                  ? [
+                      {
+                        key: "suggestions",
+                        label: readOnly ? "Suggest changes" : `Suggestions${suggestions.open.length ? ` (${suggestions.open.length})` : ""}`,
+                        active: panel === "suggestions",
+                        onPick: () => setPanel("suggestions"),
+                      },
+                    ]
+                  : []),
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
                 ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
@@ -1806,6 +1820,23 @@ export function DeckEditor({
               r.skipped.length ? `skipped ${r.skipped.length}: ${r.skipped[0]}` : "",
             ].filter(Boolean);
             say(`${r.plan.ok ? r.plan.change.label : ""}.${extra.length ? ` ${extra.join("; ")}.` : ""} Ctrl+Z undoes it.`, true);
+          }}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "suggestions" && suggestions.available !== false && (
+        <SuggestionsPanel
+          owner={!readOnly}
+          suggestions={suggestions}
+          entries={entries}
+          cards={cards}
+          identity={commanders.length ? identity : null}
+          onPreview={setPreview}
+          onUse={(adds, cuts, how) => {
+            const { plan, done, skipped } = planSuggestion(entries, adds, cuts, how);
+            if (!run(plan, adds)) return false;
+            say(`${how === "apply" ? "Applied" : "Added"} ${done} ${done === 1 ? "change" : "changes"}${skipped.length ? `; skipped ${skipped.length}` : ""}. Ctrl+Z undoes it.`, true);
+            return true;
           }}
           onClose={() => setPanel(null)}
         />
