@@ -307,7 +307,7 @@ After v2. Recorded so they aren't lost; nothing here is scheduled.
 | Game log | Record games per deck (date, win or loss, pod) and which cards stood out or flopped, feeding the playtest flags and the Smart Cutter. Neither rival has it built (an Archidekt request). Effort: medium. From the Feature gap check against Moxfield and Archidekt (Nov 14, 2026; David added all 8) | Nov 14, 2026 |
 | Card notes | A line of free text on a card in a deck ("swap for X once bought", "why it's here"), beyond My tags' labels. Archidekt has notes. Effort: small. From the Feature gap check against Moxfield and Archidekt (Nov 14, 2026; David added all 8) | Nov 14, 2026 |
 | Mana base checkup | Recommend a land count from the deck's curve and cheap ramp instead of a flat 37, count lands that enter tapped, and warn when most of the ramp is artifacts that one wipe would kill. Effort: medium. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
-| Finishers and graveyard hate as roles | Two more role bars beside Ramp and Removal, each with its own target and suggest button. Effort: small. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
+| Finishers and graveyard hate as roles | Two more role bars beside Ramp and Removal, each with its own target and suggest button. Effort: small. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9). **Built Nov 15, 2026:** both roles are hidden until shown (like Tutors) with a target of 2. Finishers = `alternate-win-condition`, `automatic-win`, `extra-combat-phase`; Graveyard hate = `graveyard-hate`, `graveyard-seal` (sub-tags included). Scryfall has no single win-condition tag, so Finishers is a narrow first cut to tune on real decks | Nov 14, 2026 |
 | Combos one card away | Show combos the deck is one card short of, with a button that adds the missing card to the maybeboard. Builds on the bracket panel's "need one more piece" list. Effort: medium. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
 | Similar decks | On a deck page, list public decks that share the most tags or cards with it. Needs Browse public decks first. Effort: medium. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
 | Welcome tour | A short walkthrough on first sign-in that points out role bars, suggestions, the bracket and the playtester. Effort: small to medium. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
@@ -315,6 +315,14 @@ After v2. Recorded so they aren't lost; nothing here is scheduled.
 | Needs help flag | Let an owner mark a public deck as wanting feedback, so other players can find it and comment. Needs V3 comments first. Effort: small. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
 | Deck health score | One score and a small chart built from the role bars, curve and mana checks. Effort: small to medium. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
 | Playgroups | Friends grouped into a playgroup with shared game history and win rates per deck and player. Builds on the Game log. Effort: large. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) | Nov 14, 2026 |
+
+## v4 backlog
+
+After v3. Recorded so they aren't lost; nothing here is scheduled.
+
+| Feature | What it means | Added |
+| --- | --- | --- |
+| Smart Search | Type a plain-English request ("cheap green ramp creatures", "black removal under 3 mana") and get the matching Scryfall query, like DeckCheck's Smart Search. Approach agreed: a hybrid, where a built-in word list turns common phrasing into Scryfall syntax for free and instantly, and an AI model handles only the free-form requests the list can't read. The AI part needs a paid API key, so it waits on David. | Nov 15, 2026 |
 
 ## Not intended
 

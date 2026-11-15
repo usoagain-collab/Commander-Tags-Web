@@ -70,7 +70,8 @@ function card(name: string, mv: number, typeLine = "Creature — Human", extra: 
 }
 
 function deck(targets: Record<string, number>) {
-  const roles = resolveRoles(buildRoleDefs(targets, []), tree);
+  // Roles added after these tests were written (V3 Finishers, Graveyard hate) default to 0, like the others here.
+  const roles = resolveRoles(buildRoleDefs({ finishers: 0, gravehate: 0, ...targets }, []), tree);
   const make = (c: CardSummary, tags: string[], opts: { commander?: boolean; quantity?: number } = {}): CutterCard => ({
     card: c,
     quantity: opts.quantity ?? 1,

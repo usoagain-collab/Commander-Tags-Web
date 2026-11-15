@@ -37,17 +37,27 @@ describe("saved role settings", () => {
 describe("hidden roles", () => {
   it("hides and shows a role without touching its target", () => {
     const hidden = withRoleHidden({ recursion: 4 }, "recursion", true);
-    expect(hiddenRoleKeys(readTargets(hidden))).toEqual(new Set(["recursion", "tutors"]));
+    expect(hiddenRoleKeys(readTargets(hidden))).toEqual(new Set(["recursion", "tutors", "finishers", "gravehate"]));
     expect(buildRoleDefs(hidden, []).find((r) => r.key === "recursion")!.target).toBe(4);
     expect(withRoleHidden(hidden, "recursion", false)).toEqual({ recursion: 4 });
   });
 
   it("hides Tutors until the user shows it, and remembers either choice", () => {
-    expect(hiddenRoleKeys({})).toEqual(new Set(["tutors"]));
+    expect(hiddenRoleKeys({})).toEqual(new Set(["tutors", "finishers", "gravehate"]));
     const shown = withRoleHidden({}, "tutors", false);
     expect(shown).toEqual({ "hide:tutors": 0 });
     expect(hiddenRoleKeys(readTargets(shown)).has("tutors")).toBe(false);
     expect(hiddenRoleKeys(withRoleHidden(shown, "tutors", true)).has("tutors")).toBe(true);
+  });
+});
+
+describe("Finishers and Graveyard hate (V3)", () => {
+  it("start hidden with a target of 2, and show once the user asks", () => {
+    const defs = buildRoleDefs({}, []);
+    expect(defs.find((r) => r.key === "finishers")!.target).toBe(2);
+    expect(defs.find((r) => r.key === "gravehate")!.target).toBe(2);
+    const shown = withRoleHidden(withRoleHidden({}, "finishers", false), "gravehate", false);
+    expect(hiddenRoleKeys(readTargets(shown))).toEqual(new Set(["tutors"]));
   });
 });
 

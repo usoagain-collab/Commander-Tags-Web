@@ -9,4 +9,6 @@ export const DEFAULT_ROLE_TARGETS: Record<string, number> = {
   wipes: 3,
   protection: 3,
   recursion: 2,
+  finishers: 2,
+  gravehate: 2,
 };
