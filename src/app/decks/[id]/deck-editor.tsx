@@ -94,7 +94,9 @@ import { BRACKET_RULES, type BracketNumber } from "@/lib/brackets/rules";
 import { useBracketTarget, useCombosWithin } from "@/lib/brackets/use-bracket";
 import { HistoryPanel } from "./history-panel";
 import { ComparePanel } from "./compare-panel";
+import { SimilarPanel } from "./similar-panel";
 import { WelcomeTour } from "./welcome-tour";
+import { GUEST_KEY, guestSnapshot } from "@/lib/deck/guest-deck";
 import { shouldShowTour } from "@/lib/tour/steps";
 import { SharePanel } from "./share-panel";
 import { StatsPanel } from "./stats-panel";
@@ -246,6 +248,8 @@ type Props = {
   cutterPrefs: CutterPrefs;
   targetBracket: BracketNumber;
   profileDefaults: { targets: Record<string, number>; custom: CustomRole[] };
+  /** Try the builder before signing in (V3): a deck kept in this browser, with no saving, sharing or history. */
+  guest?: boolean;
 };
 
 /** Written out whole so Tailwind sees each class. --rail is the width the user dragged; the cards always keep some room. */
@@ -278,6 +282,7 @@ export function DeckEditor({
   cutterPrefs,
   targetBracket,
   profileDefaults,
+  guest = false,
 }: Props) {
   const [state, dispatch] = useReducer(reducer, {
     entries: initialEntries,
@@ -288,7 +293,7 @@ export function DeckEditor({
     past: [],
     future: [],
   });
-  const { status, save, retry } = useAutosave(deck.id);
+  const { status, save, retry } = useAutosave(deck.id, guest);
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<CardSummary | null>(null);
   const [previewSide, setPreviewSide] = useState<"left" | "right">("right");
@@ -447,7 +452,8 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | null>(null);
+  const [compareWith, setCompareWith] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
     if (panel !== "search" && panel !== "suggest") {
@@ -556,6 +562,16 @@ export function DeckEditor({
   }, [readOnly, undo, redo, selecting, stopSelecting, panel, sheet, found]);
 
   const { entries, cards, categories, tagCards, printings } = state;
+  // A guest deck is kept in this browser after every edit, until signing in moves it into an account.
+  useEffect(() => {
+    if (!guest) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(GUEST_KEY, JSON.stringify(guestSnapshot(deck.name, entries, categories, printings, cards)));
+      } catch {}
+    }, 300);
+    return () => clearTimeout(t);
+  }, [guest, deck.name, entries, categories, printings, cards]);
   // What each row shows: its own pick, else your default. Edits and undo work on the picks alone.
   const { preferred, setDefault } = usePreferredPrintings(initialPreferred);
   const shownPrintings = useMemo(() => effectivePrintings(entries, printings, preferred), [entries, printings, preferred]);
@@ -1385,7 +1401,7 @@ export function DeckEditor({
         identity={identity}
         size={size}
         price={totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits)}
-        backLink={!readOnly}
+        backLink={!readOnly && !guest}
         complete={complete}
         celebrate={celebrate}
         plays={
@@ -1398,6 +1414,11 @@ export function DeckEditor({
         }
         onOpenCommander={(i) => openLine(commanders[i])}
         note={
+          guest ? (
+            <p className="mt-1.5 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
+              Trying Deck Genome: this deck is kept in this browser. Sign in to save it to a free account.
+            </p>
+          ) :
           readOnly &&
           (builder?.precon ? (
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
@@ -1451,7 +1472,7 @@ export function DeckEditor({
               </button>
             )}
             {readOnly && (
-              <Link href={userId ? "/decks" : `/login?next=${encodeURIComponent("/decks")}`} className="btn">
+              <Link href={userId ? "/decks" : "/try"} className="btn">
                 ✦ Build your own
               </Link>
             )}
@@ -1475,6 +1496,11 @@ export function DeckEditor({
                 ⌕ Search
               </HeaderButton>
             )}
+            {guest ? (
+              <Link href="/login?next=/try/save&mode=signup" className="btn btn-gold" title="Make a free account and keep this deck">
+                Sign in to save
+              </Link>
+            ) : (
             <Link
               href={`/decks/${deck.id}/playtest`}
               data-tour="playtest"
@@ -1483,12 +1509,13 @@ export function DeckEditor({
             >
               ▶ Playtest
             </Link>
+            )}
             {!readOnly && size > 100 && (
               <button type="button" className="btn btn-gold" aria-pressed={panel === "cutter"} onClick={() => setPanel("cutter")} title="Smart Cutter: what to cut, and why">
                 ✂ Cut {size - 100}
               </button>
             )}
-            {!readOnly && (
+            {!readOnly && !guest && (
               <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
                 ↗ Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
               </HeaderButton>
@@ -1498,9 +1525,18 @@ export function DeckEditor({
                 ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
                 { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
                 { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
-                { key: "compare", label: "Compare with another deck", active: panel === "compare", onPick: () => setPanel("compare") },
+                {
+                  key: "compare",
+                  label: "Compare with another deck",
+                  active: panel === "compare",
+                  onPick: () => {
+                    setCompareWith(null);
+                    setPanel("compare");
+                  },
+                },
+                { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
-                ...(readOnly ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
+                ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
                 ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
                 ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
                 ...(readOnly ? [] : [{ key: "copy", label: copying ? "Copying…" : "Make a copy", active: false, onPick: copy }]),
@@ -1710,6 +1746,20 @@ export function DeckEditor({
           rolesOfCard={visibleRoleKeys}
           maybeIds={new Set(maybeLines.map((l) => l.card.oracle_id))}
           onAddToMaybe={readOnly ? undefined : (card) => addWithNotice(card, "maybe")}
+          initialOther={compareWith}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "similar" && (
+        <SimilarPanel
+          deckId={deck.id}
+          rows={Object.entries(entries).map(([k, quantity]) => ({ ...parseKey(k), quantity }))}
+          cards={cards}
+          commanders={commanders.map((l) => ({ oracle_id: l.card.oracle_id, name: l.card.name }))}
+          onCompare={(d) => {
+            setCompareWith(d);
+            setPanel("compare");
+          }}
           onClose={() => setPanel(null)}
         />
       )}

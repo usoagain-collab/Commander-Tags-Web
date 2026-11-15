@@ -54,8 +54,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             bragging about.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            {/* Signed out, go straight to sign-in rather than through the /decks redirect, which left the button looking dead. */}
-            <Link href={user ? "/decks" : "/login?next=/decks&mode=signup"} className="btn btn-gold min-h-12 px-6 text-base">
+            {/* Signed out, "Start building" opens the builder straight away (/try); signing in comes when they want to keep it. */}
+            <Link href={user ? "/decks" : "/try"} className="btn btn-gold min-h-12 px-6 text-base">
               {user ? "Go to my decks" : "Start building"}
             </Link>
             <Link href="/precons" className="btn min-h-12 px-6 text-base">
