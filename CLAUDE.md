@@ -263,6 +263,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Suggest changes (V3, built Nov 15, 2026, migration 0061 not run yet)
+- `supabase/migrations/0061_deck_suggestions.sql`: `deck_suggestions` (adds and cuts as uuid arrays, up to 30 each, a note, status open, applied, maybe or dismissed) with no direct grants. `deck_suggestions_for(p_deck)` gives the owner every suggestion and anyone else only their own; `suggest_deck_changes` (shared decks you don't own, cuts must be in the deck, about 5 an hour), `decide_deck_suggestion` (owner) and `withdraw_deck_suggestion` (author, open only).
+- `src/lib/deck/suggestions.ts`: `useSuggestions`, `planSuggestion` (one `planBulk` change, so Apply is one save and one Ctrl+Z), `cleanSuggestion`, `readSuggestions`. `suggestions-panel.tsx` is the menu panel for both sides; the visitor's Add box is `QuickAdd`.
+- The editor's `run` takes a card array too (the same change as Packages, PR 127), so cards a suggestion adds join the editor's card map.
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).
