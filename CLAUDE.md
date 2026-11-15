@@ -263,6 +263,12 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - Steps and helpers in `src/lib/tour/steps.ts` (tested): role bars, Suggest, bracket, Playtest, each pointing at a `data-tour` attribute in the editor (`roles` on RoleProfile's root, `suggest`, `bracket` on a span around BracketBadge, `playtest`). `findTarget` takes the first match that is on screen; a step with nothing on screen still shows its card.
 - `welcome-tour.tsx`: a gold ring over the target (box-shadow dims the rest) and a card at the bottom with Back, Next, Skip tour; Escape skips. Starts once when a signed-in owner opens a deck with a commander and `tag_view.tourSeen` isn't true; finishing or skipping sets it. Menu › **Take the quick tour** shows it again. No migration.
 
+## Try the builder (V3, built Nov 15, 2026)
+- `/try` mounts `DeckEditor` with `guest`: deck id `GUEST_DECK_ID`, no user, default role targets, bracket 3. `useAutosave(id, true)` never writes to Supabase; instead the editor keeps `guestSnapshot(...)` in localStorage under `GUEST_KEY` (`src/lib/deck/guest-deck.ts`, read back with `readGuestDeck`, which drops anything malformed).
+- Signed out, the home page's Start building and a shared deck's Build your own go to `/try`. Signed in, `/try` goes to `/try/save`.
+- `/try/save` (signed in) creates the deck and adds every card in one `apply_deck_changes` call (`guestSavePayload`), clears the browser copy and opens the deck; with nothing kept it goes to `/decks`. If the cards fail, the new empty deck is removed and the browser copy stays.
+- Guests don't get Playtest, Share, History, My tags, the collection, the wishlist or the tour; those need a saved deck or an account.
+
 ## Store prices from MTGJSON (v2, built Nov 11, 2026)
 
 - **David's choices:** option A of "Prices from MTGJSON" in `docs/spec.md`, all four stores. TCGplayer stays Scryfall's `price_usd` (it is TCGplayer's price) and the default; MTGJSON adds Card Kingdom (`ck`), Mana Pool (`mp`), Cardmarket (`cm`, euros, shown in lists only, never a total).
