@@ -263,6 +263,13 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Monthly check-in email (V3, built Nov 15, 2026, migration 0063)
+- Tables checkin_sends and checkin_answers (no grants; service role only) and profiles.checkin_emails (default on).
+- src/lib/checkin/checkin.ts: questions, monthKey (Hawaii time), cleanAnswer, signed links (HMAC with CHECKIN_SECRET, else the service-role key), the email text and HTML, pickRecipients, summarize. audience.ts loads who gets this month's email.
+- src/lib/email/send.ts: the only file that talks to the email service (Resend's HTTP API). Off until EMAIL_API_KEY and EMAIL_FROM are set.
+- Pages: /checkin (answer), /checkin/stop (button; a visit alone changes nothing), POST /api/checkin/stop (one-click unsubscribe header), /admin/checkin (admin only: test to me, Send next 50, averages, notes). Nothing sends on a schedule.
+- Optional env: NEXT_PUBLIC_SITE_URL for the links (default https://deckgenome.com).
+
 ## Precons (v2, built Nov 8, 2026)
 
 - **Source: MTGJSON** (MIT license; credit it wherever precons show), not Scryfall, which has no decklists. `DeckList.json` lists decks; `/api/v5/decks/<fileName>.json` has each list with `identifiers.scryfallOracleId` / `scryfallId` and `isFoil`. Types imported: `Commander Deck` and `MTGO Commander Deck` (208 on Nov 8, 2026, back to Commander 2011).

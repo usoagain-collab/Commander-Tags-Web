@@ -26,6 +26,10 @@ export default function PrivacyPage() {
               settings, and a profile picture if you upload one.
             </li>
             <li>
+              <strong>Monthly check-in:</strong> once a month we may email you three quick questions about your decks. If you answer, we keep
+              your scores and note. Turn the email off in Settings or with the link at the bottom of any check-in email.
+            </li>
+            <li>
               <strong>Feedback:</strong> what you send with the Feedback button, with the page you sent it from and the email you add, if any. To stop spam we also keep a scrambled code made from your internet address (never the address itself).
             </li>
           </ul>
