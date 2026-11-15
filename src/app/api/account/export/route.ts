@@ -36,15 +36,22 @@ export async function GET() {
       supabase.from("decks").select("id, name, visibility, target_bracket, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
     );
     const ids = decks.map((d) => d.id);
-    type Row = { deck_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
+    type Row = { deck_id: string; oracle_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
     const rows: Row[] = [];
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100);
       rows.push(
         ...(await all<Row>((a, b) =>
-          supabase.from("deck_cards").select("deck_id, board, quantity, foil, printing_info, cards(name)").in("deck_id", chunk).order("deck_id").order("oracle_id").order("board").range(a, b) as unknown as Page<Row>,
+          supabase.from("deck_cards").select("deck_id, oracle_id, board, quantity, foil, printing_info, cards(name)").in("deck_id", chunk).order("deck_id").order("oracle_id").order("board").range(a, b) as unknown as Page<Row>,
         )),
       );
+    }
+    // Card notes (V3, migration 0055). Before that migration runs the table isn't there, so its error is ignored.
+    const notes: { deck_id: string; oracle_id: string; note: string }[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await supabase.from("deck_card_notes").select("deck_id, oracle_id, note").in("deck_id", ids.slice(i, i + 100));
+      if (error) break;
+      notes.push(...((data ?? []) as typeof notes));
     }
     const tags = await all<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>((a, b) =>
       supabase.from("user_tags").select("name, deck_id, user_tag_cards(cards(name))").eq("owner_id", uid).order("id").range(a, b) as unknown as Page<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>,
@@ -65,6 +72,13 @@ export async function GET() {
       const board = r.board as keyof ExportDeck["boards"];
       if (!deck) continue;
       (deck.boards[board] ??= []).push({ quantity: r.quantity, name: r.cards?.name ?? "Unknown card", foil: r.foil, ...printed(r.printing_info) });
+    }
+    const cardName = new Map(rows.map((r) => [r.oracle_id, r.cards?.name ?? "Unknown card"]));
+    for (const n of notes) {
+      const deck = byDeck.get(n.deck_id);
+      // A note stays when its card leaves the deck (it comes back if the card does); only cards in the deck are listed.
+      const name = cardName.get(n.oracle_id);
+      if (deck && name) (deck.notes ??= []).push({ name, note: n.note });
     }
 
     const text = formatExport({
