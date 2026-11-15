@@ -58,11 +58,14 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 export const loadDeck = cache(async (id: string, kind: "editor" | "playtest") => {
   const supabase = await createClient();
-  const [user, res, builderRes] = await Promise.all([
+  const [user, res, builderRes, cobuildRes] = await Promise.all([
     getCurrentUser(),
     supabase.rpc("deck_bundle", { p_id: id, p_tags: kind === "editor", p_tokens: kind === "playtest" }),
     // Who built it (migration 0035), asked alongside so it costs no extra wait. A failure only hides the name.
     supabase.rpc("deck_builder", { p_id: id }),
+    // Co-build (V3, migration 0064): are you building this deck with its owner? Signed out, or before the
+    // migration runs, this fails and the answer is no.
+    supabase.rpc("is_deck_cobuilder", { p_deck: id }),
   ]);
   if (res.error) throw new Error(`Couldn't load the deck: ${res.error.message}`);
   const b = res.data as Bundle | null;
@@ -70,5 +73,6 @@ export const loadDeck = cache(async (id: string, kind: "editor" | "playtest") =>
   const tags: InitialTags | undefined = b.tags ? { ...b.tags, ids: b.cards.map((c) => c.oracle_id) } : undefined;
   const raw = builderRes.data as { name: string | null; avatar_url: string | null; precon?: PreconInfo | null } | null;
   const builder: Builder | null = raw ? { name: raw.name, avatarUrl: raw.avatar_url, precon: raw.precon ?? null } : null;
-  return { user, deck: b.deck, builder, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile, preferred: b.preferred ?? {} } as const;
+  const cobuilder = !cobuildRes.error && cobuildRes.data === true;
+  return { user, deck: b.deck, builder, cobuilder, rows: b.rows, cards: b.cards, tags, combos: b.combos ?? undefined, tokens: b.tokens ?? [], profile: b.profile, preferred: b.preferred ?? {} } as const;
 });

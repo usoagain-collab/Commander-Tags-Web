@@ -56,9 +56,10 @@ type Props = {
   /** Mixed copies (v2): printings for some of this row's copies. Only for rows with more than one copy. */
   mixed?: { parts: SplitPart[]; onChange: (parts: SplitPart[]) => void };
   isCover: boolean;
-  onCover: (on: boolean) => void;
+  /** Left out for a co-builder (V3): the deck image is the owner's to choose. */
+  onCover?: (on: boolean) => void;
   /** Change mana cost (v2): the card's own mana value, this deck's override (null = none), and a setter. */
-  manaValue?: { own: number; counted: number | null; onChange: (value: number | null) => void };
+  manaValue?: { own: number; counted: number | null; onChange?: (value: number | null) => void };
   /** Search by wording (v2): opens the Search tab with a rules-text search, and what it is in words. */
   onSearchWording?: (query: string, label: string) => void;
   /**
@@ -219,13 +220,13 @@ export function CardSheet(props: Props) {
                 </p>
               )}
               <CommanderLegality details={details} />
-              {!readOnly && !props.candidate && card.image_art_crop && (
-                <button type="button" onClick={() => props.onCover(!props.isCover)} className="mt-1 block min-h-9 text-[13px] underline opacity-80 hover:opacity-100">
+              {!readOnly && !props.candidate && card.image_art_crop && props.onCover && (
+                <button type="button" onClick={() => props.onCover?.(!props.isCover)} className="mt-1 block min-h-9 text-[13px] underline opacity-80 hover:opacity-100">
                   {props.isCover ? "✓ Deck image · Back to the commander's art" : "Use as deck image"}
                 </button>
               )}
               {props.manaValue && (board === "main" || board === "commander" || props.manaValue.counted !== null) && (
-                <ManaValueControl {...props.manaValue} readOnly={readOnly} />
+                <ManaValueControl own={props.manaValue.own} counted={props.manaValue.counted} onChange={props.manaValue.onChange ?? (() => undefined)} readOnly={readOnly || !props.manaValue.onChange} />
               )}
               {props.wish && (
                 <button

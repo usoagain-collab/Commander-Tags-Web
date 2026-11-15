@@ -62,6 +62,8 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   }
   const cards = Object.fromEntries(summaries.map((c) => [c.oracle_id, c]));
   const owner = deck.owner_id === user?.id;
+  // A co-builder (V3) edits the deck's cards; everything else stays the owner's.
+  const cobuilder = !owner && loaded.cobuilder;
 
   return (
     <DeckEditor
@@ -74,7 +76,8 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       initialCards={cards}
       initialTags={initialTags}
       initialCombos={initialCombos}
-      readOnly={!owner}
+      readOnly={!owner && !cobuilder}
+      cobuilder={cobuilder}
       builder={owner ? null : loaded.builder}
       savedTagView={profile?.tag_view ?? {}}
       hiddenTags={profile?.hidden_tags ?? []}

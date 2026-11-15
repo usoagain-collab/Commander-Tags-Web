@@ -103,6 +103,7 @@ import { WelcomeTour } from "./welcome-tour";
 import { GUEST_KEY, guestSnapshot } from "@/lib/deck/guest-deck";
 import { shouldShowTour } from "@/lib/tour/steps";
 import { SharePanel } from "./share-panel";
+import { CobuildPanel } from "./cobuild-panel";
 import { StatsPanel } from "./stats-panel";
 import { SuggestPanel, type SuggestSource } from "./suggest-panel";
 import { themeGroups, type PoolCard, type SuggestSettings } from "@/lib/suggest/score";
@@ -240,6 +241,9 @@ type Props = {
   /** Two-card combos in the deck, loaded with the page. */
   initialCombos?: ComboRow[];
   readOnly: boolean;
+  /** Co-build (V3, migration 0064): you build this deck with its owner. Its cards are yours to change; its
+   *  settings, sharing, notes and history stay the owner's. */
+  cobuilder?: boolean;
   /** Who built the deck, for a deck shared with you (null for your own). */
   builder?: Builder | null;
   savedTagView: Record<string, unknown>;
@@ -276,6 +280,7 @@ export function DeckEditor({
   initialTags,
   initialCombos,
   readOnly,
+  cobuilder = false,
   builder,
   savedTagView,
   hiddenTags,
@@ -291,6 +296,8 @@ export function DeckEditor({
   profileDefaults,
   guest = false,
 }: Props) {
+  // Owner-only parts (settings, sharing, notes, history, Smart Cutter, game log) are locked for a co-builder too.
+  const ownerOnly = readOnly || cobuilder;
   const [state, dispatch] = useReducer(reducer, {
     entries: initialEntries,
     categories: initialCategories,
@@ -354,7 +361,7 @@ export function DeckEditor({
     },
     [deck.id],
   );
-  const gameLog = useGameLog(deck.id, !readOnly && !!userId, flagFlops);
+  const gameLog = useGameLog(deck.id, !ownerOnly && !!userId, flagFlops);
   const clearFlags = async (oracleId: string) => {
     setFlags((f) => {
       const next = { ...f };
@@ -471,7 +478,7 @@ export function DeckEditor({
   const [found, setFound] = useState<{ list: CardSummary[]; index: number; from: FindTab } | null>(null);
   // The Suggested tab stays mounted once shown, so switching tabs doesn't ask the database again.
   const [suggestShown, setSuggestShown] = useState(false);
-  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | "packages" | "games" | "suggestions" | null>(null);
+  const [panel, setPanel] = useState<"search" | "import" | "export" | "history" | "stats" | "suggest" | "bracket" | "share" | "cutter" | "lands" | "spin" | "compare" | "similar" | "packages" | "games" | "suggestions" | "cobuild" | null>(null);
   const [compareWith, setCompareWith] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     // Closing the drawer starts it fresh next time.
@@ -482,10 +489,10 @@ export function DeckEditor({
   }, [panel]);
   const [visibility, setVisibility] = useState<Visibility>(deck.visibility);
   // Suggest changes (V3, migration 0061): the owner's inbox, or a visitor's own suggestions on a shared deck.
-  const suggestions = useSuggestions(deck.id, !guest && !!userId && (!readOnly || visibility !== "private"));
+  const suggestions = useSuggestions(deck.id, !guest && !!userId && !cobuilder && (!readOnly || visibility !== "private"));
   const [copying, setCopying] = useState(false);
   const wishlist = useWishlist(userId);
-  const cardNotes = useCardNotes(deck.id, !readOnly && !!userId);
+  const cardNotes = useCardNotes(deck.id, !ownerOnly && !!userId);
   const collection = useCollection(userId);
   // Mixed copies (v2): saved straight to the row (deck_cards.printing_split), not through Ctrl+Z.
   const [splits, setSplits] = useState<Splits>(initialSplits ?? {});
@@ -606,13 +613,13 @@ export function DeckEditor({
   const pricedSplits = useMemo(() => priceSplits(splits, priceSource), [splits, priceSource]);
 
   // ---------- bracket targeting (Phase 5b) ----------
-  const bracket = useBracketTarget(deck.id, targetBracket, readOnly);
+  const bracket = useBracketTarget(deck.id, targetBracket, ownerOnly);
   // Combos are checked on the 100-card deck (commander, companion, mainboard), not the maybeboard.
   const deckCardIds = Object.keys(entries).filter((k) => !k.startsWith("maybe|")).map((k) => k.split("|")[1]);
   const combos = useCombosWithin(deckCardIds, initialCombos);
 
   // ---------- My tags (step 3f) ----------
-  const myTags = useMyTags(deck.id, !readOnly && !!userId, (loaded) => dispatch({ type: "loadTagCards", tagCards: loaded }));
+  const myTags = useMyTags(deck.id, !ownerOnly && !!userId, (loaded) => dispatch({ type: "loadTagCards", tagCards: loaded }));
   const showMyTags = prefs.showMyTags !== false;
   const myTagsOfCard = (oracleId: string) => tagsOfCard(tagCards, oracleId, myTags.tags);
   const toggleMyTag = (t: MyTag, onCards: CardSummary[], on: boolean) => run(planTagCards(tagCards, t.id, t.name, onCards, on));
@@ -626,7 +633,7 @@ export function DeckEditor({
   const tags = useChosenArtTags(useTagData(tagIds, initialTags), shownPrintings);
 
   // Roles: the standard ones with this deck's targets, plus its custom roles (Phase 3c).
-  const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, readOnly);
+  const roleSettings = useRoleSettings(deck.id, roleTargets, customRoles, ownerOnly);
   const [defaults, setDefaults] = useState(profileDefaults);
   // Tutors follows the target bracket until its slider is moved (C1b).
   const roleDefs = useMemo(
@@ -779,7 +786,7 @@ export function DeckEditor({
       counts={myTagCounts}
       highlight={highlight}
       show={showMyTags}
-      readOnly={readOnly}
+      readOnly={ownerOnly}
       loading={!myTags.loaded}
       onShow={(show) => updatePrefs({ showMyTags: show })}
       onHighlight={(t) => toggleHighlight(myTagHighlight(t.id))}
@@ -864,12 +871,12 @@ export function DeckEditor({
         })
       : null;
   const [suggestFor, setSuggestFor] = useState<SuggestSource | null>(null);
-  const suggestStyle = useSuggestSettings(deck.id, suggestSettings, readOnly);
-  const dismissed = useDismissed(deck.id, dismissedSuggestions, readOnly);
+  const suggestStyle = useSuggestSettings(deck.id, suggestSettings, ownerOnly);
+  const dismissed = useDismissed(deck.id, dismissedSuggestions, ownerOnly);
 
   // ---------- Smart Cutter (v2) ----------
-  const cutter = useCutterState(deck.id, cutterState, readOnly);
-  const cutterSettings = useCutterPrefs(readOnly ? null : userId, cutterPrefs);
+  const cutter = useCutterState(deck.id, cutterState, ownerOnly);
+  const cutterSettings = useCutterPrefs(ownerOnly ? null : userId, cutterPrefs);
   const locked = new Set(cutter.state.locks);
   const toggleLock = (card: CardSummary, on: boolean) => {
     cutter.setState((st) => ({ ...st, locks: on ? [...new Set([...st.locks, card.oracle_id])] : st.locks.filter((x) => x !== card.oracle_id) }));
@@ -906,7 +913,7 @@ export function DeckEditor({
   useEffect(() => {
     const before = lastCutterArchetype.current;
     lastCutterArchetype.current = cutterArchetype;
-    if (readOnly || (before.key === cutterArchetype.key && before.status === cutterArchetype.status)) return;
+    if (ownerOnly || (before.key === cutterArchetype.key && before.status === cutterArchetype.status)) return;
     const key = cutterArchetype.status === "auto" ? null : cutterArchetype.key;
     if (key !== plays.archetype) void savePlays({ ...plays, archetype: key });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a change to the Cutter's answer should save
@@ -930,7 +937,7 @@ export function DeckEditor({
   /** Asks first when a manual removal would put a role below target (David, Nov 7, 2026); otherwise just does it. */
   const [belowTarget, setBelowTarget] = useState<{ lines: string[]; proceed: () => void } | null>(null);
   const guardRemoval = (plan: Plan, proceed: () => void) => {
-    if (readOnly || !plan.ok || !cutterSettings.prefs.belowTargetWarning) return proceed();
+    if (ownerOnly || !plan.ok || !cutterSettings.prefs.belowTargetWarning) return proceed();
     const net: Record<string, number> = {};
     for (const r of plan.change.rows) if (r.board === "main" || r.board === "commander") net[r.oracle_id] = (net[r.oracle_id] ?? 0) + r.from - r.to;
     const removing = Object.fromEntries(Object.entries(net).filter(([, n]) => n > 0));
@@ -1084,7 +1091,7 @@ export function DeckEditor({
       onEditing={setEditingTargets}
       onReorder={(keys) => updatePrefs({ roleOrder: mergeOrder(keys, roleOrder) })}
       onResetOrder={() => updatePrefs({ roleOrder: [], tagOrder: [] })}
-      readOnly={readOnly}
+      readOnly={ownerOnly}
       highlight={highlight}
       saveError={roleSettings.saveError}
       onTarget={(key, n) => {
@@ -1445,7 +1452,7 @@ export function DeckEditor({
         identity={identity}
         size={size}
         price={totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits)}
-        backLink={!readOnly && !guest}
+        backLink={!ownerOnly && !guest}
         complete={complete}
         celebrate={celebrate}
         plays={
@@ -1453,7 +1460,7 @@ export function DeckEditor({
             archetype={playsHeadline}
             text={plays.text}
             tags={playsTags(plays, themes, tagLabel)}
-            onEdit={readOnly ? undefined : () => setEditingPlays(true)}
+            onEdit={ownerOnly ? undefined : () => setEditingPlays(true)}
           />
         }
         onOpenCommander={(i) => openLine(commanders[i])}
@@ -1463,7 +1470,7 @@ export function DeckEditor({
               Trying Deck Genome: this deck is kept in this browser. Sign in to save it to a free account.
             </p>
           ) :
-          readOnly &&
+          ownerOnly &&
           (builder?.precon ? (
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
               <span className="rounded bg-gold/90 px-1.5 py-0.5 text-xs font-semibold text-black">Precon</span>
@@ -1487,7 +1494,7 @@ export function DeckEditor({
             <p className="mt-1.5 flex items-center gap-2 text-sm [text-shadow:0_1px_8px_var(--art-shadow)]">
               <Avatar url={builder.avatarUrl} name={builder.name} size={24} />
               <span>
-                <span className="opacity-80">Built by </span>
+                <span className="opacity-80">{cobuilder ? "You're building this with " : "Built by "}</span>
                 <span className="font-semibold">{builder.name}</span>
               </span>
             </p>
@@ -1554,12 +1561,12 @@ export function DeckEditor({
               ▶ Playtest
             </Link>
             )}
-            {!readOnly && size > 100 && (
+            {!ownerOnly && size > 100 && (
               <button type="button" className="btn btn-gold" aria-pressed={panel === "cutter"} onClick={() => setPanel("cutter")} title="Smart Cutter: what to cut, and why">
                 ✂ Cut {size - 100}
               </button>
             )}
-            {!readOnly && !guest && (
+            {!ownerOnly && !guest && (
               <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
                 ↗ Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
               </HeaderButton>
@@ -1580,7 +1587,8 @@ export function DeckEditor({
                 },
                 { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
                 ...(userId ? [{ key: "packages", label: "Packages", active: panel === "packages", onPick: () => setPanel("packages") }] : []),
-                ...(readOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
+                ...(ownerOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
+                ...(readOnly || guest || !userId ? [] : [{ key: "cobuild", label: "Build together", active: panel === "cobuild", onPick: () => setPanel("cobuild") }]),
                 ...(suggestions.available && (!readOnly || visibility !== "private")
                   ? [
                       {
@@ -1593,8 +1601,8 @@ export function DeckEditor({
                   : []),
                 ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
                 { key: "guide", label: "How to build a deck", active: false, onPick: () => window.open("/guide", "_blank", "noopener") },
-                ...(readOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
-                ...(readOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
+                ...(ownerOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
+                ...(ownerOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
                 ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
                 ...(readOnly ? [] : [{ key: "copy", label: copying ? "Copying…" : "Make a copy", active: false, onPick: copy }]),
               ]}
@@ -1671,7 +1679,7 @@ export function DeckEditor({
         </div>
       )}
       {panel === "import" && !readOnly && <ImportPanel entries={entries} printings={printings} deckCards={cards} onApply={applyImport} onClose={() => setPanel(null)} />}
-      {panel === "share" && !readOnly && (
+      {panel === "share" && !ownerOnly && (
         <SharePanel
           deckId={deck.id}
           visibility={visibility}
@@ -1683,6 +1691,9 @@ export function DeckEditor({
             line: `${commanders.map((l) => l.card.name).join(" & ") || "Commander deck"} · ${size} cards · Bracket ${bracket.target}`,
           }}
         />
+      )}
+      {panel === "cobuild" && !readOnly && !guest && (
+        <CobuildPanel deckId={deck.id} onClose={() => setPanel(null)} onLeft={() => window.location.assign("/decks")} />
       )}
       {panel === "lands" && !readOnly && (
         <LandBasePanel
@@ -1713,7 +1724,7 @@ export function DeckEditor({
           target={bracket.target}
           estimate={estimate}
           lines={[...commanders, ...companions, ...mainLines]}
-          readOnly={readOnly}
+          readOnly={ownerOnly}
           saveError={bracket.saveError}
           comboError={combos.error}
           paused={!!sheet}
@@ -1728,7 +1739,7 @@ export function DeckEditor({
       )}
       {panel === "stats" && (
         <StatsPanel
-          history={readOnly ? undefined : { deckId: deck.id, source: priceSource, total: totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits) }}
+          history={ownerOnly ? undefined : { deckId: deck.id, source: priceSource, total: totalPriceWithSplits(entries, pricedCards, pricedPrintings, pricedSplits) }}
           lines={[...commanders, ...companions, ...mainLines]}
           identity={identity}
           roles={roles}
@@ -1737,13 +1748,13 @@ export function DeckEditor({
           paused={!!sheet}
           onOpenCard={openLine}
           onClose={closePanel}
-          onSetLandTarget={readOnly ? undefined : (n) => roleSettings.setTargets((t) => ({ ...t, lands: n }))}
+          onSetLandTarget={ownerOnly ? undefined : (n) => roleSettings.setTargets((t) => ({ ...t, lands: n }))}
         />
       )}
-      {editingPlays && !readOnly && (
+      {editingPlays && !ownerOnly && (
         <PlaysEditor plays={plays} themes={themes} ranked={ranked} labelOf={tagLabel} onSave={savePlaysFromEditor} onClose={() => setEditingPlays(false)} />
       )}
-      {panel === "cutter" && !readOnly && tags.tree && (
+      {panel === "cutter" && !ownerOnly && tags.tree && (
         <CutterPanel
           deckId={deck.id}
           lines={[...commanders, ...mainLines]}
@@ -1827,7 +1838,7 @@ export function DeckEditor({
       )}
       {panel === "suggestions" && suggestions.available !== false && (
         <SuggestionsPanel
-          owner={!readOnly}
+          owner={!ownerOnly}
           suggestions={suggestions}
           entries={entries}
           cards={cards}
@@ -1842,7 +1853,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "games" && !readOnly && (
+      {panel === "games" && !ownerOnly && (
         <GameLogPanel
           log={gameLog}
           deckCards={[...commanders, ...mainLines].map((l) => ({ oracle_id: l.card.oracle_id, name: l.card.name })).sort((a, b) => a.name.localeCompare(b.name))}
@@ -1863,7 +1874,7 @@ export function DeckEditor({
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "history" && !readOnly && (
+      {panel === "history" && !ownerOnly && (
         <HistoryPanel
           deckId={deck.id}
           current={{ entries, categories, printings }}
@@ -1908,7 +1919,7 @@ export function DeckEditor({
             <div className="gap-x-6 [column-width:250px] [&_h2]:break-after-avoid [&_li]:break-inside-avoid">
               {renderProfile()}
               <div className="mt-6 border-t border-foreground/10 pt-4">{renderTopTags()}</div>
-              {!readOnly && <div className="mt-6 border-t border-foreground/10 pt-4">{renderMyTags()}</div>}
+              {!ownerOnly && <div className="mt-6 border-t border-foreground/10 pt-4">{renderMyTags()}</div>}
             </div>
           </div>
           )}
@@ -1989,7 +2000,7 @@ export function DeckEditor({
             <FoldTab active={fold === "tags"} onClick={() => setFold(fold === "tags" ? null : "tags")}>
               Top tags
             </FoldTab>
-            {!readOnly && (
+            {!ownerOnly && (
               <FoldTab active={fold === "mine"} onClick={() => setFold(fold === "mine" ? null : "mine")}>
                 My tags
               </FoldTab>
@@ -1999,7 +2010,7 @@ export function DeckEditor({
             <div className="panel mb-4 p-3 xl:hidden">
               {fold === "roles" && renderProfile(true)}
               {fold === "tags" && renderTopTags(true)}
-              {fold === "mine" && !readOnly && renderMyTags(true)}
+              {fold === "mine" && !ownerOnly && renderMyTags(true)}
             </div>
           )}
           {!readOnly && commanders.length > 0 && (
@@ -2116,7 +2127,7 @@ export function DeckEditor({
             />
           </div>
         </aside>}
-        {!guest && <DeckSocialSection deckId={deck.id} owner={!readOnly} signedIn={!!userId} visibility={visibility} />}
+        {!guest && <DeckSocialSection deckId={deck.id} owner={!ownerOnly} signedIn={!!userId} visibility={visibility} />}
       </div>
       {previewMode === "float" && preview && !sheet && (
         <FloatingPreview
@@ -2169,11 +2180,11 @@ export function DeckEditor({
           roleKeys={lineRoleKeys(sheetLine)}
           flags={flags[sheetLine.card.oracle_id] ?? 0}
           isCover={coverId === sheetLine.card.oracle_id}
-          onCover={(on) => chooseCover(on ? sheetLine.card.oracle_id : null)}
+          onCover={ownerOnly ? undefined : (on) => chooseCover(on ? sheetLine.card.oracle_id : null)}
           manaValue={{
             own: cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value,
             counted: manaValues[sheetLine.card.oracle_id] ?? null,
-            onChange: (v) => setManaValue(sheetLine.card.oracle_id, v, cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value),
+            onChange: ownerOnly ? undefined : (v) => setManaValue(sheetLine.card.oracle_id, v, cards[sheetLine.card.oracle_id]?.mana_value ?? sheetLine.card.mana_value),
           }}
           wish={userId ? { on: wishlist.has(sheetLine.card.oracle_id), onToggle: async () => say(await wishlist.toggle(sheetLine.card.oracle_id)) } : undefined}
           collection={collectionBox(sheetLine.card.oracle_id, shownParts(sheetLine, splits, cards[sheetLine.card.oracle_id]).at(-1)!)}
@@ -2181,7 +2192,7 @@ export function DeckEditor({
             parts: splits[entryKey(sheetLine.board, sheetLine.card.oracle_id)] ?? [],
             onChange: (parts) => saveSplit(sheetLine.board, sheetLine.card.oracle_id, parts),
           }}
-          onClearFlags={() => clearFlags(sheetLine.card.oracle_id)}
+          onClearFlags={ownerOnly ? undefined : () => clearFlags(sheetLine.card.oracle_id)}
           extra={
             readOnly ? null : (
               <>

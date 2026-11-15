@@ -9,6 +9,7 @@ import { BRACKETS } from "@/lib/brackets/rules";
 import { printingImage } from "@/lib/deck/printing";
 import { byFolderName, folderCounts, inFolder, pickFolder, type Folder } from "@/lib/decks/folders";
 import { FolderBar } from "./folder-bar";
+import { readCobuildDecks } from "@/lib/deck/cobuild";
 
 export const metadata = { title: "My decks · Deck Genome" };
 
@@ -35,6 +36,10 @@ export default async function DecksPage({ searchParams }: { searchParams: Promis
   const folderOf = new Map(foldersReady ? ((placeRes.data ?? []) as { id: string; folder_id: string | null }[]).map((d) => [d.id, d.folder_id]) : []);
   const folderParam = Array.isArray(params.folder) ? params.folder[0] : params.folder;
   const pick = pickFolder(folderParam, folders);
+
+  // Decks you build with a friend (V3 co-build, migration 0064). Before that migration this fails and nothing shows.
+  const { data: cobuildRaw } = await supabase.rpc("my_cobuild_decks");
+  const together = readCobuildDecks(cobuildRaw);
 
   // Your default printings, for the art on each tile.
   const { data: defaults } = await supabase.from("preferred_printings").select("oracle_id, printing_id, printing_info");
@@ -152,6 +157,21 @@ export default async function DecksPage({ searchParams }: { searchParams: Promis
             empty={openFolder ? "No decks in this folder yet. Make one above, or use Folder on any deck to move it here." : "Every deck is in a folder."}
           />
         </>
+      )}
+      {together.length > 0 && (
+        <section className="mt-10">
+          <h2 className="display text-xl">Building with friends</h2>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {together.map((d) => (
+              <li key={d.id}>
+                <Link href={`/decks/${d.id}`} className="block min-h-11 rounded-lg border border-foreground/15 px-3 py-2 hover:bg-foreground/5">
+                  <span className="block font-semibold">{d.name}</span>
+                  <span className="block text-xs opacity-75">{d.owner ? `${d.owner}'s deck` : "A friend's deck"}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </main>
   );
