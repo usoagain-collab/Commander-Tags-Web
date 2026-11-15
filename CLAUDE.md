@@ -263,6 +263,21 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `src/lib/deck/similar.ts` (tested): `loadSimilarCandidates` reads the 60 newest public decks sharing a commander (this deck left out) and their commander, companion and main rows, 8 decks per read to stay under the 1000-row page; `rankSimilar` orders them by `compareDecks(...).overlap`, then shared cards, then newest, and drops decks sharing nothing.
 - `similar-panel.tsx`: menu › Similar decks, ranked once when it opens. Compare opens `ComparePanel` with `initialOther`, listed under Public decks when it isn't yours or a precon. No migration.
 
+## Packages (V3, built Nov 15, 2026; migration 0057)
+- `card_packages` and `card_package_cards` (owner-only RLS). `src/lib/deck/packages.ts` (tested): `packageFromLines` (copies added up, commanders out), `planAddPackage` (one planBulk edit; cards already there go in `already`), `usePackages` (fails quietly before the migration; the panel then says packages aren't switched on).
+- `packages-panel.tsx`, menu › Packages for any signed-in viewer; Add to deck and To maybeboard only on your own deck. `run(plan, cards)` now takes an array of new cards.
+## Game log (V3, built Nov 15, 2026; migration 0058)
+- `deck_games` (date, result win/loss/draw, pod 2-8, opponents and note text, `standouts` and `flops` uuid arrays), owner-only RLS. `src/lib/deck/game-log.ts` (tested): `cleanGame`, `summarize`, `cardRecord`, `useGameLog` (fails quietly before the migration).
+- `game-log-panel.tsx`, menu › Game log for the owner. A flopped card calls `flag_card` once per game, so it shows as a playtest flag. The Smart Cutter doesn't read games yet.
+## Deck descriptions, comments and likes (V3, built Nov 15, 2026, migration 0059 not run yet)
+- `supabase/migrations/0059_deck_social.sql`: `decks.comments_open` and a 1000-character check on `decks.description` (not valid, so old rows are left alone); `deck_comments` and `deck_likes` with no direct grants. Read with `deck_social(p_id)` (anon and signed in, null unless the deck is unlisted, public or yours); write with `add_deck_comment`, `delete_deck_comment` (author or deck owner) and `set_deck_like` (not your own deck). All security definer, because the decks policies hide other people's unlisted decks.
+- `src/lib/deck/deck-social.ts`: `useDeckSocial`, `cleanDescription`, `cleanComment`, `readSocial`, `friendlyError` (shows only our own raised sentences). Before 0059 the RPC fails, and the owner falls back to reading `decks.description` directly.
+- `src/app/decks/[id]/deck-social.tsx`: `DeckSocialSection`, rendered at the bottom of the editor's content (not for guest decks). It follows the editor's live `visibility`, so sharing the deck shows likes and comments straight away.
+
+## Needs help flag (V3, built Nov 15, 2026, migration 0060 not run yet, after 0059)
+- `supabase/migrations/0060_needs_help.sql`: `decks.needs_help` and `decks.help_note` (200 characters), a partial index for public decks that want feedback, and `deck_social()` recreated to return both.
+- `useDeckSocial().setHelp(on, note)` writes them with a plain decks update and opens comments when asking. `data.help` is null until the server sends the fields, which hides the button before 0060.
+- Browse: `?help=1` (Wants feedback). `loadPublicDecks` retries without `needs_help` when the column is missing, so Browse keeps working before 0060.
 ## Suggest changes (V3, built Nov 15, 2026, migration 0061 not run yet)
 - `supabase/migrations/0061_deck_suggestions.sql`: `deck_suggestions` (adds and cuts as uuid arrays, up to 30 each, a note, status open, applied, maybe or dismissed) with no direct grants. `deck_suggestions_for(p_deck)` gives the owner every suggestion and anyone else only their own; `suggest_deck_changes` (shared decks you don't own, cuts must be in the deck, about 5 an hour), `decide_deck_suggestion` (owner) and `withdraw_deck_suggestion` (author, open only).
 - `src/lib/deck/suggestions.ts`: `useSuggestions`, `planSuggestion` (one `planBulk` change, so Apply is one save and one Ctrl+Z), `cleanSuggestion`, `readSuggestions`. `suggestions-panel.tsx` is the menu panel for both sides; the visitor's Add box is `QuickAdd`.

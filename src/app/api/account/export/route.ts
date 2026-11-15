@@ -32,8 +32,8 @@ export async function GET() {
       supabase.auth.getUser(),
       supabase.from("profiles").select("display_name, created_at").eq("id", uid).single(),
     ]);
-    const decks = await all<{ id: string; name: string; visibility: string; target_bracket: number | null; created_at: string; updated_at: string }>((a, b) =>
-      supabase.from("decks").select("id, name, visibility, target_bracket, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
+    const decks = await all<{ id: string; name: string; visibility: string; target_bracket: number | null; description: string | null; created_at: string; updated_at: string }>((a, b) =>
+      supabase.from("decks").select("id, name, visibility, target_bracket, description, created_at, updated_at").eq("owner_id", uid).order("id").range(a, b),
     );
     const ids = decks.map((d) => d.id);
     type Row = { deck_id: string; oracle_id: string; board: string; quantity: number; foil: boolean; printing_info: Info; cards: Named };
@@ -65,6 +65,23 @@ export async function GET() {
       if (error) break;
       notes.push(...((data ?? []) as typeof notes));
     }
+    // Packages (V3, migration 0057); skipped quietly before that migration runs.
+    type Pack = { name: string; card_package_cards: { quantity: number; cards: Named }[] };
+    const { data: packs, error: packError } = await supabase.from("card_packages").select("name, card_package_cards(quantity, cards(name))");
+    const packages = packError
+      ? []
+      : ((packs ?? []) as unknown as Pack[]).map((p) => ({
+          name: p.name,
+          cards: p.card_package_cards.map((c) => ({ quantity: c.quantity, name: c.cards?.name ?? "Unknown card" })),
+        }));
+    // Game log (V3, migration 0058); skipped quietly before that migration runs.
+    type Game = { deck_id: string; played_on: string; result: string; pod_size: number | null; opponents: string | null; note: string | null; standouts: string[]; flops: string[] };
+    const { data: gameRows, error: gameError } = await supabase
+      .from("deck_games")
+      .select("deck_id, played_on, result, pod_size, opponents, note, standouts, flops")
+      .order("played_on", { ascending: false })
+      .limit(5000);
+    const games = gameError ? [] : ((gameRows ?? []) as Game[]);
     const tags = await all<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>((a, b) =>
       supabase.from("user_tags").select("name, deck_id, user_tag_cards(cards(name))").eq("owner_id", uid).order("id").range(a, b) as unknown as Page<{ name: string; deck_id: string | null; user_tag_cards: { cards: Named }[] }>,
     );
@@ -77,8 +94,23 @@ export async function GET() {
 
     const deckName = new Map(decks.map((d) => [d.id, d.name]));
     const byDeck = new Map<string, ExportDeck>(
-      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, boards: {}, folder: folderOfDeck.get(d.id) ?? null }]),
+      decks.map((d) => [d.id, { name: d.name, visibility: d.visibility, bracket: d.target_bracket, created: d.created_at, updated: d.updated_at, description: d.description, boards: {}, folder: folderOfDeck.get(d.id) ?? null }]),
     );
+    const nameOfCard = new Map(rows.map((r) => [r.oracle_id, r.cards?.name ?? "Unknown card"]));
+    for (const g of games) {
+      const deck = byDeck.get(g.deck_id);
+      if (!deck) continue;
+      const names = (ids: string[]) => ids.map((id) => nameOfCard.get(id) ?? "a card no longer in the deck").join(", ");
+      const parts = [
+        `${g.played_on} ${g.result === "win" ? "Win" : g.result === "draw" ? "Draw" : "Loss"}`,
+        g.pod_size ? `${g.pod_size} players` : "",
+        g.opponents ? `against ${g.opponents}` : "",
+        g.standouts.length ? `stood out: ${names(g.standouts)}` : "",
+        g.flops.length ? `flopped: ${names(g.flops)}` : "",
+        g.note ? `note: ${g.note}` : "",
+      ].filter(Boolean);
+      (deck.games ??= []).push(parts.join(" · "));
+    }
     for (const r of rows) {
       const deck = byDeck.get(r.deck_id);
       const board = r.board as keyof ExportDeck["boards"];
@@ -104,6 +136,7 @@ export async function GET() {
         cards: t.user_tag_cards.map((c) => c.cards?.name ?? "Unknown card"),
       })),
       wishlist: wish.map((w) => ({ quantity: w.quantity, name: w.cards?.name ?? "Unknown card", foil: w.foil, note: w.note })),
+      packages,
       collection: owned.map((c) => ({
         quantity: c.quantity,
         name: c.cards?.name ?? "Unknown card",
