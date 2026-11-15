@@ -44,9 +44,18 @@ export async function createDeck(formData: FormData) {
     .single();
   if (error) throw new Error(`Couldn't create the deck: ${error.message}`);
 
+  // From a Commander page (V3): the new deck starts with that commander. A bad id only means an empty deck.
+  const commander = String(formData.get("commander") ?? "");
+  if (UUID.test(commander)) {
+    const { error: cardError } = await supabase.from("deck_cards").insert({ deck_id: data.id, oracle_id: commander, board: "commander", quantity: 1 });
+    if (cardError) console.error("Couldn't add the commander", cardError.message);
+  }
+
   revalidatePath("/decks");
   redirect(`/decks/${data.id}`);
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function renameDeck(formData: FormData) {
   const { supabase } = await requireUser();
