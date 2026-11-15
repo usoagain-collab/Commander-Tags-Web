@@ -26,6 +26,7 @@ describe("formatExport", () => {
             updated: "2026-11-01T00:00:00Z",
             boards: { main: [{ quantity: 1, name: "Sol Ring" }], commander: [{ quantity: 1, name: "Omo, Queen of Vesuva" }] },
             notes: [{ name: "Sol Ring", note: "always" }],
+            games: ["2026-11-10 Win · 4 players"],
           },
         ],
         myTags: [{ name: "Pet cards", scope: "all decks", cards: ["Sol Ring"] }],
@@ -38,6 +39,7 @@ describe("formatExport", () => {
     expect(text).toContain("Downloaded 2026-11-09");
     expect(text).toContain("--- Omo ---");
     expect(text).toContain("Folder: Casual");
+    expect(text).toContain("Game log\n2026-11-10 Win · 4 players");
     expect(text.indexOf("Commander\n1 Omo")).toBeLessThan(text.indexOf("Deck\n1 Sol Ring"));
     expect(text).toContain("Pet cards (all decks): Sol Ring");
     expect(text).toContain("1 Mana Crypt (note: someday)");

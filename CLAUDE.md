@@ -266,6 +266,9 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 ## Packages (V3, built Nov 15, 2026; migration 0057)
 - `card_packages` and `card_package_cards` (owner-only RLS). `src/lib/deck/packages.ts` (tested): `packageFromLines` (copies added up, commanders out), `planAddPackage` (one planBulk edit; cards already there go in `already`), `usePackages` (fails quietly before the migration; the panel then says packages aren't switched on).
 - `packages-panel.tsx`, menu › Packages for any signed-in viewer; Add to deck and To maybeboard only on your own deck. `run(plan, cards)` now takes an array of new cards.
+## Game log (V3, built Nov 15, 2026; migration 0058)
+- `deck_games` (date, result win/loss/draw, pod 2-8, opponents and note text, `standouts` and `flops` uuid arrays), owner-only RLS. `src/lib/deck/game-log.ts` (tested): `cleanGame`, `summarize`, `cardRecord`, `useGameLog` (fails quietly before the migration).
+- `game-log-panel.tsx`, menu › Game log for the owner. A flopped card calls `flag_card` once per game, so it shows as a playtest flag. The Smart Cutter doesn't read games yet.
 
 ## Precons (v2, built Nov 8, 2026)
 

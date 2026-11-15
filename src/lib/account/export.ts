@@ -20,6 +20,8 @@ export type ExportDeck = {
   folder?: string | null;
   /** Card notes (V3), listed after the boards so the lists above still paste into Import. */
   notes?: { name: string; note: string }[];
+  /** Game log (V3): one line per game, newest first, already written out. */
+  games?: string[];
 };
 export type ExportData = {
   name: string | null;
@@ -73,6 +75,7 @@ export function formatExport(d: ExportData, now = new Date()): string {
       out.push("", title, ...byName(rows).map(cardLine));
     }
     if (deck.notes?.length) out.push("", "Card notes", ...byName(deck.notes).map((n) => `${n.name}: ${n.note}`));
+    if (deck.games?.length) out.push("", "Game log", ...deck.games);
     out.push("");
   }
 
