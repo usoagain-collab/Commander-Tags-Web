@@ -35,6 +35,8 @@ export type DeckItem = {
   owned?: OwnedMark;
   /** Mixed copies (v2): how many different printings the copies show, when more than one. */
   arts?: number;
+  /** Card notes (V3): your private note on this card, if any. */
+  note?: string;
 };
 export type ViewSection = {
   key: string;
@@ -436,6 +438,11 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
       )}
       {item.untagged && <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">untagged</span>}
       {item.owned && <OwnedBadge owned={item.owned} />}
+      {item.note && (
+        <span title={`Note: ${item.note}`} className="rounded bg-black/80 px-1.5 py-0.5 text-xs text-white">
+          ✎
+        </span>
+      )}
       {item.flags > 0 && (
         <span title={`Flagged as an underperformer ${item.flags}× in playtests`} className="rounded bg-rose-600 px-1.5 py-0.5 text-xs font-semibold text-white">
           ⚑{item.flags}
