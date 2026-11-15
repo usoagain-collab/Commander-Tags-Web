@@ -199,11 +199,6 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - `src/app/settings/roles-setting.tsx`: every standard role (slider, Hide / Show) plus custom roles (slider, Remove, + Add a role from a tag, reusing the exported `AddRole` from `role-profile.tsx`). Saves `profiles.default_role_targets` and `custom_roles` on **Save defaults**, the same values a deck's "Save as my defaults" writes; Tutors has no slider (follows each deck's bracket). Only new decks use them.
 
-## Mana base checkup and Deck health (V3, built Nov 15, 2026)
-
-- Logic `src/lib/deck/mana-checkup.ts` (`landAdvice`: Karsten's 99-card land formula, cheap = nonland, mana value 2 or less, fills Ramp or Card advantage; `enteredTapped` / `tappedLands` from oracle text, land face only, "unless" / "if" in the sentence = sometimes; `rampRisk`) and `src/lib/deck/health.ts` (`deckHealth`, weights in `HEALTH_WEIGHTS`), tested in `mana-checkup.test.ts`.
-- UI: two sections at the top of the Stats grid (`stats-panel.tsx`: `DeckHealth`, `ManaCheckup`). Land oracle text comes from `use-land-text.ts`, a direct read of the public `cards` table. **Set Lands target to N** calls `onSetLandTarget` from the editor (absent on read-only decks). No migration.
-
 ## Reorder the left column (v2, built Nov 8, 2026)
 
 - **Edit targets** (was "Adjust targets", now shared state in the editor) turns on sliders, Hide and dragging for roles and top tags. Drag = `src/lib/ui/use-drag-reorder.ts` (pointer events, whole row is the handle; a mouse drags after 6 px, a finger only after resting 0.4 s on the row, otherwise the touch scrolls (rows are `touch-action: pan-y`; an armed drag stops scrolling with a native non-passive touchmove listener; David, Nov 8, 2026: dragging on a phone was too easy and blocked scrolling); live reorder by `elementFromPoint` over `data-reorder` rows, sliders and `data-no-drag` keep their gestures, the click after a drag is swallowed). Order in `tag_view.roleOrder` / `tagOrder` (`src/lib/tags/order.ts`: `applyOrder`, `moveKey`, `mergeOrder` keeps keys from other decks, capped at 200), used by the role profile, top tags and the narrow rail only; hero, suggestions and Group by Role keep their usual order. **Testing note:** with an emulated viewport the browser tool's drag lands off target (it moved a slider once); test with dispatched PointerEvents, rows scrolled into view.
@@ -212,6 +207,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 
 - Logic `src/lib/deck/land-base.ts` (tested): `planLandBase` fills `target - lands` (MDFCs count). Nonbasics first, up to `NONBASIC_SHARE` of the target minus nonbasics already in the deck (2 colors 35%, 3  50%, 4-5 60%, mono / colorless 0), from candidates most played first that make or fetch 2+ of the deck's colors (`colorsMade`: produced mana plus `tutor-land-<type>` / `tutor-land-basic` tags, since fetch lands make no mana themselves), skipping `restricted-mana` lands, cards already in the deck and anything over the price cap. Then basics: the whole basic count is aimed at the spells' pip split and the new ones go to the colors furthest behind (`splitByWeight`, largest remainder); colorless decks get Wastes. `landBaseChange` = one `Change`.
 - UI `land-base-panel.tsx` (GlassOverlay preview, price cap, Add N lands), opened by **⛰ Auto build** on the Lands row while under target (hover = `landBaseAbout`) or More → Auto build land base. Candidates: `card_summaries` lands in the identity filtered on **`commander_legal`** (filtering on the computed `commander_status` column timed out, 4.4 s vs 0.6 s), top 250 by EDHREC rank, plus `card_tags_for`.
+
+## Mana base checkup and Deck health (V3, built Nov 15, 2026)
+
+- Logic `src/lib/deck/mana-checkup.ts` (`landAdvice`: Karsten's 99-card land formula, cheap = nonland, mana value 2 or less, fills Ramp or Card advantage; `enteredTapped` / `tappedLands` from oracle text, land face only, "unless" / "if" in the sentence = sometimes; `rampRisk`) and `src/lib/deck/health.ts` (`deckHealth`, weights in `HEALTH_WEIGHTS`), tested in `mana-checkup.test.ts`.
+- UI: two sections at the top of the Stats grid (`stats-panel.tsx`: `DeckHealth`, `ManaCheckup`). Land oracle text comes from `use-land-text.ts`, a direct read of the public `cards` table. **Set Lands target to N** calls `onSetLandTarget` from the editor (absent on read-only decks). No migration.
 
 ## Spin the wheel (v2, built Nov 8, 2026)
 
