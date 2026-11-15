@@ -1,6 +1,6 @@
 // The cards a Scryfall search finds, as oracle ids (v2, Nov 8, 2026: Suggest filters). Suggest narrows its pool to
 // these, so the filters can use anything Scryfall knows (first printings, the Reserved List, rules text).
-// Reads up to `maxPages` pages of 175, most played first, about 110 ms apart (Scryfall asks for 10 a second at most).
+// Reads up to `maxPages` pages of 175, most played first, about 550 ms apart (Scryfall allows 2 searches a second).
 
 export type ScryfallIds = {
   ids: string[];
@@ -24,7 +24,7 @@ export async function scryfallOracleIds(query: string, maxPages = 3): Promise<Sc
   let total = 0;
   let warnings: string[] = [];
   for (let page = 0; url && page < maxPages; page++) {
-    if (page) await new Promise((r) => setTimeout(r, 110));
+    if (page) await new Promise((r) => setTimeout(r, 550));
     const res: Response = await fetch(url, { headers: { Accept: "application/json" } });
     const body = await res.json();
     // No results is a 404 on Scryfall.
