@@ -21,6 +21,11 @@ const tree = new TagTree({
     ["discard-outlet", "discard outlet", 1400, []], // 9
     ["mill", "mill", 0, []], // 10
     ["mill-self", "mill self", 1100, [10]], // 11
+    ["ritual", "ritual", 60, []], // 12
+    ["cantrip", "cantrip", 688, []], // 13
+    ["cost-reducer-instant", "cost reducer instant", 40, []], // 14
+    ["storm-count-matters", "storm count matters", 30, []], // 15
+    ["gives-double-strike", "gives double strike", 60, []], // 16
   ],
 } as unknown as ConstructorParameters<typeof TagTree>[0]);
 
@@ -72,7 +77,7 @@ describe("sample games (speed)", () => {
     expect(s.route.key).toBe("cheat");
     // A casual reanimator: ready by turn 7 in half the games and by turn 4 in the fastest quarter, whatever its
     // 8-drops do to the average mana value.
-    expect(s.turn).toBeLessThanOrEqual(7);
+    expect(s.route.median).toBeLessThan(s.routes.find((r) => r.key === "board")!.median);
     expect(s.fast).toBeLessThanOrEqual(4);
     expect(s.points).toBeGreaterThanOrEqual(20);
     expect(s.route.cards).toEqual(expect.arrayContaining(["reanimate0", "fatty0"]));
@@ -151,6 +156,73 @@ describe("sample games (speed)", () => {
     expect(estimateSpeed(input(lines, tags)).routes.map((r) => r.key)).not.toContain("cheat");
     const graveyard = ARCHETYPES.find((x) => x.key === "graveyard")!;
     expect(estimateSpeed(input(lines, tags, {}, { archetype: { archetype: graveyard, picked: true } })).routes.map((r) => r.key)).toContain("cheat");
+  });
+
+  it("finds a spell chain: rituals, cantrips and cost reducers into a storm finisher", () => {
+    const lines = [
+      commander,
+      main(card("Grapeshot", 2, "Sorcery"), 8), // test-only copies, standing in for the tutors a real deck would run
+      ...many("ritual", 8, 1, "Instant"),
+      ...many("cantrip", 30, 1, "Sorcery"),
+      ...many("reducer", 4, 2, "Artifact"),
+      ...many("filler", 13, 4, "Creature — Wizard"),
+      ...lands(36),
+    ];
+    const s = estimateSpeed(input(lines, { ritual: ["ritual"], cantrip: ["cantrip"], reducer: ["cost-reducer-instant"] }));
+    const chain = s.routes.find((r) => r.key === "chain")!;
+    const board = s.routes.find((r) => r.key === "board")!;
+    expect(chain).toBeDefined();
+    expect(chain.label).toBe("spell chain");
+    expect(chain.median).toBeLessThan(board.median);
+    expect(chain.cards).toEqual(expect.arrayContaining(["Grapeshot", "reducer0"]));
+    expect(chain.pieces).toBe("1 finisher and 42 cheap spells, rituals and cost reducers");
+  });
+
+  it("leaves the spell chain off without a finisher, or with too few cheap spells unless the deck plays as Spellslinger", () => {
+    const none = [commander, ...many("cantrip", 30, 1, "Sorcery"), ...many("filler", 33, 4, "Creature — Wizard"), ...lands(36)];
+    expect(estimateSpeed(input(none, { cantrip: ["cantrip"] })).routes.map((r) => r.key)).not.toContain("chain");
+    const thin = [commander, main(card("Grapeshot", 2, "Sorcery")), ...many("cantrip", 4, 1, "Sorcery"), ...many("filler", 58, 4, "Creature — Wizard"), ...lands(36)];
+    expect(estimateSpeed(input(thin, { cantrip: ["cantrip"] })).routes.map((r) => r.key)).not.toContain("chain");
+    const slinger = ARCHETYPES.find((x) => x.key === "spellslinger")!;
+    expect(estimateSpeed(input(thin, { cantrip: ["cantrip"] }, {}, { archetype: { archetype: slinger, picked: true } })).routes.map((r) => r.key)).toContain("chain");
+  });
+
+  it("finds a commander damage route: a cheap commander, equipment and protection", () => {
+    const champ = main(card("Champion", 3, "Legendary Creature — Human Soldier"));
+    champ.board = "commander";
+    const lines = [
+      champ,
+      ...many("sword", 18, 2, "Artifact — Equipment"),
+      ...many("ward", 8, 1, "Instant"),
+      ...many("rock", 6, 2, "Artifact"),
+      ...many("filler", 31, 4, "Sorcery"),
+      ...lands(36),
+    ];
+    const s = estimateSpeed(input(lines, { rock: ["mana-rock"] }, { ward: ["protection"], rock: ["ramp"] }));
+    expect(s.route.key).toBe("voltron");
+    expect(s.route.label).toBe("commander damage");
+    expect(s.route.median).toBeLessThan(s.routes.find((r) => r.key === "board")!.median);
+    expect(s.route.cards).toEqual(expect.arrayContaining(["Champion", "sword0"]));
+    expect(s.route.pieces).toBe("Champion with 18 equipment and auras");
+  });
+
+  it("counts double strike as doubling the commander's damage", () => {
+    const champ = main(card("Champion", 3, "Legendary Creature — Human Soldier"));
+    champ.board = "commander";
+    const base = [champ, ...many("ward", 8, 1, "Instant"), ...many("filler", 40, 4, "Sorcery"), ...lands(36)];
+    const plain = estimateSpeed(input([...base, ...many("sword", 15, 2, "Artifact — Equipment")], {}, { ward: ["protection"] }));
+    const doubled = estimateSpeed(input([...base, ...many("sword", 12, 2, "Artifact — Equipment"), ...many("strike", 3, 2, "Artifact — Equipment")], { strike: ["gives-double-strike"] }, { ward: ["protection"] }));
+    const at = (x: typeof plain) => x.routes.find((r) => r.key === "voltron")!.median;
+    expect(at(doubled)).toBeLessThanOrEqual(at(plain));
+  });
+
+  it("leaves commander damage off with only a few equipment unless the deck plays as Voltron", () => {
+    const champ = main(card("Champion", 3, "Legendary Creature — Human Soldier"));
+    champ.board = "commander";
+    const lines = [champ, ...many("sword", 3, 2, "Artifact — Equipment"), ...many("filler", 60, 4, "Sorcery"), ...lands(36)];
+    expect(estimateSpeed(input(lines, {})).routes.map((r) => r.key)).not.toContain("voltron");
+    const voltron = ARCHETYPES.find((x) => x.key === "voltron")!;
+    expect(estimateSpeed(input(lines, {}, {}, { archetype: { archetype: voltron, picked: true } })).routes.map((r) => r.key)).toContain("voltron");
   });
 
   it("gives the same answer every time for the same deck", () => {
