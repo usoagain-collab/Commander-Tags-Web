@@ -2,8 +2,8 @@
 // 1,000 shuffled sample games, mana and pieces only: one land a turn, ramp cast when it can be, tutors fetch a
 // missing piece. No opponents and no combat. Each game tracks the first turn each of the deck's win routes is
 // ready; the threat turn is the median of the earliest route per game, the fast case the 25th percentile.
-// Routes in this step: two-card combos, cheat or reanimate, and the board (every deck). Spell chains and
-// commander damage come in step 3. Pure logic: the caller hands in the cards with their tags.
+// Routes: two-card combos, cheat or reanimate, spell chains and commander damage (step 3, David, Nov 16, 2026), and
+// the board (every deck). Pure logic: the caller hands in the cards with their tags.
 import type { DeckLine } from "@/lib/deck/model";
 import type { TagTree } from "@/lib/tags/tree";
 import { cheatTargets, type CutterCard } from "@/lib/cutter/archetype";
@@ -11,7 +11,7 @@ import type { Archetype } from "@/lib/cutter/archetypes";
 import { CHEAT_ENABLERS } from "@/lib/cutter/config";
 import type { BracketEstimate } from "./evaluate";
 
-export type RouteKey = "combo" | "cheat" | "board";
+export type RouteKey = "combo" | "cheat" | "chain" | "voltron" | "board";
 
 /** Every tuning number in one place. */
 export const SPEED = {
@@ -34,10 +34,31 @@ export const SPEED = {
   millCount: 3,
   /** With a picked or detected archetype that plays this way, the route turns on with fewer enablers. */
   pickedCheatEnablers: 2,
+  /**
+   * Spell chain (step 3): ready when a finisher is set up (or still being dug for with cantrips, with mana held back to cast it) and this many spells can be cast in one turn (rituals,
+   * cantrips that replace themselves, cost reducers in play). The route turns on with a finisher and at least
+   * `chainPieces` cheap instants and sorceries, rituals and cost reducers, or any finisher when the archetype is
+   * Spellslinger. A rougher estimate than the others: no storm math, just "can it chain".
+   */
+  chainLength: 5,
+  chainPieces: 12,
+  /**
+   * Commander damage (step 3): ready when the commander is out, its equipment and auras let it deal `voltronDamage`
+   * a turn (21 in about three swings) and a protection piece is in play or castable. Cards carry no power, so the
+   * commander counts its mana value as its power (at least 1; most voltron commanders are close) and each equipment or aura `boostPower`; double strike and
+   * an extra combat each double it. Equipment costs `equipCost` more to attach. The route turns on for a creature
+   * commander with at least `voltronBoosts` equipment and auras, or any when the archetype is Voltron.
+   */
+  voltronDamage: 7,
+  voltronBoosts: 8,
+  boostPower: 2,
+  equipCost: 2,
   /** Archetypes whose plan is each route (keys from src/lib/cutter/archetypes.ts). */
   archetypeRoutes: {
     cheat: ["graveyard", "bigcreatures", "eldrazi"],
     combo: ["combo"],
+    chain: ["spellslinger"],
+    voltron: ["voltron"],
   } as Record<Exclude<RouteKey, "board">, string[]>,
 };
 
@@ -74,6 +95,21 @@ export const FAST_MANA: Record<string, { tap?: number; once?: number; cost?: num
   "Skyshroud Claim": { tap: 2 },
 };
 
+/** Spell-chain finishers by name, beside the storm-count-matters tag: storm spells and cast-trigger wins. */
+export const CHAIN_FINISHERS = new Set([
+  "Grapeshot",
+  "Brain Freeze",
+  "Tendrils of Agony",
+  "Empty the Warrens",
+  "Mind's Desire",
+  "Aetherflux Reservoir",
+  "Thousand-Year Storm",
+  "Haze of Rage",
+  "Galvanic Relay",
+  "Temporal Fissure",
+  "Jeskai Ascendancy",
+]);
+
 /** Tags the sample games read. Each includes its subtree; missing slugs are simply ignored (checked in a test). */
 export const SPEED_TAGS = {
   rock: ["mana-rock"],
@@ -87,6 +123,13 @@ export const SPEED_TAGS = {
   toGraveyard: ["tutor-to-graveyard"],
   toBattlefield: ["tutor-to-battlefield"],
   toTop: ["tutor-to-top"],
+  // Step 3: spell chain and commander damage.
+  reducer: ["cost-reducer-instant", "cost-reducer-sorcery", "cost-reducer-instant-sorcery"],
+  untapper: ["untapper"],
+  cantrip: ["cantrip"],
+  chainPayoff: ["storm-count-matters"],
+  doubleStrike: ["gives-double-strike"],
+  extraCombat: ["extra-combat-phase"],
   /** What a tutor can find, by its tag. A tutor with none of these finds any nonland card. */
   finds: [
     ["tutor-creature", "Creature"],
@@ -143,7 +186,13 @@ export type SpeedInput = {
   archetype?: { archetype: Archetype; picked: boolean } | null;
 };
 
-export const ROUTE_LABELS: Record<RouteKey, string> = { combo: "two-card combo", cheat: "cheat or reanimate", board: "board" };
+export const ROUTE_LABELS: Record<RouteKey, string> = {
+  combo: "two-card combo",
+  cheat: "cheat or reanimate",
+  chain: "spell chain",
+  voltron: "commander damage",
+  board: "board",
+};
 
 /** Speed points for a threat turn. */
 export const speedPoints = (turn: number) => {
@@ -186,6 +235,19 @@ type Kind = {
   /** Mana it adds to the board route (0 = not a threat). */
   threat: number;
   commander: boolean;
+  /** An instant or sorcery (front face): the spell chain's fuel. */
+  spell: boolean;
+  /** Makes instants and sorceries cost 1 less once in play. */
+  reducer: boolean;
+  /** Draws a card when cast, so it replaces itself in a chain. */
+  cantrip: boolean;
+  /** A spell-chain finisher (storm spell or cast-trigger win). */
+  chainPayoff: boolean;
+  /** Equipment or a non-removal aura: power for the commander. */
+  boost: boolean;
+  doubleStrike: boolean;
+  extraCombat: boolean;
+  protection: boolean;
 };
 
 const front = (typeLine: string) => typeLine.split(" // ")[0];
@@ -219,7 +281,7 @@ function kindsOf(input: SpeedInput, payoffs: Set<string>): Kind[] {
     let sick = 0;
     let once = !land && known.once !== undefined ? known.once - (known.cost ?? c.mana_value) : 0;
     if (!land && !tap && !once) {
-      if (ritual) once = 1;
+      if (ritual || has(tags, sets.untapper)) once = 1;
       else if (ramp) {
         tap = 1;
         // Rocks make mana the turn they land; dorks, land ramp and the rest from the next turn.
@@ -263,6 +325,14 @@ function kindsOf(input: SpeedInput, payoffs: Set<string>): Kind[] {
       engine: drawCard && !threatType && permanent,
       threat: !land && (creature || /\bPlaneswalker\b/.test(type) || has(tags, sets.tokens)) ? SPEED.threatBase + c.mana_value / 2 : 0,
       commander: l.board === "commander",
+      spell: !land && !permanent,
+      reducer: !land && permanent && has(tags, sets.reducer),
+      cantrip: !land && has(tags, sets.cantrip),
+      chainPayoff: !land && (CHAIN_FINISHERS.has(c.name) || has(tags, sets.chainPayoff)),
+      boost: !land && (/\bEquipment\b/.test(type) || (/\bAura\b/.test(type) && !roles.includes("removal"))),
+      doubleStrike: !land && has(tags, sets.doubleStrike),
+      extraCombat: !land && has(tags, sets.extraCombat),
+      protection: !land && roles.includes("protection"),
     };
   });
 }
@@ -334,6 +404,16 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
   const routes: RouteKey[] = ["board"];
   if (combos.length) routes.unshift("combo");
   if (cheat.targets.size && enablers.length) routes.unshift("cheat");
+  // Spell chain: a finisher plus enough cheap spells, rituals and cost reducers (any finisher for Spellslinger).
+  const copies = (k: Kind) => input.lines[kinds.indexOf(k)].quantity;
+  const finishers = kinds.filter((k) => k.chainPayoff);
+  const chainFuel = kinds.filter((k) => !k.chainPayoff && ((k.spell && k.cost <= 2) || k.reducer || k.once > 0)).reduce((n, k) => n + copies(k), 0);
+  if (finishers.length && (chainFuel >= SPEED.chainPieces || calls("chain"))) routes.unshift("chain");
+  // Commander damage: a creature commander with enough equipment and auras (any for Voltron).
+  const champion = kinds.findIndex((k) => k.commander && k.creature);
+  const boosts = kinds.filter((k) => k.boost || ((k.doubleStrike || k.extraCombat) && !k.creature));
+  const boostCount = boosts.reduce((n, k) => n + copies(k), 0);
+  if (champion >= 0 && boostCount && (boostCount >= SPEED.voltronBoosts || calls("voltron"))) routes.unshift("voltron");
 
   const reanimates = enablers.some((k) => k.reanimator);
   const sneaks = enablers.some((k) => !k.reanimator);
@@ -344,9 +424,9 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
   });
 
   const rand = mulberry32(hash(key));
-  const ready: Record<RouteKey, number[]> = { combo: [], cheat: [], board: [] };
+  const ready: Record<RouteKey, number[]> = { combo: [], cheat: [], chain: [], voltron: [], board: [] };
   const earliest: number[] = [];
-  const firstCount: Record<RouteKey, number> = { combo: 0, cheat: 0, board: 0 };
+  const firstCount: Record<RouteKey, number> = { combo: 0, cheat: 0, chain: 0, voltron: 0, board: 0 };
   const never = SPEED.maxTurn + 1;
 
   for (let g = 0; g < SPEED.games; g++) {
@@ -375,7 +455,9 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
     let threat = 0;
     let pressure = 0;
     let engines = 0;
-    const done: Record<RouteKey, number> = { combo: never, cheat: never, board: never };
+    let boostPower = 0;
+    let doubled = 0; // double strike and extra combats in play, each doubling the commander's damage
+    const done: Record<RouteKey, number> = { combo: never, cheat: never, chain: never, voltron: never, board: never };
 
     const take = (from: number[], i: number) => {
       const at = from.indexOf(i);
@@ -411,7 +493,63 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
         });
         if (ok) done.cheat = turn;
       }
+      if (done.chain === never && routes.includes("chain") && chainReady(mana)) done.chain = turn;
+      if (done.voltron === never && routes.includes("voltron") && voltronReady(mana)) done.voltron = turn;
       if (done.board === never && pressure >= SPEED.boardPressure) done.board = turn;
+    };
+
+    /** Instants and sorceries cost 1 less per cost reducer in play, never below 1 (colored mana stays). */
+    const spellCost = (i: number) => {
+      const reducers = [...inPlay].filter((x) => kinds[x].reducer).length;
+      const k = kinds[i];
+      return k.spell && k.cost > 0 ? Math.max(1, k.cost - reducers) : k.cost;
+    };
+    /** Could the deck chain enough spells this turn into a finisher? Rituals first, then cheapest; cantrips draw. */
+    const chainReady = (mana: number) => {
+      const permFinisher = [...inPlay].some((i) => kinds[i].chainPayoff);
+      let spellFinisher: number | undefined = hand.filter((i) => kinds[i].chainPayoff && kinds[i].spell).sort((a, b) => spellCost(a) - spellCost(b))[0];
+      // With no finisher yet, the chain can still dig for one with cantrips.
+      if (!permFinisher && spellFinisher === undefined && !hand.some((i) => kinds[i].cantrip)) return false;
+      let m = mana + hand.filter((i) => !kinds[i].spell && kinds[i].once > 0).reduce((n, i) => n + kinds[i].once, 0);
+      const pool = hand.filter((i) => kinds[i].spell && i !== spellFinisher);
+      let top = 0;
+      let count = 0;
+      // Mana held back for the finisher (a typical 2 while it's still being dug for).
+      const reserve = () => (permFinisher ? 0 : spellFinisher !== undefined ? spellCost(spellFinisher) : 2);
+      for (;;) {
+        const ritual = pool.filter((i) => kinds[i].once > 0 && spellCost(i) <= m).sort((a, b) => kinds[b].once - kinds[a].once)[0];
+        const next = ritual ?? pool.filter((i) => spellCost(i) <= m - reserve()).sort((a, b) => spellCost(a) - spellCost(b))[0];
+        if (next === undefined) break;
+        pool.splice(pool.indexOf(next), 1);
+        m += kinds[next].once + (kinds[next].once > 0 ? kinds[next].cost : 0) - spellCost(next);
+        count += 1;
+        if (kinds[next].cantrip && top < lib.length) {
+          const drawn = lib[top++];
+          if (kinds[drawn].chainPayoff && kinds[drawn].spell && spellFinisher === undefined) spellFinisher = drawn;
+          else if (kinds[drawn].spell) pool.push(drawn);
+        }
+      }
+      return count >= SPEED.chainLength && (permFinisher || (spellFinisher !== undefined && reserve() <= m));
+    };
+    /** Is the commander out, strong enough to kill in about three swings, and protected? */
+    const voltronReady = (mana: number) => {
+      if (!inPlay.has(champion)) return false;
+      const base = Math.max(1, kinds[champion].mv);
+      let m = mana;
+      // An instant that grants double strike or an extra combat, castable now, counts too.
+      const trick = doubled ? undefined : hand.find((i) => !kinds[i].permanent && (kinds[i].doubleStrike || kinds[i].extraCombat) && kinds[i].cost <= m);
+      if (trick !== undefined) m -= kinds[trick].cost;
+      const damage = (base + boostPower) * 2 ** Math.min(2, doubled + (trick !== undefined ? 1 : 0));
+      const shielded = [...inPlay].some((i) => kinds[i].protection) || hand.some((i) => kinds[i].protection && kinds[i].cost <= m);
+      return damage >= SPEED.voltronDamage && shielded;
+    };
+    /** Puts a permanent from hand into play: cost paid, threat added, chain and voltron effects tracked. */
+    const cast = (i: number, extra = 0) => {
+      take(hand, i);
+      inPlay.add(i);
+      if (kinds[i].boost) boostPower += SPEED.boostPower;
+      if (kinds[i].doubleStrike || kinds[i].extraCombat) doubled += 1;
+      return kinds[i].cost + extra;
     };
 
     /** Cards a tutor could usefully find right now, most useful first: a combo piece, or a cheat piece. */
@@ -428,6 +566,10 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
         if (!payoffReady) out.push(...lib.filter((i) => kinds[i].payoff));
         if (!enablerIn) out.push(...lib.filter((i) => kinds[i].reanimator || kinds[i].sneak));
       }
+      // A spell-chain finisher when none is in hand or play; a protection piece for a commander that's out.
+      if (done.chain === never && routes.includes("chain") && ![...hand, ...inPlay].some((i) => kinds[i].chainPayoff)) out.push(...lib.filter((i) => kinds[i].chainPayoff));
+      if (done.voltron === never && routes.includes("voltron") && inPlay.has(champion) && ![...hand, ...inPlay].some((i) => kinds[i].protection))
+        out.push(...lib.filter((i) => kinds[i].protection));
       return out;
     };
 
@@ -460,6 +602,24 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
         }
       }
       check(turn, mana);
+
+      // Commander damage: the commander goes down as soon as it can, then its equipment and auras, cheapest first.
+      if (routes.includes("voltron") && done.voltron === never) {
+        if (zone.has(champion) && kinds[champion].cost <= mana) {
+          zone.delete(champion);
+          inPlay.add(champion);
+          mana -= kinds[champion].cost;
+          threat += kinds[champion].threat;
+        }
+        if (inPlay.has(champion)) {
+          for (const i of hand.filter((x) => kinds[x].permanent && (kinds[x].boost || kinds[x].doubleStrike || kinds[x].extraCombat)).sort((a, b) => kinds[a].cost - kinds[b].cost)) {
+            const extra = /\bEquipment\b/.test(kinds[i].type) ? SPEED.equipCost : 0;
+            if (kinds[i].cost + extra > mana) continue;
+            mana -= cast(i, extra);
+          }
+        }
+        check(turn, mana);
+      }
 
       // Tutors fetch a missing piece.
       for (let n = 0; n < 2; n++) {
@@ -503,6 +663,16 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
       // Digging: while a combo or cheat route is still missing pieces, cheap draw spells come before threats.
       if ((routes.includes("combo") && done.combo === never) || (routes.includes("cheat") && done.cheat === never)) {
         mana = castDraw(hand.filter((x) => kinds[x].draw), mana);
+        check(turn, mana);
+      }
+
+      // Spell chain: cost reducers and permanent finishers (Aetherflux Reservoir) go down before threats.
+      if (routes.includes("chain") && done.chain === never) {
+        for (const i of hand.filter((x) => kinds[x].permanent && (kinds[x].reducer || kinds[x].chainPayoff)).sort((a, b) => kinds[a].cost - kinds[b].cost)) {
+          if (kinds[i].cost > mana) continue;
+          mana -= cast(i);
+          if (kinds[i].creature) threat += kinds[i].threat;
+        }
         check(turn, mana);
       }
 
@@ -580,13 +750,21 @@ export function estimateSpeed(input: SpeedInput): SpeedEstimate {
         ? [...new Set(combos.flatMap((c) => c.pieces.map((i) => kinds[i].id)))]
         : r === "cheat"
           ? [...enablerIds, ...[...cheat.targets].filter((id) => !enablerIds.has(id))]
-          : [],
+          : r === "chain"
+            ? [...new Set([...finishers, ...kinds.filter((k) => k.reducer)].map((k) => k.id))]
+            : r === "voltron"
+              ? [...new Set([kinds[champion], ...boosts].map((k) => k.id))]
+              : [],
     pieces:
       r === "combo"
         ? `${combos.length} two-card ${combos.length === 1 ? "combo" : "combos"}`
         : r === "cheat"
           ? `${enablers.length} ${enablers.length === 1 ? "enabler" : "enablers"} and ${cheat.targets.size} ${cheat.targets.size === 1 ? "payoff" : "payoffs"} at mana value 6+`
-          : "creatures, planeswalkers and token makers",
+          : r === "chain"
+            ? `${finishers.length} ${finishers.length === 1 ? "finisher" : "finishers"} and ${chainFuel} cheap spells, rituals and cost reducers`
+            : r === "voltron"
+              ? `${input.lines[champion].card.name} with ${boostCount} equipment and auras`
+              : "creatures, planeswalkers and token makers",
   }));
   const route = routeOut.slice().sort((a, b) => b.first - a.first || a.median - b.median)[0];
   const turn = quantile(earliest, 0.5);

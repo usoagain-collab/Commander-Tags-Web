@@ -345,7 +345,7 @@ function speedPart(speed: SpeedEstimate | null): PowerPart {
   const max = SPEED.points.max;
   if (!speed) return { key: "speed", label: "Speed", points: 0, max, detail: "Not checked yet (the tag tree is still loading)", cards: [] };
   const r = speed.route;
-  const by = r.key === "board" ? "by building a board" : `through a ${r.label} (${r.pieces})`;
+  const by = r.key === "board" ? "by building a board" : `through ${r.key === "voltron" ? "" : "a "}${r.label} (${r.pieces})`;
   const detail =
     speed.turn > SPEED.maxTurn
       ? `No win route ready by turn ${SPEED.maxTurn} in ${speed.games.toLocaleString("en-US")} sample games`
