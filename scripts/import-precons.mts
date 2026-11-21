@@ -148,11 +148,12 @@ try {
         collector: isCollectorEdition(entry.name),
         hash,
       };
+      // owner_id is reset on conflict too, so a precon always ends up under the Precons account (migration 0065).
       const { rows: saved } = await client.query<{ id: string }>(
         `insert into public.decks (owner_id, name, visibility, target_bracket, precon, cover_oracle_id)
          values ($1, $2, 'public', 2, $3, $4)
          on conflict ((precon->>'file')) where precon is not null
-         do update set name = excluded.name, precon = excluded.precon, cover_oracle_id = excluded.cover_oracle_id, visibility = 'public'
+         do update set owner_id = excluded.owner_id, name = excluded.name, precon = excluded.precon, cover_oracle_id = excluded.cover_oracle_id, visibility = 'public'
          returning id`,
         [owner, entry.name.slice(0, 120), precon, commander.oracle_id],
       );
