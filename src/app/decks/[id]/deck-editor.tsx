@@ -44,7 +44,6 @@ import {
   buildRoleDefs,
   customKey,
   hiddenRoleKeys,
-  roleCounts,
   roleStatus,
   TUTORS_KEY,
   withoutBracketTargets,
@@ -701,7 +700,21 @@ export function DeckEditor({
     (card: Parameters<typeof rolesOf>[0], slugs: string[] | undefined) => rolesOf(card, slugs, allRoles).filter((k) => !hiddenRoles.has(k)),
     [allRoles, hiddenRoles],
   );
-  const roleKeysOf = useCallback((card: CardSummary) => visibleRoleKeys(card, tags.oracleTags[card.oracle_id]), [tags.oracleTags, visibleRoleKeys]);
+  // Remembered per card until the tags or roles change: the editor redraws on every hover, and each redraw asks for
+  // every card's roles several times (bars, genome strip, highlight, badges, archetype). rolesOf reads only the card's
+  // type line and land flag, which are the same for every printing, so the oracle id is a safe key.
+  // Callers must not change the returned array, since it is shared.
+  const roleKeysOf = useMemo(() => {
+    const known = new Map<string, string[]>();
+    return (card: CardSummary) => {
+      let keys = known.get(card.oracle_id);
+      if (!keys) {
+        keys = visibleRoleKeys(card, tags.oracleTags[card.oracle_id]);
+        known.set(card.oracle_id, keys);
+      }
+      return keys;
+    };
+  }, [tags.oracleTags, visibleRoleKeys]);
   /** Roles a deck row counts toward: its manual category when set (step 3f), otherwise its tags. */
   const lineRoleKeys = (l: DeckLine) => {
     const c = categories[entryKey(l.board, l.card.oracle_id)];
@@ -826,13 +839,21 @@ export function DeckEditor({
   };
   // Role counts cover the 100-card deck: commander(s) plus mainboard.
   const commanderWording = useCommanderWording(commanders.map((l) => l.card));
-  const counts = roleCounts([...commanders, ...mainLines], lineRoleKeys);
   // Design refresh (option E): the genome strip in the banner, one stripe per card under the first role it fills.
+  // Worked out in the same pass as the role counts, so each card's roles are looked up once per redraw.
+  const counts: Record<string, number> = {};
   const genomeGroups: GenomeGroup[] = (() => {
+    const order = new Map(roles.map((r, i) => [r.key, i]));
     const byKey = new Map<string, number>();
     for (const l of [...commanders, ...mainLines]) {
-      const keys = lineRoleKeys(l);
-      const key = roles.find((r) => keys.includes(r.key))?.key ?? "other";
+      let first: string | null = null;
+      let firstAt = Infinity;
+      for (const k of lineRoleKeys(l)) {
+        counts[k] = (counts[k] ?? 0) + l.quantity;
+        const at = order.get(k);
+        if (at !== undefined && at < firstAt) [first, firstAt] = [k, at];
+      }
+      const key = first ?? "other";
       byKey.set(key, (byKey.get(key) ?? 0) + l.quantity);
     }
     return [
