@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCheckinEmail, checkinLinks, checkinSecret, checkLink, cleanAnswer, isMonth, monthKey, monthName, pickRecipients, siteOrigin, signLink, summarize } from "./checkin";
+import { buildCheckinEmail, checkinLinks, checkinSecret, checkLink, cleanAnswer, isMonth, monthKey, monthName, pickRecipients, previousMonth, siteOrigin, signLink, summarize } from "./checkin";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -42,6 +42,20 @@ describe("signed links", () => {
     expect(await checkLink(undefined, "answer", A, t)).toBeNull();
     expect(await checkLink("s3cret", "answer", "not-an-id", t)).toBeNull();
     expect(await checkLink("s3cret", "answer", A, "")).toBeNull();
+  });
+  it("answer links work the month they were sent and the next, stop links forever", async () => {
+    const nov = new Date("2026-11-20T12:00:00Z");
+    const t = await signLink("s3cret", "answer", A, "2026-11");
+    expect(t.startsWith("2026-11.")).toBe(true);
+    expect(await checkLink("s3cret", "answer", A, t, nov)).toBe(A);
+    expect(await checkLink("s3cret", "answer", A, t, new Date("2026-12-20T12:00:00Z"))).toBe(A);
+    expect(await checkLink("s3cret", "answer", A, t, new Date("2027-01-20T12:00:00Z"))).toBeNull();
+    // Changing the month in the link breaks the signature.
+    expect(await checkLink("s3cret", "answer", A, t.replace("2026-11", "2026-12"), new Date("2026-12-20T12:00:00Z"))).toBeNull();
+    const stop = await signLink("s3cret", "stop", A);
+    expect(await checkLink("s3cret", "stop", A, stop, new Date("2030-06-01T12:00:00Z"))).toBe(A);
+    expect(previousMonth("2027-01")).toBe("2026-12");
+    expect(previousMonth("2026-11")).toBe("2026-10");
   });
   it("picks the secret and the site", () => {
     expect(checkinSecret({ CHECKIN_SECRET: "a", SUPABASE_SERVICE_ROLE_KEY: "b" })).toBe("a");
