@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { GenomeStrip } from "@/components/genome-strip";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Folder } from "@/lib/decks/folders";
@@ -98,9 +99,22 @@ export function DeckRow({ deck, folders }: { deck: DeckTile; folders?: Folder[] 
         )}
       </div>
 
-      <span aria-hidden className="mx-4 mb-3 block h-1 overflow-hidden rounded-full bg-foreground/10">
-        <span className={`block h-full ${deck.card_count === 100 ? "bg-green-400" : "bg-gold"}`} style={{ width: `${Math.min(100, deck.card_count)}%` }} />
-      </span>
+      {/* Design refresh (option E): the progress bar as a 100-slot genome strip. Role colors would need each card's tags,
+          which this page doesn't load, so the stripes show how full the deck is. */}
+      <div aria-hidden className="mx-4 mb-3">
+        <GenomeStrip
+          height={6}
+          slots={100}
+          groups={[
+            {
+              key: "cards",
+              label: "Cards",
+              color: deck.card_count === 100 ? "var(--color-green-400)" : "var(--gold)",
+              count: Math.min(100, deck.card_count),
+            },
+          ]}
+        />
+      </div>
 
       {drop.status && (
         <p
