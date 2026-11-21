@@ -1644,8 +1644,9 @@ export function DeckEditor({
               </button>
             )}
             {!ownerOnly && !guest && (
-              <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Share a read-only link">
-                ↗ Share{visibility !== "private" && <span className="text-xs opacity-75">({visibility === "public" ? "public" : "link"})</span>}
+              <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Public or private, and the deck's link">
+                {/* Always says who can see it (Nov 21, 2026): "Share" alone hid where to make a deck public. */}
+                ↗ Share <span className="text-xs opacity-75">· {visibility === "public" ? "Public" : visibility === "unlisted" ? "Link only" : "Private"}</span>
               </HeaderButton>
             )}
             <MoreMenu

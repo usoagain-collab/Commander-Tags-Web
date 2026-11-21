@@ -108,7 +108,7 @@ export const GUIDE_STEPS: GuideStep[] = [
     id: "share",
     title: "11. Share it and keep it",
     points: [
-      "↗ Share picks who can open the deck: Private, Anyone with the link, or Public. Others can look but never change it.",
+      "New decks are public: anyone can find them in Browse. ↗ Share (or the switch on each My decks tile) makes one Private or link-only. Others can look but never change it.",
       "More › History keeps versions as you edit, so you can see what changed and restore an older list.",
       "More › Compare with another deck puts it beside your other decks or a precon, and Similar decks finds public decks with the same commander.",
       "More › Export gives a list to paste anywhere, and Make a copy gives you a second deck to try ideas in without touching this one. Take the quick tour shows the short walkthrough again.",

@@ -43,7 +43,7 @@ export default function PrivacyPage() {
         </Section>
         <Section title="Who can see your decks">
           <p>
-            New decks are private. You choose per deck whether anyone with the link can open it, or whether it is public. A shared deck shows
+            New decks are public, so anyone can find and open them (read-only). One tap on My decks or under Share makes a deck private, or visible only to people with its link. A shared deck shows
             your name and picture as its builder.
           </p>
         </Section>

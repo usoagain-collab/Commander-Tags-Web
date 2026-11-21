@@ -4,6 +4,9 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import { ArtCredit } from "@/components/art-credit";
 import { GenomeStrip, type GenomeGroup } from "@/components/genome-strip";
 import { roleColor } from "@/lib/tags/pretty";
+import { recentPublicDecks } from "@/lib/browse/cached";
+import { PublicDeckTile } from "@/components/public-deck-tile";
+import type { DeckTile } from "@/lib/browse/public-decks";
 
 // Design refresh (option E, Nov 20, 2026): the landing page from the design canvas. The hero shows an example deck's
 // genome and role counts, so a visitor sees what the builder does before signing up.
@@ -54,7 +57,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const { deleted } = await searchParams;
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
   // The two most-played commanders make the fanned cards, so the page changes as the format does.
-  const [{ data }, { data: picks }] = await Promise.all([
+  // Fresh public decks (Nov 21, 2026) sit right under the hero, so a visitor sees people building here. A failed
+  // read only hides the row.
+  const [{ data }, { data: picks }, recent] = await Promise.all([
     supabase
       .from("card_summaries")
       .select("oracle_id, name, image_art_crop, artist")
@@ -70,6 +75,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         "name",
         SAMPLE_PICKS.map((p) => p.name),
       ),
+    recentPublicDecks().catch((e): DeckTile[] => {
+      console.error("home: public decks failed", e);
+      return [];
+    }),
   ]);
   const art = (data ?? []) as { oracle_id: string; name: string; image_art_crop: string; artist: string | null }[];
   const pickImage = new Map(((picks ?? []) as { name: string; image_normal: string | null }[]).map((p) => [p.name, p.image_normal]));
@@ -148,6 +157,27 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
           {art.length > 0 && <ArtCredit artists={art.map((c) => c.artist)} className="mt-2" />}
         </div>
       </section>
+
+      {recent.length > 0 && (
+        <section aria-labelledby="fresh-decks" className="mx-auto max-w-[1280px] px-6 pb-16">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <p className="eyebrow !text-gold">From the community</p>
+              <h2 id="fresh-decks" className="display mt-2 text-3xl sm:text-4xl">
+                Fresh decks
+              </h2>
+            </div>
+            <Link href="/browse" className="btn min-h-11 px-5">
+              Browse all decks →
+            </Link>
+          </div>
+          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {recent.map((d) => (
+              <PublicDeckTile key={d.id} deck={d} showAge />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="border-y border-line bg-panel">
         <div className="mx-auto grid max-w-[1280px] gap-10 px-6 py-16 sm:grid-cols-3">

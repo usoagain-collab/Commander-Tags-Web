@@ -2,32 +2,16 @@
 // Precons have their own page, so they are left out unless asked for. Read signed out (no cookies) and kept for
 // five minutes per search, like the precons list. No migration: public decks are already readable by anyone.
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { ManaSymbol } from "@/components/mana-cost";
-import { ArtCredit } from "@/components/art-credit";
 import { BRACKETS } from "@/lib/brackets/rules";
-import { browseHref, commandersNamed, loadPublicDecks, parseBrowseQuery, type BrowseQuery, type DeckTile } from "@/lib/browse/public-decks";
+import { browseHref, parseBrowseQuery } from "@/lib/browse/public-decks";
+import { searchPublicDecks as search } from "@/lib/browse/cached";
+import { PublicDeckTile } from "@/components/public-deck-tile";
 
 export const metadata = {
   title: "Browse Commander decks · Deck Genome",
   description: "Find public Commander decks by commander, colors and bracket, and see how each one is built.",
 };
-
-const anon = () =>
-  createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-const search = unstable_cache(
-  async (query: BrowseQuery) => {
-    const supabase = anon();
-    const ids = query.q ? await commandersNamed(supabase, query.q) : null;
-    return loadPublicDecks(supabase, query, ids);
-  },
-  ["browse-decks"],
-  { revalidate: 300, tags: ["browse"] },
-);
 
 export default async function BrowsePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const query = parseBrowseQuery(await searchParams);
@@ -101,7 +85,7 @@ export default async function BrowsePage({ searchParams }: { searchParams: Promi
         <>
           <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {result.decks.map((d) => (
-              <Tile key={d.id} deck={d} />
+              <PublicDeckTile key={d.id} deck={d} showAge />
             ))}
           </ul>
           <nav aria-label="Pages" className="mt-6 flex justify-between text-sm">
@@ -121,43 +105,5 @@ export default async function BrowsePage({ searchParams }: { searchParams: Promi
         </>
       )}
     </main>
-  );
-}
-
-function Tile({ deck }: { deck: DeckTile }) {
-  const art = deck.commanders.find((c) => c.art);
-  const bracket = BRACKETS.find((b) => b.n === deck.bracket);
-  return (
-    <li className="panel overflow-hidden">
-      <Link href={`/decks/${deck.id}`} className="block hover:opacity-90">
-        <div className="relative aspect-[16/9] bg-foreground/10">
-          {art?.art && <img src={art.art} alt="" className="h-full w-full object-cover" loading="lazy" />}
-        </div>
-        <div className="p-3">
-          <p className="font-medium">{deck.name}</p>
-          <p className="mt-1 flex items-center gap-2 text-xs opacity-70">
-            <span className="flex gap-0.5">
-              {(deck.identity.length ? deck.identity : ["C"]).map((c) => (
-                <ManaSymbol key={c} symbol={c} size={14} />
-              ))}
-            </span>
-            {bracket && <span>Bracket {bracket.n}</span>}
-            {deck.precon && <span>Precon</span>}
-            {deck.needsHelp && <span className="rounded bg-gold px-1.5 text-gold-ink">Wants feedback</span>}
-          </p>
-        </div>
-      </Link>
-      <p className="px-3 pb-1 text-sm opacity-80">
-        {deck.commanders.map((c, i) => (
-          <span key={c.oracle_id}>
-            {i > 0 && " & "}
-            <Link href={`/commanders/${c.oracle_id}`} className="hover:underline">
-              {c.name}
-            </Link>
-          </span>
-        ))}
-      </p>
-      {art?.art && <ArtCredit artists={[art.artist]} className="px-3 pb-2 text-[11px] opacity-60" />}
-    </li>
   );
 }

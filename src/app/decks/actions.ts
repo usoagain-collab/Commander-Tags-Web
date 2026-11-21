@@ -2,7 +2,7 @@
 
 // Server actions for the "My decks" page. They run on the server as the signed-in user,
 // so row-level security still decides what each one may touch.
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_ROLE_TARGETS } from "@/lib/roles";
@@ -41,6 +41,9 @@ export async function createDeck(formData: FormData) {
     .insert({
       name,
       target_bracket,
+      // Public by default (David, Nov 21, 2026), so Browse and the home page show what people build. One tap on
+      // My decks or Share makes it private. Set here rather than as a column default, so no migration is needed.
+      visibility: "public",
       ...(folder_id ? { folder_id } : {}),
       // No Tutors number: a new deck follows its bracket for that one.
       role_targets: withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...(profile?.default_role_targets ?? {}) }),
@@ -91,7 +94,7 @@ type SharedRow = {
 };
 
 /**
- * Copy to my decks (v2): a private copy of any deck you can open (yours, unlisted or public), with its cards,
+ * Copy to my decks (v2): a copy (public, like every new deck) of any deck you can open (yours, unlisted or public), with its cards,
  * printings, categories, role targets and bracket. My tags, flags and suggestion settings stay with the original.
  * shared_deck decides what you may read, so a private deck of someone else can't be copied.
  */
@@ -112,6 +115,7 @@ export async function copyDeck(id: string) {
     .from("decks")
     .insert({
       name,
+      visibility: "public",
       target_bracket: src.target_bracket ?? 3,
       role_targets: src.role_targets ?? {},
       custom_roles: src.custom_roles ?? [],
@@ -157,4 +161,25 @@ export async function joinCobuild(formData: FormData) {
   const { data, error } = await supabase.rpc("join_cobuild", { p_code: code });
   if (error) redirect(`/decks/cobuild/${encodeURIComponent(code)}?error=${encodeURIComponent(cobuildError(error.message, "Couldn't join this deck."))}`);
   redirect(`/decks/${data as string}`);
+}
+
+/**
+ * Public / private switch on My decks (Nov 21, 2026). Row-level security keeps it to the owner's own decks; the
+ * update asks for the row back so a deck that isn't yours says so instead of silently doing nothing.
+ */
+export async function setDeckVisibility(id: string, visibility: "private" | "unlisted" | "public"): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in first." };
+  if (!UUID.test(id) || !["private", "unlisted", "public"].includes(visibility)) return { error: "That deck wasn't found." };
+  const { data, error } = await supabase.from("decks").update({ visibility }).eq("id", id).eq("owner_id", user.id).select("id");
+  if (error) return { error: `Couldn't save: ${error.message}` };
+  if (!data?.length) return { error: "That deck wasn't found." };
+  // The deck page itself is never cached, so it isn't refreshed here (that would re-render an open editor).
+  revalidatePath("/decks");
+  // Browse and the home page cache public decks for five minutes; a deck made public shows there straight away.
+  revalidateTag("browse");
+  return { ok: true };
 }

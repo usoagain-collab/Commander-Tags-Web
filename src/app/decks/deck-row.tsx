@@ -8,7 +8,7 @@ import type { Folder } from "@/lib/decks/folders";
 import { moveDeckToFolder } from "./folder-actions";
 import { ManaSymbol } from "@/components/mana-cost";
 import { ArtCredit } from "@/components/art-credit";
-import { deleteDeck, renameDeck } from "./actions";
+import { deleteDeck, renameDeck, setDeckVisibility } from "./actions";
 import { useDeckDrop } from "./use-deck-drop";
 
 export type DeckTile = {
@@ -23,6 +23,8 @@ export type DeckTile = {
   identity: string[];
   /** Folders (V3): the deck's folder, or null for none. */
   folder_id?: string | null;
+  /** Who can open it: the tile's Public / Private switch. */
+  visibility?: "private" | "unlisted" | "public";
 };
 
 /** "3 days ago": easier to take in than a full date. */
@@ -45,6 +47,9 @@ export function DeckRow({ deck, folders }: { deck: DeckTile; folders?: Folder[] 
   const [moving, startMove] = useTransition();
   const [moveError, setMoveError] = useState<string | null>(null);
   const [renameNote, setRenameNote] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState(deck.visibility ?? "private");
+  const [visError, setVisError] = useState<string | null>(null);
+  const [savingVis, startVis] = useTransition();
   const drop = useDeckDrop(deck.id);
   const pips = WUBRG.filter((c) => deck.identity.includes(c));
 
@@ -97,6 +102,42 @@ export function DeckRow({ deck, folders }: { deck: DeckTile; folders?: Folder[] 
             </button>
           </span>
         )}
+      </div>
+
+      {/* Public / private in one tap (Nov 21, 2026). "Link only" (unlisted) is still picked under Share on the deck page;
+          from here a tap makes it public. Its own row, so it never squeezes Rename and Delete. */}
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-2 text-sm">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={visibility === "public"}
+          disabled={savingVis}
+          onClick={() => {
+            const before = visibility;
+            const to = visibility === "public" ? "private" : "public";
+            setVisibility(to);
+            startVis(async () => {
+              const res = await setDeckVisibility(deck.id, to);
+              if ("error" in res) {
+                setVisibility(before);
+                setVisError(res.error);
+              } else setVisError(null);
+            });
+          }}
+          title={visibility === "public" ? "Anyone can find and open this deck. Tap to make it private." : "Tap to make this deck public, so others can find it in Browse."}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3 ${
+            visibility === "public" ? "border-gold/60 bg-gold/15 text-gold" : "border-foreground/20 opacity-85 hover:bg-foreground/10"
+          }`}
+        >
+          <span aria-hidden className={`relative h-4 w-7 rounded-full transition-colors ${visibility === "public" ? "bg-gold" : "bg-foreground/25"}`}>
+            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-background transition-all ${visibility === "public" ? "left-3.5" : "left-0.5"}`} />
+          </span>
+          {visibility === "public" ? "Public" : visibility === "unlisted" ? "Link only" : "Private"}
+        </button>
+        <span className="text-xs opacity-65">
+          {visibility === "public" ? "Shown in Browse" : visibility === "unlisted" ? "Only people with the link" : "Only you"}
+        </span>
+        {visError && <p role="alert" className="basis-full text-amber-400">{visError}</p>}
       </div>
 
       {/* Design refresh (option E): the progress bar as a 100-slot genome strip. Role colors would need each card's tags,
