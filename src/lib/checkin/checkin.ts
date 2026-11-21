@@ -70,11 +70,30 @@ function sameText(a: string, b: string) {
 
 export type LinkPurpose = "answer" | "stop";
 
-export const signLink = (secret: string, purpose: LinkPurpose, userId: string) => hmac(secret, `checkin|${purpose}|${userId.toLowerCase()}`);
+/** The month before a YYYY-MM key. */
+export function previousMonth(m: string): string {
+  const [y, mo] = m.split("-").map(Number);
+  return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, "0")}`;
+}
 
-export async function checkLink(secret: string | undefined, purpose: LinkPurpose, userId: unknown, token: unknown): Promise<string | null> {
+/**
+ * Answer links carry the month they were sent ("2026-11.<signature>") and work that month and the next, so an old
+ * email can't answer for someone forever (security tidy-up, Nov 20, 2026). Stop links never expire: unsubscribing
+ * must always work.
+ */
+export async function signLink(secret: string, purpose: LinkPurpose, userId: string, month = monthKey()): Promise<string> {
+  const id = userId.toLowerCase();
+  if (purpose === "stop") return hmac(secret, `checkin|stop|${id}`);
+  return `${month}.${await hmac(secret, `checkin|answer|${month}|${id}`)}`;
+}
+
+export async function checkLink(secret: string | undefined, purpose: LinkPurpose, userId: unknown, token: unknown, now = new Date()): Promise<string | null> {
   if (!secret || typeof userId !== "string" || !UUID.test(userId) || typeof token !== "string" || !token) return null;
-  return sameText(await signLink(secret, purpose, userId), token) ? userId.toLowerCase() : null;
+  if (purpose === "stop") return sameText(await signLink(secret, "stop", userId), token) ? userId.toLowerCase() : null;
+  const month = token.slice(0, 7);
+  const current = monthKey(now);
+  if (!isMonth(month) || token[7] !== "." || (month !== current && month !== previousMonth(current))) return null;
+  return sameText(await signLink(secret, "answer", userId, month), token) ? userId.toLowerCase() : null;
 }
 
 export function checkinSecret(env: Record<string, string | undefined> = process.env): string | undefined {
