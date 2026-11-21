@@ -65,7 +65,7 @@ export function FilterFields({
                 onClick={() => set({ colors: toggle(value.colors, c) })}
                 className={`flex min-h-11 min-w-11 items-center justify-center rounded-lg border ${value.colors.includes(c) ? "border-gold bg-gold/20" : "border-foreground/20 hover:bg-foreground/10"}`}
               >
-                <img src={`https://svgs.scryfall.io/card-symbols/${c}.svg`} alt={name} width={22} height={22} />
+                <img src={`https://svgs.scryfall.io/card-symbols/${c}.svg`} alt={name} width={22} height={22} className="max-w-none shrink-0" />
               </button>
             ))}
             <select
