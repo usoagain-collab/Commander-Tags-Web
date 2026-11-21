@@ -6,10 +6,11 @@
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #0c0d12;
-  --foreground: #f3efe6;
-  --panel: #161821;
-  --panel-raised: #20232f;
+  --background: #0b0c10;
+  --foreground: #f1ece2;
+  --panel: #15161c;
+  --panel-raised: #1f2028;
+  --line: #2a2b33;
   --gold: #e8b54d;
   --gold-hover: #f4cb74;
   --gold-ink: #1d1505;
@@ -30,6 +31,7 @@
   --foreground: #1e1c18;
   --panel: #fffdf8;
   --panel-raised: #ece7dc;
+  --line: #e2dccd;
   --gold: #8a5d00;
   --gold-hover: #734d00;
   --gold-ink: #fffaf0;
@@ -52,13 +54,14 @@
   --color-gold: var(--gold);
   --color-gold-ink: var(--gold-ink);
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Gamer look (v2): Cinzel for titles, close in spirit to card titles; Fraunces stays as the fallback. */
-  --font-display: var(--font-cinzel), var(--font-fraunces), Georgia, serif;
+  --color-line: var(--line);
+  /* Design refresh (option E): Fraunces for titles, the system monospace for small data labels (counts, tags, codes). */
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", monospace;
 }
 
 body {
-  background: radial-gradient(1100px 520px at 50% -160px, var(--glow), transparent), var(--background);
-  background-repeat: no-repeat;
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
 }
@@ -88,28 +91,30 @@ input[type="radio"] {
 @layer components {
   .display {
     font-family: var(--font-display);
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    font-weight: 500;
+    letter-spacing: -0.01em;
   }
 
+  /* Small data labels: counts, tags, set codes. */
   .eyebrow {
+    font-family: var(--font-mono);
     font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
+    font-weight: 500;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: color-mix(in srgb, var(--foreground) 72%, transparent);
   }
 
   .btn {
     display: inline-flex;
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    border-radius: 0.6rem;
-    border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-    background: color-mix(in srgb, var(--panel-raised) 82%, transparent);
-    padding: 0 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 0 1rem;
     font-size: 0.875rem;
     font-weight: 500;
     backdrop-filter: blur(6px);
@@ -119,7 +124,7 @@ input[type="radio"] {
       border-color 120ms;
   }
   .btn:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 32%, transparent);
     background: var(--panel-raised);
   }
   .btn:active:not(:disabled) {
@@ -137,8 +142,7 @@ input[type="radio"] {
     border-color: var(--gold);
     background: var(--gold);
     color: var(--gold-ink);
-    font-weight: 650;
-    box-shadow: 0 6px 22px -10px var(--gold);
+    font-weight: 600;
   }
   .btn-gold:hover:not(:disabled) {
     border-color: var(--gold-hover);
@@ -149,14 +153,11 @@ input[type="radio"] {
     box-shadow: inset 0 0 0 2px var(--gold-ink);
   }
 
-  /* A card-frame feel: the outer border plus a faint inner line in the deck's colors (gold elsewhere). */
+  /* Option E: a quiet surface with one thin line, rounder corners. */
   .panel {
-    border-radius: 0.9rem;
-    border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+    border-radius: 1rem;
+    border: 1px solid var(--line);
     background: var(--panel);
-    box-shadow:
-      inset 0 0 0 3px var(--panel),
-      inset 0 0 0 4px color-mix(in srgb, var(--deck-accent, var(--gold)) 22%, transparent);
   }
 
   .card-lift {
@@ -335,7 +336,7 @@ input[type="radio"] {
 
 @media (max-width: 639px) {
   .btn {
-    padding: 0 0.6rem;
+    padding: 0 0.75rem;
   }
 }
 

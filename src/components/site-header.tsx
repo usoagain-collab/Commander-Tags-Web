@@ -4,167 +4,94 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import { Avatar } from "./avatar";
 import { FeedbackButton } from "./feedback-button";
 import { HeaderMenu } from "./header-menu";
+import { GenomeMark, NavLinks, type NavItem } from "./nav-links";
+
+// Design refresh (option E, Nov 20, 2026): one slim header on every page. The main places are pills, the page you're on
+// is filled in, and account things (Playgroups, Settings, Sign out) sit in a menu under your picture.
+const SIGNED_IN: NavItem[] = [
+  { href: "/decks", label: "My decks" },
+  { href: "/precons", label: "Precons", title: "Every Commander precon" },
+  { href: "/browse", label: "Browse", title: "Public decks by commander, colors and bracket" },
+  { href: "/collection", label: "Collection", title: "Cards you own" },
+  { href: "/wishlist", label: "Wish list", title: "Cards you want to buy" },
+];
+
+const SIGNED_OUT: NavItem[] = [
+  { href: "/precons", label: "Precons", title: "Every Commander precon" },
+  { href: "/browse", label: "Browse", title: "Public decks by commander, colors and bracket" },
+];
+
+function SignOut({ className }: { className: string }) {
+  return (
+    <form action="/auth/signout" method="post" className="!p-0 mt-1 border-t border-line !rounded-none pt-1">
+      <button className={className}>Sign out</button>
+    </form>
+  );
+}
 
 export async function SiteHeader() {
   const [user, look] = await Promise.all([getCurrentUser(), getProfileLook()]);
+  const avatar = <Avatar url={look.avatarUrl} name={look.name} size={34} />;
+  const menuButton = "min-h-12 w-full rounded-xl px-3 text-left opacity-80 hover:bg-foreground/5";
 
   return (
-    <header className="relative z-40 border-b border-foreground/10 bg-background/70 backdrop-blur">
-      <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 whitespace-nowrap px-4 sm:px-6">
-        <Link
-          href="/"
-          className="display flex min-h-12 items-center gap-2 text-lg"
-        >
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            className="text-gold"
-          >
-            <path
-              fill="currentColor"
-              d="M12 1.5 14.6 9.4 22.5 12 14.6 14.6 12 22.5 9.4 14.6 1.5 12 9.4 9.4Z"
-            />
-          </svg>
+    <header className="relative z-40 border-b border-line bg-background">
+      <div className="mx-auto flex h-[60px] max-w-[1500px] items-center gap-2 whitespace-nowrap px-4 sm:px-6">
+        <Link href="/" className="display mr-3 flex min-h-11 items-center gap-2.5 text-[19px] font-semibold">
+          <GenomeMark />
           <span>Deck Genome</span>
         </Link>
-        <nav
-          aria-label="Main"
-          className="hidden items-center gap-2 text-sm sm:flex"
-        >
-          <Link
-            href="/precons"
-            className="flex min-h-11 items-center px-2 hover:text-gold"
-            title="Every Commander precon"
-          >
-            Precons
-          </Link>
-          <Link
-            href="/browse"
-            className="flex min-h-11 items-center px-2 hover:text-gold"
-            title="Public decks by commander, colors and bracket"
-          >
-            Browse
-          </Link>
-          {user ? (
-            <>
-              <Link
-                href="/decks"
-                className="flex min-h-11 items-center px-2 font-medium hover:text-gold"
-              >
-                My decks
+
+        {user ? (
+          <>
+            <nav aria-label="Main" className="hidden md:block">
+              <NavLinks items={SIGNED_IN} />
+            </nav>
+            <div className="ml-auto hidden items-center gap-1 md:flex">
+              <FeedbackButton signedIn className="flex min-h-10 items-center rounded-full px-3 text-sm text-foreground/75 hover:text-foreground" />
+              <HeaderMenu label={avatar} burger={false} menuLabel="Account menu" id="account-menu">
+                <Link href="/playgroups">Playgroups</Link>
+                <Link href="/settings">Settings</Link>
+                <SignOut className={menuButton} />
+              </HeaderMenu>
+            </div>
+            {/* Phones and narrow tablets: everything folds into one menu. */}
+            <nav aria-label="Main" className="ml-auto md:hidden">
+              <HeaderMenu label={avatar}>
+                {SIGNED_IN.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    {item.label}
+                  </Link>
+                ))}
+                <Link href="/playgroups">Playgroups</Link>
+                <Link href="/settings">Settings</Link>
+                <FeedbackButton signedIn className="text-left opacity-80 hover:bg-foreground/5" />
+                <SignOut className={menuButton} />
+              </HeaderMenu>
+            </nav>
+          </>
+        ) : (
+          <>
+            <nav aria-label="Main" className="hidden sm:block">
+              <NavLinks items={SIGNED_OUT} />
+            </nav>
+            <div className="ml-auto flex items-center gap-1 text-sm">
+              {/* Phones: the two places as plain links, since the pills are hidden there. */}
+              <Link href="/precons" className="flex min-h-11 items-center px-2 sm:hidden">
+                Precons
               </Link>
-              <Link
-                href="/wishlist"
-                className="flex min-h-11 items-center px-2 hover:text-gold"
-                title="Cards you want to buy"
-              >
-                <span aria-hidden>♡</span>
-                <span className="ml-1">Wish list</span>
+              <Link href="/browse" className="flex min-h-11 items-center px-2 sm:hidden">
+                Browse
               </Link>
-              <Link
-                href="/collection"
-                className="flex min-h-11 items-center px-2 hover:text-gold"
-                title="Cards you own"
-              >
-                Collection
-              </Link>
-              <Link
-                href="/playgroups"
-                className="flex min-h-11 items-center px-2 hover:text-gold"
-                title="The people you play with, and your games together"
-              >
-                Playgroups
-              </Link>
-              <Link
-                href="/settings"
-                className="flex min-h-11 items-center gap-2 px-2 hover:text-gold"
-              >
-                <Avatar url={look.avatarUrl} name={look.name} size={28} />
-                Settings
-              </Link>
-              <FeedbackButton
-                signedIn
-                className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100"
-              />
-              <form
-                action="/auth/signout"
-                method="post"
-                className="ml-4 border-l border-foreground/15 pl-4"
-              >
-                <button className="min-h-11 px-1 opacity-70 hover:opacity-100">
-                  Sign out
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <FeedbackButton className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100" />
-              <Link
-                href="/login"
-                className="flex min-h-11 items-center px-2 font-medium hover:text-gold"
-              >
+              <FeedbackButton className="flex min-h-10 items-center rounded-full px-2 text-foreground/75 hover:text-foreground sm:px-3" />
+              <Link href="/login" className="flex min-h-11 items-center px-2 font-medium sm:px-3">
                 Sign in
               </Link>
-            </>
-          )}
-        </nav>
-        {/* Phones: signed out there are only three short links, which fit; signed in they fold into a menu. */}
-        {user ? (
-          <nav aria-label="Main" className="sm:hidden">
-            <HeaderMenu
-              label={<Avatar url={look.avatarUrl} name={look.name} size={28} />}
-            >
-              <Link href="/decks" className="font-medium">
-                My decks
+              <Link href="/try" className="btn btn-gold hidden sm:inline-flex">
+                Start building
               </Link>
-              <Link href="/precons">Precons</Link>
-              <Link href="/browse">Browse decks</Link>
-              <Link href="/wishlist">♡ Wish list</Link>
-              <Link href="/collection">Collection</Link>
-              <Link href="/playgroups">Playgroups</Link>
-              <Link href="/settings">Settings</Link>
-              <FeedbackButton
-                signedIn
-                className="text-left opacity-80 hover:bg-foreground/5"
-              />
-              <form
-                action="/auth/signout"
-                method="post"
-                className="!p-0 border-t border-foreground/10 !rounded-none mt-1 pt-1"
-              >
-                <button className="min-h-12 w-full rounded-lg px-3 text-left opacity-80 hover:bg-foreground/5">
-                  Sign out
-                </button>
-              </form>
-            </HeaderMenu>
-          </nav>
-        ) : (
-          <nav
-            aria-label="Main"
-            className="flex items-center gap-1 text-sm sm:hidden"
-          >
-            <Link
-              href="/precons"
-              className="flex min-h-11 items-center px-2 hover:text-gold"
-            >
-              Precons
-            </Link>
-            <Link
-              href="/browse"
-              className="flex min-h-11 items-center px-2 hover:text-gold"
-            >
-              Browse
-            </Link>
-            <FeedbackButton className="flex min-h-11 items-center px-2 opacity-70 hover:opacity-100" />
-            <Link
-              href="/login"
-              className="flex min-h-11 items-center px-2 font-medium hover:text-gold"
-            >
-              Sign in
-            </Link>
-          </nav>
+            </div>
+          </>
         )}
       </div>
     </header>

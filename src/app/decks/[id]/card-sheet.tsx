@@ -122,7 +122,7 @@ export function CardSheet(props: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-[2px] sm:items-center sm:p-6"
       onClick={onClose}
       role="presentation"
     >
@@ -131,10 +131,12 @@ export function CardSheet(props: Props) {
         aria-modal="true"
         aria-label={card.name}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-foreground/10 bg-panel p-4 shadow-2xl sm:max-w-4xl sm:rounded-2xl sm:p-6"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-line bg-panel p-4 pt-2 shadow-2xl sm:max-w-5xl sm:rounded-3xl sm:p-8"
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
-        <div className="mb-3 flex items-center justify-between gap-2">
+        {/* Design refresh (option E): a grab handle tells phone users this is a sheet they can close. */}
+        <span aria-hidden className="mx-auto mb-2 block h-1.5 w-10 rounded-full bg-foreground/20 sm:hidden" />
+        <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex gap-2">
             <SheetButton onClick={onPrev} label="Previous card (←)">
               ‹ Prev
@@ -151,14 +153,14 @@ export function CardSheet(props: Props) {
             ref={closeRef}
             onClick={onClose}
             aria-label="Close (Esc)"
-            className="min-h-11 min-w-11 rounded-lg border border-foreground/20 px-3 text-sm"
+            className="min-h-11 min-w-11 rounded-full border border-line px-4 text-sm hover:bg-foreground/5"
           >
             Close
           </button>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-[minmax(0,260px)_1fr]">
-          <div className="mx-auto w-full max-w-[300px] space-y-2">
+        <div className="grid gap-6 sm:grid-cols-[minmax(0,320px)_1fr] sm:gap-8">
+          <div className="mx-auto w-full max-w-[340px] space-y-2 sm:sticky sm:top-0 sm:self-start">
             {image ? (
               <div className="relative mx-auto w-fit sm:w-full">
                 <img
@@ -167,7 +169,7 @@ export function CardSheet(props: Props) {
                   alt={details?.flippable ? details.faces[face].name : card.name}
                   width={300}
                   height={418}
-                  className="mx-auto max-h-[38vh] w-auto rounded-[4.75%/3.5%] shadow-lg sm:max-h-none sm:w-full"
+                  className="mx-auto max-h-[38vh] w-auto rounded-[4.75%/3.5%] shadow-2xl shadow-black/50 sm:max-h-none sm:w-full"
                 />
                 {tutor && (
                   <span className="pointer-events-none absolute right-2 top-[7%]">
@@ -182,7 +184,7 @@ export function CardSheet(props: Props) {
               <button
                 type="button"
                 onClick={() => setFace((f) => (f + 1) % details.faces.length)}
-                className="min-h-11 w-full rounded-lg border border-foreground/20 text-sm"
+                className="min-h-11 w-full rounded-full border border-line text-sm hover:bg-foreground/5"
               >
                 ⟲ Flip to {details.faces[(face + 1) % details.faces.length].name}
               </button>
@@ -192,7 +194,7 @@ export function CardSheet(props: Props) {
           <div className="min-w-0 space-y-4">
             <div>
               <div className="flex items-start justify-between gap-3">
-                <h2 className="display text-2xl leading-tight">{card.name}</h2>
+                <h2 className="display text-3xl leading-tight sm:text-4xl">{card.name}</h2>
                 <ManaCost cost={card.mana_cost} size={18} />
               </div>
               <p className="text-sm opacity-70">{card.type_line}</p>
@@ -437,12 +439,12 @@ export function ActionButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`min-h-11 rounded-lg border px-3 text-sm font-medium ${
+      className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${
         danger
-          ? "border-red-400/50 text-red-400 hover:bg-red-600/10"
+          ? "border-red-400/40 bg-red-500/5 text-red-400 hover:bg-red-600/10"
           : gold
             ? "btn-gold border-transparent"
-            : "border-foreground/20 hover:bg-foreground/10"
+            : "border-line bg-foreground/[0.03] hover:bg-foreground/10"
       }`}
     >
       {children}
@@ -457,7 +459,7 @@ function SheetButton({ onClick, label, children }: { onClick: () => void; label:
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="min-h-11 rounded-lg border border-foreground/20 px-3 text-sm"
+      className="min-h-11 rounded-full border border-line px-4 text-sm hover:bg-foreground/5"
     >
       {children}
     </button>

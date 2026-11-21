@@ -122,6 +122,7 @@ import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
 import { Avatar } from "@/components/avatar";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
+import { GenomeStrip, type GenomeGroup } from "@/components/genome-strip";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
@@ -826,6 +827,19 @@ export function DeckEditor({
   // Role counts cover the 100-card deck: commander(s) plus mainboard.
   const commanderWording = useCommanderWording(commanders.map((l) => l.card));
   const counts = roleCounts([...commanders, ...mainLines], lineRoleKeys);
+  // Design refresh (option E): the genome strip in the banner, one stripe per card under the first role it fills.
+  const genomeGroups: GenomeGroup[] = (() => {
+    const byKey = new Map<string, number>();
+    for (const l of [...commanders, ...mainLines]) {
+      const keys = lineRoleKeys(l);
+      const key = roles.find((r) => keys.includes(r.key))?.key ?? "other";
+      byKey.set(key, (byKey.get(key) ?? 0) + l.quantity);
+    }
+    return [
+      ...roles.map((r) => ({ key: r.key, label: r.name, color: roleColor(r.name), count: byKey.get(r.key) ?? 0 })),
+      { key: "other", label: "No role", color: "color-mix(in srgb, var(--foreground) 22%, transparent)", count: byKey.get("other") ?? 0 },
+    ];
+  })();
   // How many cards in the deck (commander + mainboard) carry each My tag.
   const myTagCounts: Record<string, number> = {};
   for (const l of [...commanders, ...companions, ...mainLines])
@@ -1499,6 +1513,14 @@ export function DeckEditor({
     <main className="deck-colors" style={deckAccentVars(commanders.length ? identity : null) as React.CSSProperties | undefined}>
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <DeckHero
+        genome={
+          <GenomeStrip
+            groups={genomeGroups}
+            slots={100}
+            active={highlight?.startsWith("role:") ? highlight.slice(5) : null}
+            onPick={(k) => k !== "other" && toggleHighlight(`role:${k}`)}
+          />
+        }
         coverArt={coverArt}
         coverArtist={coverCard?.artist}
         wide={previewMode !== "docked"}
@@ -2027,7 +2049,8 @@ export function DeckEditor({
           )}
           {roles.length > 0 && (
             <ul aria-label="Roles" className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
-              {roles.map((r) => {
+              {/* Design refresh (option E): roles that are short come first, since they're the ones you'd tap. */}
+              {[...roles].sort((a, b) => Number((counts[a.key] ?? 0) >= a.target) - Number((counts[b.key] ?? 0) >= b.target)).map((r) => {
                 const n = counts[r.key] ?? 0;
                 return (
                   <li key={r.key} className="shrink-0">
@@ -2036,7 +2059,7 @@ export function DeckEditor({
                       onClick={() => toggleHighlight(`role:${r.key}`)}
                       aria-pressed={highlight === `role:${r.key}`}
                       title={`Highlight the ${r.name} cards`}
-                      className={`panel block min-h-11 min-w-24 px-2.5 py-1 text-left text-[13px] ${highlight === `role:${r.key}` ? "border-gold" : ""}`}
+                      className={`panel block min-h-11 min-w-24 px-3 py-1.5 text-left text-[13px] ${highlight === `role:${r.key}` ? "border-gold bg-gold/10" : ""}`}
                     >
                       <span className="flex justify-between gap-2">
                         <span className="font-medium">{r.name}</span>
@@ -2157,6 +2180,14 @@ export function DeckEditor({
                   });
                 }}
                 onCardDrop={view.group === "role" && !readOnly && roles.length > 0 ? dropOnRole : undefined}
+                shortBy={(sectionKey) => {
+                  // Mainboard role groups are keyed "main:<role>"; commander, companion and maybe never get a tile.
+                  if (!sectionKey.startsWith("main:")) return 0;
+                  const k = sectionKey.slice(5);
+                  const r = roles.find((x) => x.key === k);
+                  return r ? Math.max(0, r.target - (counts[k] ?? 0)) : 0;
+                }}
+                onSuggestRole={view.group === "role" && !readOnly ? (sectionKey) => suggestForRole(sectionKey.slice(5)) : undefined}
               />
             )}
           </div>
