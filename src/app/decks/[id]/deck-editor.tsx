@@ -2049,7 +2049,8 @@ export function DeckEditor({
           )}
           {roles.length > 0 && (
             <ul aria-label="Roles" className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 xl:hidden">
-              {roles.map((r) => {
+              {/* Design refresh (option E): roles that are short come first, since they're the ones you'd tap. */}
+              {[...roles].sort((a, b) => Number((counts[a.key] ?? 0) >= a.target) - Number((counts[b.key] ?? 0) >= b.target)).map((r) => {
                 const n = counts[r.key] ?? 0;
                 return (
                   <li key={r.key} className="shrink-0">
@@ -2058,7 +2059,7 @@ export function DeckEditor({
                       onClick={() => toggleHighlight(`role:${r.key}`)}
                       aria-pressed={highlight === `role:${r.key}`}
                       title={`Highlight the ${r.name} cards`}
-                      className={`panel block min-h-11 min-w-24 px-2.5 py-1 text-left text-[13px] ${highlight === `role:${r.key}` ? "border-gold" : ""}`}
+                      className={`panel block min-h-11 min-w-24 px-3 py-1.5 text-left text-[13px] ${highlight === `role:${r.key}` ? "border-gold bg-gold/10" : ""}`}
                     >
                       <span className="flex justify-between gap-2">
                         <span className="font-medium">{r.name}</span>
