@@ -55,9 +55,9 @@
   --color-gold-ink: var(--gold-ink);
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --color-line: var(--line);
-  /* Design refresh (option E): Fraunces for titles, JetBrains Mono for small data labels (counts, tags, codes). */
+  /* Design refresh (option E): Fraunces for titles, the system monospace for small data labels (counts, tags, codes). */
   --font-display: var(--font-fraunces), Georgia, serif;
-  --font-mono: var(--font-mono-face), ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", monospace;
 }
 
 body {
