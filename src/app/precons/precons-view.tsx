@@ -68,7 +68,7 @@ export function PreconsView({ precons, failed }: { precons: PreconTile[]; failed
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by deck, commander, set or year…"
           aria-label="Search precons"
-          className="min-h-11 w-full rounded-md border border-foreground/20 bg-transparent px-3 sm:w-96"
+          className="min-h-11 w-full rounded-full border border-line bg-panel px-4 sm:w-96"
         />
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <input type="checkbox" checked={collector} onChange={(e) => setCollector(e.target.checked)} className="h-5 w-5 accent-gold" />
@@ -91,7 +91,7 @@ export function PreconsView({ precons, failed }: { precons: PreconTile[]; failed
           <section key={setName}>
             <h2 className="display mb-3 flex flex-wrap items-baseline gap-x-3 text-xl">
               {setName}
-              <span className="font-sans text-sm opacity-60">
+              <span className="font-mono text-xs uppercase tracking-wide opacity-60">
                 {decks[0].precon.code} · {dateLabel(decks[0].precon.release)}
                 {decks[0].precon.release && decks[0].precon.release > today ? " · coming soon" : ""}
               </span>
@@ -124,7 +124,7 @@ function Tile({ precon: p }: { precon: PreconTile }) {
   const colors = [...p.identity].sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b));
   return (
     <Link href={`/decks/${p.id}`} className="panel group block overflow-hidden transition hover:border-gold/60">
-      <span className="relative block aspect-[626/457] overflow-hidden bg-foreground/10">
+      <span className="relative block aspect-[626/457] overflow-hidden rounded-t-[inherit] bg-foreground/10">
         {art && <img src={art} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />}
         {p.precon.collector && <span className="absolute left-2 top-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold text-gold">✦ Collector&apos;s Edition</span>}
         {p.precon.type === "MTGO Commander Deck" && (

@@ -2,7 +2,8 @@
 
 export const RAIL_MIN = 130;
 export const RAIL_MAX = 1000;
-export const RAIL_DEFAULT = 280;
+// Design refresh (option E): a slimmer column by default, so the cards get the room. Saved widths are kept.
+export const RAIL_DEFAULT = 232;
 export const RAIL_COLLAPSED = 160;
 
 /** compact: only roles and numbers. rail: bars and top tags too. full: the whole panel, in more columns as it widens. */

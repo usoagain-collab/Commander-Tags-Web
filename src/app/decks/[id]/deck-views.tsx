@@ -64,7 +64,39 @@ type Props = {
   onCardDrop?: (card: { oracle_id: string; board: string }, sectionKey: string) => void;
   /** The left column is collapsed, so the cards take the room and grow. */
   roomy?: boolean;
+  /**
+   * Design refresh (option E): Group by Role ends a role that is under its target with one tile that opens suggestions
+   * for it. Returns how many cards the role is short, or 0.
+   */
+  shortBy?: (roleKey: string) => number;
+  onSuggestRole?: (roleKey: string) => void;
 };
+
+/** The role a section belongs to: its parent role for subgroups (Ramp › Mana rock), else its own key. */
+const roleKeyOf = (s: ViewSection) => s.parent?.key ?? s.key;
+
+/** Keys of the last section of each role, where the suggestion tile goes. */
+function lastOfRole(sections: ViewSection[]) {
+  const last = new Map<string, string>();
+  for (const s of sections) last.set(roleKeyOf(s), s.key);
+  return new Set(last.values());
+}
+
+function GapTile({ missing, title, onPick }: { missing: number; title: string; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className="flex aspect-[63/88] w-full flex-col items-center justify-center gap-2 rounded-[4.75%/3.5%] border border-dashed border-gold/70 bg-gold/5 p-3 text-center hover:bg-gold/10"
+    >
+      <span className="display text-4xl leading-none text-gold">{missing}</span>
+      <span className="text-sm leading-snug opacity-85">
+        more for {title}
+      </span>
+      <span className="text-sm font-semibold text-gold">See suggestions</span>
+    </button>
+  );
+}
 
 /** Our own drag type, so the Scryfall drop overlay (which looks for links and text) ignores these drags. */
 const DRAG_TYPE = "application/x-ctw-card";
@@ -158,6 +190,9 @@ export function DeckView(props: Props) {
     );
   }
   const blocks = withParents(sections, props.collapsed);
+  const tileAfter = props.shortBy && props.onSuggestRole ? lastOfRole(sections) : new Set<string>();
+  const gapOf = (sec: ViewSection) => (tileAfter.has(sec.key) ? (props.shortBy?.(roleKeyOf(sec)) ?? 0) : 0);
+  const gapTitle = (sec: ViewSection) => sec.parent?.title ?? sec.title;
   if (view === "grid") {
     return (
       <div className="space-y-5">
@@ -184,6 +219,11 @@ export function DeckView(props: Props) {
                       )}
                     </li>
                   ))}
+                  {gapOf(b.section) > 0 && (
+                    <li>
+                      <GapTile missing={gapOf(b.section)} title={gapTitle(b.section)} onPick={() => props.onSuggestRole?.(roleKeyOf(b.section))} />
+                    </li>
+                  )}
                 </ul>
               )}
             </DropZone>
@@ -220,6 +260,19 @@ export function DeckView(props: Props) {
                     drag={dragProps(it.line, !!props.onCardDrop)}
                   />
                 ))}
+                {gapOf(b.section) > 0 && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => props.onSuggestRole?.(roleKeyOf(b.section))}
+                      className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed border-gold/60 px-3 text-left text-sm hover:bg-gold/10"
+                    >
+                      <span className="font-semibold text-gold">{gapOf(b.section)} more</span>
+                      <span className="opacity-80">for {gapTitle(b.section)}</span>
+                      <span className="ml-auto font-semibold text-gold">See suggestions</span>
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </DropZone>
