@@ -27,6 +27,7 @@ export function DeckHero({
   wide,
   coverArt,
   coverArtist,
+  genome,
 }: {
   name: string;
   commanders: CardSummary[];
@@ -50,6 +51,8 @@ export function DeckHero({
   coverArt?: string | null;
   /** Illustrator of coverArt, for the art credit. */
   coverArtist?: string | null;
+  /** The genome strip, drawn full width along the bottom of the banner. */
+  genome?: React.ReactNode;
 }) {
   const artCard = commanders.find((c) => c.image_art_crop);
   const art = coverArt || artCard?.image_art_crop;
@@ -73,7 +76,7 @@ export function DeckHero({
         />
         {celebrate && <div className="shimmer absolute inset-0" />}
       </div>
-      <div className={`mx-auto flex ${wide ? "" : "max-w-[1500px]"} items-end gap-5 px-4 pb-4 sm:px-6 ${art ? "pt-2 lg:pt-8" : "pt-2 sm:pt-4"}`}>
+      <div className={`mx-auto flex flex-wrap ${wide ? "" : "max-w-[1500px]"} items-end gap-x-5 gap-y-3 px-4 pb-3 sm:px-6 ${art ? "pt-2 lg:pt-6" : "pt-2 sm:pt-4"}`}>
         {commanders.length > 0 && (
           <div className="hidden shrink-0 md:flex lg:hidden">
             {commanders.map((c, i) => (
@@ -95,20 +98,21 @@ export function DeckHero({
               ← My decks
             </Link>
           )}
-          <h1 className="display text-3xl leading-tight [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-5xl">{name}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 [text-shadow:0_1px_8px_var(--art-shadow)]">
+          {/* Design refresh (option E): the commander and colors sit above the name, the numbers beside them. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 [text-shadow:0_1px_8px_var(--art-shadow)]">
             {pips.length > 0 && (
               <span className="inline-flex gap-1">
                 {pips.map((c) => (
-                  <ManaSymbol key={c} symbol={c} size={20} />
+                  <ManaSymbol key={c} symbol={c} size={18} />
                 ))}
               </span>
             )}
-            {commanders.length > 0 && <span className="min-w-0 opacity-90">{commanders.map((c) => c.name).join(" & ")}</span>}
+            {commanders.length > 0 && <span className="eyebrow min-w-0 !text-gold">{commanders.map((c) => c.name).join(" & ")}</span>}
           </div>
+          <h1 className="display mt-1 text-3xl leading-tight [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-[2.6rem]">{name}</h1>
           {note}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            {complete && <span className={`${celebrate ? "complete " : ""}inline-flex min-h-9 items-center rounded-lg bg-gold px-3 font-semibold text-gold-ink`}>✦ Complete</span>}
+            {complete && <span className={`${celebrate ? "complete " : ""}inline-flex min-h-9 items-center rounded-full bg-gold px-3 font-semibold text-gold-ink`}>✦ Complete</span>}
             <Stat good={size === 100}>
               <span key={size} className="pop inline-block">
                 {size} / 100
@@ -118,10 +122,15 @@ export function DeckHero({
             {status}
           </div>
           {plays && <div className="hidden sm:block">{plays}</div>}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">{actions}</div>
-          {art && <ArtCredit artists={[artist]} className="mt-2 [text-shadow:0_1px_8px_var(--art-shadow)]" />}
         </div>
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:gap-2 lg:w-auto lg:max-w-[46%] lg:justify-end">{actions}</div>
       </div>
+      {(genome || art) && (
+        <div className={`mx-auto ${wide ? "" : "max-w-[1500px]"} px-4 pb-3 sm:px-6`}>
+          {genome}
+          {art && <ArtCredit artists={[artist]} className="mt-1.5 [text-shadow:0_1px_8px_var(--art-shadow)]" />}
+        </div>
+      )}
       {celebrate && <ManaConfetti colors={pips.length ? pips : ["C"]} />}
     </header>
   );
@@ -129,7 +138,7 @@ export function DeckHero({
 
 function Stat({ good, children }: { good?: boolean; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex min-h-9 items-center rounded-lg bg-background/65 px-3 font-semibold tabular-nums backdrop-blur ${good ? "text-green-400" : ""}`}>
+    <span className={`inline-flex min-h-9 items-center rounded-full bg-background/65 px-3 font-semibold tabular-nums backdrop-blur ${good ? "text-green-400" : ""}`}>
       {children}
     </span>
   );

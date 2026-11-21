@@ -122,6 +122,7 @@ import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
 import { Avatar } from "@/components/avatar";
 import { DeckHero, MoreMenu, Toast } from "./deck-hero";
+import { GenomeStrip, type GenomeGroup } from "@/components/genome-strip";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
 import { copyDeck } from "../actions";
@@ -826,6 +827,19 @@ export function DeckEditor({
   // Role counts cover the 100-card deck: commander(s) plus mainboard.
   const commanderWording = useCommanderWording(commanders.map((l) => l.card));
   const counts = roleCounts([...commanders, ...mainLines], lineRoleKeys);
+  // Design refresh (option E): the genome strip in the banner, one stripe per card under the first role it fills.
+  const genomeGroups: GenomeGroup[] = (() => {
+    const byKey = new Map<string, number>();
+    for (const l of [...commanders, ...mainLines]) {
+      const keys = lineRoleKeys(l);
+      const key = roles.find((r) => keys.includes(r.key))?.key ?? "other";
+      byKey.set(key, (byKey.get(key) ?? 0) + l.quantity);
+    }
+    return [
+      ...roles.map((r) => ({ key: r.key, label: r.name, color: roleColor(r.name), count: byKey.get(r.key) ?? 0 })),
+      { key: "other", label: "No role", color: "color-mix(in srgb, var(--foreground) 22%, transparent)", count: byKey.get("other") ?? 0 },
+    ];
+  })();
   // How many cards in the deck (commander + mainboard) carry each My tag.
   const myTagCounts: Record<string, number> = {};
   for (const l of [...commanders, ...companions, ...mainLines])
@@ -1499,6 +1513,14 @@ export function DeckEditor({
     <main className="deck-colors" style={deckAccentVars(commanders.length ? identity : null) as React.CSSProperties | undefined}>
       {!readOnly && <DropOverlay onCard={addWithNotice} onMessage={say} />}
       <DeckHero
+        genome={
+          <GenomeStrip
+            groups={genomeGroups}
+            slots={100}
+            active={highlight?.startsWith("role:") ? highlight.slice(5) : null}
+            onPick={(k) => k !== "other" && toggleHighlight(`role:${k}`)}
+          />
+        }
         coverArt={coverArt}
         coverArtist={coverCard?.artist}
         wide={previewMode !== "docked"}
@@ -2157,6 +2179,14 @@ export function DeckEditor({
                   });
                 }}
                 onCardDrop={view.group === "role" && !readOnly && roles.length > 0 ? dropOnRole : undefined}
+                shortBy={(sectionKey) => {
+                  // Mainboard role groups are keyed "main:<role>"; commander, companion and maybe never get a tile.
+                  if (!sectionKey.startsWith("main:")) return 0;
+                  const k = sectionKey.slice(5);
+                  const r = roles.find((x) => x.key === k);
+                  return r ? Math.max(0, r.target - (counts[k] ?? 0)) : 0;
+                }}
+                onSuggestRole={view.group === "role" && !readOnly ? (sectionKey) => suggestForRole(sectionKey.slice(5)) : undefined}
               />
             )}
           </div>

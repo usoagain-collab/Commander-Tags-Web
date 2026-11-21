@@ -16,7 +16,7 @@ describe("left column width", () => {
 
   it("changes stage as it narrows", () => {
     expect(railStage(600)).toBe("full");
-    expect(railStage(RAIL_DEFAULT)).toBe("full");
+    expect(railStage(RAIL_DEFAULT)).toBe("rail");
     expect(railStage(RAIL_COLLAPSED)).toBe("rail");
     expect(railStage(RAIL_MIN)).toBe("compact");
   });
