@@ -168,21 +168,25 @@ function ocrCrop(card: HTMLCanvasElement, region: Rect, width: number, binary: b
 // found a little off (an outline above the card's top, or past its bottom onto the table) doesn't cut the text.
 // They reach a little past the card's top and bottom: an edge found slightly inside the card (a black border on a
 // dark surface) still leaves the text in the strip.
+// Round 9: the corner strip reaches from 82% to 112% of the card's height, because the measured bottom edge still
+// landed well inside some cards (Talon Gates, Scorched Geyser) and the collector line fell below the strip.
 export const TALL = {
-  name: { x: 0.04, y: -0.03, w: 0.7, h: 0.155 },
-  corner: { x: 0.03, y: 0.85, w: 0.5, h: 0.21 },
+  name: { x: 0.04, y: -0.05, w: 0.7, h: 0.18 },
+  corner: { x: 0.03, y: 0.82, w: 0.5, h: 0.3 },
 } satisfies Record<string, Rect>;
 
-// How each strip is trimmed to its text: the name line is at most about 5% of the card's height, the corner's two
-// lines about 6%, in strip rows.
-const bandOptions = (kind: "name" | "corner", h: number) =>
-  kind === "name"
-    ? { mergeGap: 3, maxRows: Math.round((h * 0.05) / TALL.name.h) }
-    : { mergeGap: Math.round(h * 0.05), maxRows: Math.round((h * 0.06) / TALL.corner.h), pick: "lowest" as const };
+// How each strip is trimmed to its text, in shares of the card's height: the name line is at most about 5%, the
+// corner's two lines about 6%, joined across up to 2% (Scorched Geyser lost its number line at 1.2%).
+const bandOptions = (kind: "name" | "corner", h: number) => {
+  const rows = h / TALL[kind].h; // strip rows per card height
+  return kind === "name"
+    ? { mergeGap: Math.round(rows * 0.003), maxRows: Math.round(rows * 0.05) }
+    : { mergeGap: Math.round(rows * 0.02), maxRows: Math.round(rows * 0.06), pick: "lowest" as const };
+};
 
 // The sizes the strips are read at (on a 630 × 880 card), also used for stacked frames.
 const stripSize = (r: Rect, w: number) => ({ w, h: Math.round((w * r.h * 880) / (r.w * 630)) });
-export const STRIP = { name: stripSize(TALL.name, 900), corner: stripSize(TALL.corner, 1100) };
+export const STRIP = { name: stripSize(TALL.name, 900), corner: stripSize(TALL.corner, 1000) };
 
 // Where the old fixed boxes sit inside the tall strips, in rows (a fallback when no text band is found).
 const fixedRows = (tall: Rect, fixed: Rect, h: number): [number, number] => [
@@ -190,21 +194,25 @@ const fixedRows = (tall: Rect, fixed: Rect, h: number): [number, number] => [
   Math.min(h, Math.round(((fixed.y + fixed.h - tall.y) / tall.h) * h)),
 ];
 
-// What the reader gets from a tall strip: its text rows (gray, then black and white), then the old fixed box.
-export function stripCrops(gray: Uint8Array, kind: "name" | "corner", extra: Uint8Array | null = null): HTMLCanvasElement[] {
+// What the reader gets from a tall strip: its text rows (gray, then black and white), the text rows of each `extras`
+// picture (auto scan: the sharpest single frame, the newest), then the old fixed box.
+export function stripCrops(gray: Uint8Array, kind: "name" | "corner", extras: (Uint8Array | null)[] = [], fixed = true): HTMLCanvasElement[] {
   const { w, h } = STRIP[kind];
   const band = textBand(gray, w, h, bandOptions(kind, h));
   const out: HTMLCanvasElement[] = [];
   const rows = (g: ArrayLike<number>, y0: number, y1: number, binary: boolean) => toOcrCanvas(cropRows(g, w, y0, y1), w, y1 - y0, binary);
   if (band) {
     out.push(rows(gray, band[0], band[1], false), rows(gray, band[0], band[1], true));
-    if (extra) {
+    for (const extra of extras) {
+      if (!extra) continue;
       const b2 = textBand(extra, w, h, bandOptions(kind, h));
       if (b2) out.push(rows(extra, b2[0], b2[1], false));
     }
   }
-  const [f0, f1] = fixedRows(TALL[kind], kind === "name" ? REGIONS.name : REGIONS.collector, h);
-  out.push(rows(gray, f0, f1, false));
+  if (fixed || !out.length) {
+    const [f0, f1] = fixedRows(TALL[kind], kind === "name" ? REGIONS.name : REGIONS.collector, h);
+    out.push(rows(gray, f0, f1, false));
+  }
   return out;
 }
 
@@ -226,8 +234,20 @@ export function toOcrCanvas(gray: ArrayLike<number>, w: number, h: number, binar
   let dark = 0;
   for (let i = 0; i < gray.length; i++) if (gray[i] <= t) dark++;
   const invert = dark > gray.length / 2; // light text on a dark border
+  // Gray pictures are stretched so the darkest 2% turn black and the lightest 2% white: faint print (Arcum's corner
+  // in round 8) gets the contrast the reader needs.
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < gray.length; i++) hist[Math.max(0, Math.min(255, Math.round(gray[i])))]++;
+  const at = (share: number) => {
+    let n = 0;
+    for (let v = 0; v < 256; v++) if ((n += hist[v]) >= gray.length * share) return v;
+    return 255;
+  };
+  const lo = at(0.02);
+  const span = Math.max(1, at(0.98) - lo);
   for (let i = 0; i < gray.length; i++) {
-    let v = invert ? 255 - gray[i] : gray[i];
+    const g = Math.max(0, Math.min(255, ((gray[i] - lo) * 255) / span));
+    let v = invert ? 255 - g : g;
     if (binary) v = (invert ? gray[i] > t : gray[i] <= t) ? 0 : 255;
     img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
     img.data[i * 4 + 3] = 255;
@@ -557,28 +577,52 @@ interface NameResult {
 // The name, from each crop in turn until one names a card: first the closest name in the full list (no fuzzy search
 // when the read is close), then Scryfall's fuzzy search, kept only if the read really looks like the card it
 // returned. If none works, the closest name allowing more mistakes.
+// The closest name for a read, also trying it without a stray letter in front (the name bar's swoosh read as "A":
+// "A Hirod" for HERO).
+function closest(text: string, index: NameIndex, maxShare?: number) {
+  const plain = closestName(text, index, maxShare);
+  const trimmed = text.replace(/^\W*\S\s+/, "");
+  if (trimmed === text) return plain;
+  const other = closestName(trimmed, index, maxShare);
+  return other && (!plain || other.share < plain.share) ? other : plain;
+}
+
+// Round 9: Scryfall's fuzzy search goes last and only for the two longest reads. Round 8 asked it after every failed
+// read (up to 3 calls each), so a name that wouldn't read (the Star Trek block letters) cost 4 to 6 s.
 async function readName(crops: HTMLCanvasElement[], index: NameIndex | null): Promise<NameResult> {
   const reads: { text: string; crop: HTMLCanvasElement }[] = [];
   for (const crop of crops) {
     const text = await readText(crop, "name");
     reads.push({ text, crop });
-    const near = index ? closestName(text, index, 0.25) : null;
+    const near = index ? closest(text, index, 0.25) : null;
     if (near) {
       const match = await cardByExactName(near.target).catch(() => null);
       if (match) return { nameRead: text, nameMatch: match, nameVia: "closest", nameCrop: crop };
     }
-    const match = await cardByName(text).catch(() => null);
-    if (match && (!index || nameFits(text, [...printedNames(match.name, index), match.flavorName ?? ""]))) {
-      return { nameRead: text, nameMatch: match, nameVia: "scryfall", nameCrop: crop };
-    }
   }
   if (index) {
-    const guesses = reads.map((r) => ({ ...r, guess: closestName(r.text, index) })).filter((r) => r.guess);
+    const guesses = reads.map((r) => ({ ...r, guess: closest(r.text, index) })).filter((r) => r.guess);
     guesses.sort((a, b) => a.guess!.share - b.guess!.share);
     const best = guesses[0];
     if (best?.guess) {
       const match = await cardByExactName(best.guess.target).catch(() => null);
       if (match) return { nameRead: best.text, nameMatch: match, nameVia: "closest", nameCrop: best.crop };
+    }
+  }
+  const letters = (t: string) => cleanNameRead(t).replace(/[^A-Za-z]/g, "").length;
+  // Only reads with a real word (4+ letters) are worth a fuzzy search.
+  const longest = [...reads]
+    .filter((r) => letters(r.text) >= 5 && /[A-Za-z]{4,}/.test(r.text))
+    .sort((a, b) => letters(b.text) - letters(a.text));
+  const tried = new Set<string>();
+  for (const r of longest) {
+    const key = cleanNameRead(r.text).toLowerCase();
+    if (tried.has(key)) continue;
+    tried.add(key);
+    if (tried.size > 2) break;
+    const match = await cardByName(r.text).catch(() => null);
+    if (match && (!index || nameFits(r.text, [...printedNames(match.name, index), match.flavorName ?? ""]))) {
+      return { nameRead: r.text, nameMatch: match, nameVia: "scryfall", nameCrop: r.crop };
     }
   }
   return { nameRead: reads.find((r) => r.text)?.text ?? "", nameMatch: null, nameVia: null, nameCrop: crops[0] };

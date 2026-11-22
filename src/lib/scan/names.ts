@@ -82,13 +82,18 @@ export function closestName(text: string, index: NameIndex, maxShare = 0.34): Na
   let bestDistance = key.length < 6 ? 0 : Math.floor(key.length * maxShare);
   for (let i = 0; i < index.keys.length; i++) {
     const k = index.keys[i];
+    // A short name may still have one stray letter stuck on the end ("Herod" for Hero).
+    if (key.length < 6 && !best && key.length === k.length + 1 && key.startsWith(k)) {
+      best = { name: index.names[i], target: index.targets[i], distance: 1, share: 1 / key.length };
+      continue;
+    }
     const d = editDistance(key, k, bestDistance);
     if (d <= bestDistance && (!best || d < best.distance || (d === best.distance && k.length === key.length))) {
       best = { name: index.names[i], target: index.targets[i], distance: d, share: d / Math.max(key.length, k.length) };
       bestDistance = d;
     }
   }
-  return best && best.share <= maxShare ? best : null;
+  return best && (best.share <= maxShare || (key.length < 6 && best.distance === 1)) ? best : null;
 }
 
 /* ---------- set codes: fixing a misread code in the corner ---------- */

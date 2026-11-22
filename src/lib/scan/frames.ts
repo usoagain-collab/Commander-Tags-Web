@@ -18,8 +18,9 @@ const MARGIN = 0.07; // room around the outline, so the edge measure can see the
 type Corners = [Pt, Pt, Pt, Pt];
 
 export class FrameCollector {
-  readonly name = new StripStack(STRIP.name.w, STRIP.name.h, 15, 16);
-  readonly corner = new StripStack(STRIP.corner.w, STRIP.corner.h, 15, 16);
+  // Frames may need lining up by up to 28 strip pixels (the live outline wobbles a little each frame).
+  readonly name = new StripStack(STRIP.name.w, STRIP.name.h, 15, 28);
+  readonly corner = new StripStack(STRIP.corner.w, STRIP.corner.h, 15, 28);
   private scratch = document.createElement("canvas");
   private last: { pixels: ImageData; corners: Corners } | null = null;
   private offset: Quad4 | null = null; // correction to the live outline, in fractions of the frame
@@ -104,12 +105,13 @@ export class FrameCollector {
     return found ? (found.map(([x, y]) => [x / s, y / s]) as Corners) : null;
   }
 
-  // What the reader gets: the stacked picture's text rows (gray, black and white), the newest frame's, then the
-  // stacked picture at the old fixed box.
+  // What the reader gets: the stacked picture's text rows (gray, black and white), the sharpest single frame's, the
+  // newest frame's, then the stacked picture at the old fixed box.
   crops() {
     return {
-      name: stripCrops(this.name.median(), "name", this.name.latest),
-      line: stripCrops(this.corner.median(), "corner", this.corner.latest),
+      // The name from 3 crops (each failed read costs time), the corner from 5.
+      name: stripCrops(this.name.median(), "name", [this.name.sharpest()], false),
+      line: stripCrops(this.corner.median(), "corner", [this.corner.sharpest(), this.corner.latest]),
     };
   }
 
