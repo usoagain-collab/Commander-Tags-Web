@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CARD_RATIO, houghCorners } from "@/lib/scan/image";
 import { LAB_KEY, pct, readLabResults, resultsText, summarize, type LabResult } from "@/lib/scan/lab-results";
 import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, searchCards, straighten, type Printing, type Ranked, type ScanOutput, type Straightened } from "@/lib/scan/pipeline";
-import { isLocked, plausibleQuad, startTrack, stepTrack, type Quad4, type TrackState } from "@/lib/scan/track";
+import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4, type TrackState } from "@/lib/scan/track";
+import { FrameCollector } from "@/lib/scan/frames";
 
 const LANGS: [string, string][] = [
   ["en", "English"], ["ja", "Japanese"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"],
@@ -159,7 +160,23 @@ export function ScanLab() {
   const live = track.shown;
   const liveRef = useRef<Quad4 | null>(null);
   const [quick, setQuick] = useState(false); // use the video picture instead of taking a full photo
-  useEffect(() => setQuick(localStorage.getItem("scan-lab:quick") === "1"), []);
+  // Auto scan (round 7): no tap. While the outline is on a card, every frame goes into a stack (FrameCollector);
+  // after 5 frames it reads the stacked picture, and if that finds nothing it keeps collecting and reads again with
+  // more frames, for up to about 6 s. Then it beeps and shows the result, and waits for the card to be lifted.
+  const [auto, setAuto] = useState(false);
+  const autoRef = useRef(false);
+  autoRef.current = auto;
+  const [frames, setFrames] = useState(0);
+  const collectorRef = useRef<FrameCollector | null>(null);
+  const attemptRef = useRef(false); // a read is running
+  const nextAtRef = useRef(5); // read again once the stack has this many frames
+  const liftRef = useRef(false); // a card was just scanned: wait until it leaves the view
+  const reviewOpenRef = useRef(false);
+  const audioRef = useRef<AudioContext | null>(null);
+  useEffect(() => {
+    setQuick(localStorage.getItem("scan-lab:quick") === "1");
+    setAuto(localStorage.getItem("scan-lab:auto") === "1");
+  }, []);
   const busyRef = useRef(false);
   busyRef.current = step !== null;
   useEffect(() => {
@@ -176,10 +193,12 @@ export function ScanLab() {
       if (stopped) return;
       const video = videoRef.current;
       const t = performance.now();
-      if (video && !busyRef.current) {
+      if (video && (!busyRef.current || autoRef.current)) {
+        const prev = state.shown;
         state = stepTrack(state, trackCard(video, scratch));
         liveRef.current = state.shown;
         setTrack(state);
+        if (autoRef.current) autoTickRef.current(video, prev, state);
       }
       // About every 140 ms, less often when finding the card takes longer on this phone.
       timer = window.setTimeout(tick, Math.max(60, 140 - (performance.now() - t)));
@@ -191,6 +210,81 @@ export function ScanLab() {
     };
   }, [camera]);
 
+  // A short beep and buzz when auto scan has a card (high = found, low = gave up).
+  const beep = (found: boolean) => {
+    navigator.vibrate?.(found ? 60 : [40, 60, 40]);
+    const ac = audioRef.current;
+    if (!ac) return;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.frequency.value = found ? 1046 : 330;
+    gain.gain.value = 0.15;
+    osc.connect(gain).connect(ac.destination);
+    osc.start();
+    osc.stop(ac.currentTime + 0.09);
+  };
+
+  const attempt = async (c: FrameCollector) => {
+    const card = c.card();
+    if (!card) return;
+    attemptRef.current = true;
+    const used = c.count;
+    const collect = Math.round(performance.now() - c.firstAt);
+    try {
+      const result = await scanCard(card, setStep, c.crops());
+      const waited = performance.now() - c.firstAt;
+      const found = !!(result.nameMatch || result.linePrinting);
+      if (found || waited > 6000) {
+        setOut({
+          ...result,
+          timing: { collect, ...result.timing },
+          source: "auto",
+          n: ++scans.current,
+          foundBy: "tracked",
+          totalMs: Math.round(waited),
+          size: c.videoSize,
+          frames: used,
+        });
+        reviewOpenRef.current = true;
+        liftRef.current = true;
+        c.reset();
+        nextAtRef.current = 5;
+        beep(found);
+      } else {
+        nextAtRef.current = c.count + 4; // nothing yet: look longer, read again with more frames
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The scan failed.");
+    } finally {
+      attemptRef.current = false;
+      setStep(null);
+    }
+  };
+
+  const autoTickRef = useRef<(video: HTMLVideoElement, prev: Quad4 | null, s: TrackState) => void>(() => {});
+  autoTickRef.current = (video, prev, s) => {
+    const c = (collectorRef.current ??= new FrameCollector());
+    if (reviewOpenRef.current) return;
+    if (!s.shown) {
+      // No card in view: start fresh, and the last card counts as lifted.
+      if (c.count) c.reset();
+      liftRef.current = false;
+      nextAtRef.current = 5;
+      setFrames(0);
+      return;
+    }
+    if (liftRef.current) return;
+    if (prev && quadMove(prev, s.shown) >= TRACK.follow) {
+      c.reset(); // the outline jumped: another card, or the same one moved a lot
+      nextAtRef.current = 5;
+    }
+    if (!c.count && s.steady < 1) return; // start once the outline settles
+    c.add(video, s.shown);
+    setFrames(c.count);
+    if (!attemptRef.current && c.count >= nextAtRef.current) void attempt(c);
+  };
+  reviewOpenRef.current = out !== null;
+
   const save = (next: LabResult[]) => {
     setRows(next);
     localStorage.setItem(LAB_KEY, JSON.stringify(next));
@@ -199,6 +293,13 @@ export function ScanLab() {
   const startCamera = async () => {
     setError(null);
     setCamera("starting");
+    // Sound has to be switched on by a tap; this is one.
+    try {
+      audioRef.current ??= new AudioContext();
+      void audioRef.current.resume();
+    } catch {
+      // no beep, the buzz still works on Android
+    }
     ocrWorker().catch(() => {}); // start loading the reader while the camera opens
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -372,7 +473,11 @@ export function ScanLab() {
             <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-sm font-semibold text-white" style={{ textShadow: "0 1px 3px #000" }}>
               {busy
                 ? step
-                : locked
+                : auto && liftRef.current
+                  ? "Got it. Lift the card and put the next one down"
+                  : auto && frames
+                    ? `Auto scan: looking (${frames} frame${frames === 1 ? "" : "s"} so far)`
+                    : locked
                   ? "Locked on the card: tap to scan"
                   : live
                     ? "Found the card: hold still a moment"
@@ -445,6 +550,28 @@ export function ScanLab() {
           <input
             type="checkbox"
             className="h-5 w-5"
+            checked={auto}
+            onChange={(e) => {
+              setAuto(e.target.checked);
+              localStorage.setItem("scan-lab:auto", e.target.checked ? "1" : "0");
+              collectorRef.current?.reset();
+              try {
+                audioRef.current ??= new AudioContext();
+                void audioRef.current.resume();
+              } catch {
+                // no beep
+              }
+            }}
+          />
+          <span>
+            <b>Auto scan</b>: no tap. Hold the card in view; it collects video frames, stacks them into a cleaner picture and reads
+            it, looking longer when it can&apos;t read it yet. Beeps when done.
+          </span>
+        </label>
+        <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-5 w-5"
             checked={quick}
             onChange={(e) => {
               setQuick(e.target.checked);
@@ -502,9 +629,10 @@ export function ScanLab() {
   );
 }
 
-type ReviewInput = ScanOutput & { source: Source; n: number; foundBy: string; totalMs: number; size: string };
+type ReviewInput = ScanOutput & { source: Source; n: number; foundBy: string; totalMs: number; size: string; frames?: number };
 
 const FOUND_BY: Record<string, string> = {
+  tracked: "the live outline, frame by frame",
   edges: "its four edges",
   outline: "its outline",
   live: "the gold outline (the photo's own edges weren't clear)",
@@ -514,7 +642,7 @@ const FOUND_BY: Record<string, string> = {
 };
 
 const stepsText = (t: Record<string, number>) =>
-  ["photo", "find", "prepare", "name", "corner", "lookup", "pictures"]
+  ["collect", "photo", "find", "prepare", "name", "corner", "lookup", "pictures"]
     .filter((k) => typeof t[k] === "number")
     .map((k) => `${k} ${t[k]}`)
     .join(" · ");
@@ -600,6 +728,7 @@ function ScanReview({ out, onSave, onSkip }: { out: ReviewInput; onSave: (r: Lab
       steps: stepsText(out.timing),
       foundBy: out.foundBy,
       size: out.size,
+      frames: out.frames,
     });
   };
 
@@ -640,9 +769,10 @@ function ScanReview({ out, onSave, onSkip }: { out: ReviewInput; onSave: (r: Lab
           {out.disagree ? <div className="text-amber-400">The name and the corner point at different cards, so the name won.</div> : null}
           <div className="opacity-75">
             Card found by {FOUND_BY[out.foundBy] ?? out.foundBy} · {out.size} px
+            {out.frames ? ` · ${out.frames} video frames stacked` : ""}
           </div>
           <div className="opacity-75">
-            {(out.totalMs / 1000).toFixed(1)} s from the tap ({stepsText(out.timing)} ms; the name and the corner are read at the same time)
+            {(out.totalMs / 1000).toFixed(1)} s {out.source === "auto" ? "from the first frame" : "from the tap"} ({stepsText(out.timing)} ms; the name and the corner are read at the same time)
           </div>
         </div>
       </div>

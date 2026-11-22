@@ -7,7 +7,7 @@ export const LAB_KEY = "scan-lab:results";
 
 export interface LabResult {
   at: string; // ISO time
-  source: "camera" | "still" | "photo" | "url"; // still = a full-resolution photo taken from the live camera
+  source: "camera" | "still" | "photo" | "url" | "auto"; // still = a full-resolution photo taken from the live camera; auto = stacked video frames, no tap
   // The truth David picked.
   trueName: string;
   truePrinting: string; // "set/number" of the printing David picked (language is separate)
@@ -40,6 +40,7 @@ export interface LabResult {
   steps?: string; // "photo 900 · find 300 · name 800 · …"
   foundBy?: string; // edges, outline, live, turned, box, whole
   size?: string; // the picture's size in pixels, "4000×3000"
+  frames?: number; // auto scan: video frames stacked for the read that was kept
 }
 
 export function readLabResults(raw: string | null): LabResult[] {
@@ -142,7 +143,7 @@ export function resultsText(rows: LabResult[]): string {
   ];
   const cols: (keyof LabResult)[] = [
     "at", "source", "trueName", "trueSet", "trueNumber", "trueLang", "foil", "sleeved", "nameRead", "nameMatch", "nameVia",
-    "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "lineFix", "truePrinting", "candidates", "cardRank", "artRank", "ms", "totalMs", "steps", "foundBy", "size", "note",
+    "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "lineFix", "truePrinting", "candidates", "cardRank", "artRank", "ms", "totalMs", "steps", "foundBy", "size", "frames", "note",
   ];
   const clean = (v: unknown) => String(v ?? "").replace(/[\t\r\n]+/g, " ");
   return [...head, cols.join("\t"), ...rows.map((r) => cols.map((c) => clean(r[c])).join("\t"))].join("\n");

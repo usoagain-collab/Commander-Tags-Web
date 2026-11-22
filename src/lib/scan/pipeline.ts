@@ -160,11 +160,23 @@ function ocrCrop(card: HTMLCanvasElement, region: Rect, width: number, binary: b
   const [c, ctx] = canvas(width, (width * r.h) / r.w);
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(card, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
-  const img = ctx.getImageData(0, 0, c.width, c.height);
-  const gray = toGray(img);
-  const t = otsu(gray);
+  return toOcrCanvas(toGray(ctx.getImageData(0, 0, c.width, c.height)), c.width, c.height, binary, c);
+}
+
+// The sizes the name and corner are read at (the crops above, on a 630 × 880 card), also used for stacked frames.
+export const STRIP = {
+  name: { w: 900, h: Math.round((900 * REGIONS.name.h * 880) / (REGIONS.name.w * 630)) },
+  corner: { w: 1100, h: Math.round((1100 * REGIONS.collector.h * 880) / (REGIONS.collector.w * 630)) },
+};
+
+// Gray pixels to what the reader gets: dark text on light (light text on a dark border is flipped), or black and
+// white with Otsu's threshold when `binary`.
+export function toOcrCanvas(gray: ArrayLike<number>, w: number, h: number, binary: boolean, into?: HTMLCanvasElement): HTMLCanvasElement {
+  const [c, ctx] = into ? [into, into.getContext("2d", { willReadFrequently: true })!] : canvas(w, h);
+  const img = ctx.createImageData(w, h);
+  const t = otsu(Float32Array.from(gray));
   let dark = 0;
-  for (const v of gray) if (v <= t) dark++;
+  for (let i = 0; i < gray.length; i++) if (gray[i] <= t) dark++;
   const invert = dark > gray.length / 2; // light text on a dark border
   for (let i = 0; i < gray.length; i++) {
     let v = invert ? 255 - gray[i] : gray[i];
@@ -539,19 +551,25 @@ async function readCorner(crops: HTMLCanvasElement[], validSets: Set<string> | n
   return { lineRead, line, lineCrop };
 }
 
-export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) => void): Promise<ScanOutput> {
+// `given`: name and corner crops to read instead of cutting them from `card` (auto scan passes crops stacked from
+// many video frames).
+export async function scanCard(
+  card: HTMLCanvasElement,
+  onStep?: (step: string) => void,
+  given?: { name: HTMLCanvasElement[]; line: HTMLCanvasElement[] },
+): Promise<ScanOutput> {
   const started = performance.now();
   const timing: Record<string, number> = {};
   const since = (t: number) => Math.round(performance.now() - t);
   // Each text is read from a few crops in turn (the box a little lower or higher, gray or black and white) until one
   // works: frames differ, and the card's edges are found a few pixels off now and then.
   const shifted = (r: Rect, dy: number, dh = 0): Rect => ({ ...r, y: r.y + dy, h: r.h + dh });
-  const nameCrops = [
+  const nameCrops = given?.name ?? [
     ocrCrop(card, REGIONS.name, 900, false),
     ocrCrop(card, shifted(REGIONS.name, 0.008, 0.012), 900, false),
     ocrCrop(card, REGIONS.name, 900, true),
   ];
-  const lineCrops = [
+  const lineCrops = given?.line ?? [
     ocrCrop(card, REGIONS.collector, 1100, false),
     ocrCrop(card, shifted(REGIONS.collector, 0.02, -0.01), 1100, false),
     ocrCrop(card, shifted(REGIONS.collector, -0.03), 1100, false),

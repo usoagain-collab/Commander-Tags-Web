@@ -4,6 +4,7 @@ import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBound
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
 import { buildNameIndex, cleanNameRead, closestName, editDistance, nameFits, printedNames, setCodeVariants } from "./names";
 import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4 } from "./track";
+import { alignShift, medianImage, shiftImage, StripStack, warpGray } from "./stack";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -108,7 +109,7 @@ describe("lab results", () => {
   it("writes one tab-separated line per scan without breaking on newlines", () => {
     const text = resultsText([row({ note: "glare\nhere" })]);
     const lines = text.split("\n");
-    expect(lines[lines.length - 1].split("\t")).toHaveLength(29);
+    expect(lines[lines.length - 1].split("\t")).toHaveLength(30);
     expect(text).toContain("0263 U C21 • EN");
   });
 });
@@ -293,5 +294,52 @@ describe("tracker (round 6: a steady outline)", () => {
     expect(plausibleQuad(card())).toBe(true);
     expect(plausibleQuad([[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.7, 0.9]])).toBe(false);
     expect(plausibleQuad([[0.2, 0.1], [0.8, 0.9], [0.8, 0.1], [0.2, 0.9]])).toBe(false); // crossed
+  });
+});
+
+describe("frame stacking (round 7)", () => {
+  // A strip with "text": dark blocks on light, deterministic.
+  const strip = (w: number, h: number) => {
+    const img = new Uint8Array(w * h).fill(220);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if ((Math.floor(x / 7) * 3 + Math.floor(y / 5)) % 4 === 0 && y > 8 && y < h - 8) img[y * w + x] = 30;
+    return img;
+  };
+  it("finds how far a frame moved", () => {
+    const w = 200;
+    const h = 60;
+    const ref = strip(w, h);
+    const moved = shiftImage(ref, w, h, 3, -2);
+    expect(alignShift(ref, moved, w, h, 8)).toEqual([-3, 2]);
+  });
+  it("lines frames up and the median drops glare seen in only some frames", () => {
+    const w = 200;
+    const h = 60;
+    const ref = strip(w, h);
+    const stack = new StripStack(w, h, 15, 8);
+    for (let i = 0; i < 5; i++) {
+      const f = shiftImage(ref, w, h, (i % 3) - 1, i % 2);
+      if (i < 2) for (let y = 20; y < 40; y++) for (let x = 60; x < 120; x++) f[y * w + x] = 255; // glare
+      stack.add(f);
+    }
+    const med = stack.median();
+    const first = shiftImage(ref, w, h, -1, 0); // everything is lined up with the first frame
+    let off = 0;
+    for (let y = 12; y < h - 12; y++) for (let x = 12; x < w - 12; x++) if (Math.abs(med[y * w + x] - first[y * w + x]) > 40) off++;
+    expect(off).toBe(0);
+  });
+  it("takes the middle value per pixel", () => {
+    const a = Uint8Array.from([10, 200]);
+    const b = Uint8Array.from([20, 100]);
+    const c = Uint8Array.from([250, 0]);
+    expect([...medianImage([a, b, c], 2)]).toEqual([20, 100]);
+  });
+  it("flattens a strip through the card map", () => {
+    // A 4 × 4 picture, left half black, right half white; the identity map over the whole card.
+    const data = new Uint8Array(4 * 4 * 4);
+    for (let i = 0; i < 16; i++) data.fill(i % 4 < 2 ? 0 : 255, i * 4, i * 4 + 3);
+    const H = homography(4, 4, [[0, 0], [4, 0], [4, 4], [0, 4]]);
+    const out = warpGray({ data, width: 4, height: 4 }, H, 4, 4, { x: 0, y: 0, w: 1, h: 1 }, 4, 4);
+    expect(out[0]).toBeLessThan(60);
+    expect(out[3]).toBeGreaterThan(200);
   });
 });
