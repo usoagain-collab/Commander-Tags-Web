@@ -61,13 +61,14 @@ export function parseCollectorLine(text: string): CollectorLine {
     if (!out.number) {
       // The line starts with the number; the rarity letter after it is often misread (U as V), so it's optional.
       // Cards from about 2023 print the rarity first ("C 0145"), older ones after ("123/274 R").
-      const m = /^[^0-9A-Za-z]*(?:([A-Z])\s+)?([0-9OIlSB]{1,4}[a-z]?)(?:\s*\/\s*[0-9OIlSB]{1,4})?(?:\s+([A-Z]))?(?![0-9A-Za-z])/.exec(line);
+      // The rarity letter may touch the number ("M0026"); only real rarity letters, so a misread digit isn't eaten.
+      const m = /^[^0-9A-Za-z]*(?:([CURMLTP])\s*|([A-Z])\s+)?([0-9OIlSB]{1,4}[a-z]?)(?:\s*\/\s*[0-9OIlSB]{1,4})?(?:\s+([A-Z]))?(?![0-9A-Za-z])/.exec(line);
       if (m) {
-        const n = cleanNumber(m[2]);
+        const n = cleanNumber(m[3]);
         // At least two real digits, so a stray letter or a lone "1" isn't taken for a number.
-        if (n && (m[2].match(/\d/g)?.length ?? 0) >= 2) {
+        if (n && (m[3].match(/\d/g)?.length ?? 0) >= 2) {
           out.number = n;
-          const letter = m[1] ?? m[3];
+          const letter = m[1] ?? m[2] ?? m[4];
           const r = letter === "V" ? "U" : letter;
           out.rarity = r && RARITIES.has(r) ? r : null;
         }

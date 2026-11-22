@@ -9,6 +9,18 @@ export const simplify = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+// OCR often adds junk after the name (the mana cost, a dash): cut at a dash or bar, keep name characters only, and
+// drop a stray letter or digit at the end.
+export function cleanNameRead(text: string): string {
+  return text
+    .split(/[—–|]/)[0]
+    .replace(/[^A-Za-z0-9',\- ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(\s+\S{1,2})+$/, "")
+    .trim();
+}
+
 // Letter edits (insert, delete, change) to turn a into b; gives up early once past `limit`.
 export function editDistance(a: string, b: string, limit = Infinity): number {
   if (Math.abs(a.length - b.length) > limit) return limit + 1;

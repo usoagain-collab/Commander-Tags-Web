@@ -4,8 +4,8 @@
 // Everything here runs in the browser; the photo never leaves the phone.
 
 import { parseCollectorLine, type CollectorLine } from "./collector-line";
-import { buildNameIndex, closestName, type NameIndex } from "./names";
-import { CARD_RATIO, colorDistance, colorGrid, dHash, findCardBounds, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
+import { buildNameIndex, cleanNameRead, closestName, type NameIndex } from "./names";
+import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, homography, houghCorners, locateCardQuad, type Pt, type Quad, warp, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
 
 const API = "https://api.scryfall.com";
 // The straightened card keeps the photo's own resolution (630 to 1400 px wide), so the tiny corner text isn't shrunk away.
@@ -23,6 +23,7 @@ export interface Printing {
   lang: string;
   image: string; // small image
   finishes: string[];
+  flavorName?: string; // a Universes Beyond name printed on the card ("Worf, Regent of Terok Nor" on Mogis)
 }
 
 export interface Ranked extends Printing {
@@ -69,22 +70,56 @@ function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContex
 
 const pixelsOf = (ctx: CanvasRenderingContext2D, w: number, h: number): Pixels => ctx.getImageData(0, 0, w, h);
 
-// Cut `rect` out of the source and find the card's edges inside it (on a smaller copy, for speed).
-export function straighten(source: CanvasImageSource, srcW: number, srcH: number, rect: Rect | null, refine: boolean): HTMLCanvasElement {
+// Cut `rect` out of the source, find the card inside it (on a smaller copy, for speed) and flatten it upright.
+// First choice: the card's four edges as straight lines (houghCorners), then its outline's corners (both fix tilt
+// and a photo taken at an angle, where the card is a trapezoid); then a turned rectangle; then plain edge finding;
+// else the whole crop.
+export async function straighten(source: CanvasImageSource, srcW: number, srcH: number, rect: Rect | null, refine: boolean): Promise<HTMLCanvasElement> {
   const r = rect ?? { x: 0, y: 0, w: srcW, h: srcH };
-  let inner: Rect = { x: 0, y: 0, w: r.w, h: r.h };
+  let quad: Quad = { cx: r.w / 2, cy: r.h / 2, w: r.w, h: r.h, angle: 0 };
   if (refine) {
     const s = Math.min(1, 600 / Math.max(r.w, r.h));
-    const [, sctx] = canvas(r.w * s, r.h * s);
-    sctx.drawImage(source, r.x, r.y, r.w, r.h, 0, 0, sctx.canvas.width, sctx.canvas.height);
-    const b = findCardBounds(pixelsOf(sctx, sctx.canvas.width, sctx.canvas.height));
-    inner = { x: b.x / s, y: b.y / s, w: b.w / s, h: b.h / s };
+    const [sc, sctx] = canvas(r.w * s, r.h * s);
+    sctx.drawImage(source, r.x, r.y, r.w, r.h, 0, 0, sc.width, sc.height);
+    const small = pixelsOf(sctx, sc.width, sc.height);
+    const corners = houghCorners(small) ?? cardCorners(small);
+    if (corners) return flatten(source, r, corners.map(([x, y]) => [x / s, y / s]) as [Pt, Pt, Pt, Pt]);
+    const q = locateCardQuad(small);
+    if (q) {
+      quad = { cx: q.cx / s, cy: q.cy / s, w: q.w / s, h: q.h / s, angle: q.angle };
+    } else {
+      const b = findCardBounds(small);
+      quad = { cx: (b.x + b.w / 2) / s, cy: (b.y + b.h / 2) / s, w: b.w / s, h: b.h / s, angle: 0 };
+    }
   }
-  const w = Math.round(Math.min(MAX_W, Math.max(MIN_W, inner.w)));
+  const w = Math.round(Math.min(MAX_W, Math.max(MIN_W, quad.w)));
   const h = Math.round(w / CARD_RATIO);
   const [c, ctx] = canvas(w, h);
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, r.x + inner.x, r.y + inner.y, inner.w, inner.h, 0, 0, w, h);
+  // Map the turned card onto the upright canvas: centre it, scale it, undo its turn.
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(w / quad.w, h / quad.h);
+  ctx.rotate(-quad.angle);
+  ctx.drawImage(source, r.x, r.y, r.w, r.h, -quad.cx, -quad.cy, r.w, r.h);
+  return c;
+}
+
+// Perspective-correct the card from its four corners (in crop pixels) onto an upright canvas.
+function flatten(source: CanvasImageSource, r: Rect, corners: [Pt, Pt, Pt, Pt]): HTMLCanvasElement {
+  // Work on a copy at most 2400 px on its long side: plenty for the corner print, and light enough for a phone.
+  const k = Math.min(1, 2400 / Math.max(r.w, r.h));
+  const [, wctx] = canvas(r.w * k, r.h * k);
+  wctx.drawImage(source, r.x, r.y, r.w, r.h, 0, 0, wctx.canvas.width, wctx.canvas.height);
+  const src = pixelsOf(wctx, wctx.canvas.width, wctx.canvas.height);
+  const scaled = corners.map(([x, y]) => [x * k, y * k]) as [Pt, Pt, Pt, Pt];
+  const len = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const across = Math.max(len(scaled[0], scaled[1]), len(scaled[3], scaled[2]));
+  const w = Math.round(Math.min(MAX_W, Math.max(MIN_W, across)));
+  const h = Math.round(w / CARD_RATIO);
+  const [c, ctx] = canvas(w, h);
+  const img = ctx.createImageData(w, h);
+  img.data.set(warp(src, homography(w, h, scaled), w, h));
+  ctx.putImageData(img, 0, 0);
   return c;
 }
 
@@ -142,6 +177,7 @@ interface ScryCard {
   collector_number: string;
   lang: string;
   finishes?: string[];
+  flavor_name?: string;
   image_uris?: { small?: string };
   card_faces?: { oracle_id?: string; image_uris?: { small?: string } }[];
 }
@@ -157,7 +193,30 @@ function toPrinting(c: ScryCard): Printing {
     lang: c.lang,
     image: c.image_uris?.small ?? c.card_faces?.[0]?.image_uris?.small ?? "",
     finishes: c.finishes ?? [],
+    flavorName: c.flavor_name,
   };
+}
+
+// Cards whose name (or printed flavor name) contains the typed words, most played first, up to 15. Used when a name
+// fits too many cards for the fuzzy lookup ("Worf").
+export async function searchCards(text: string): Promise<Printing[]> {
+  const words = text.replace(/["()]/g, " ").trim();
+  if (words.length < 2) return [];
+  const res = await scry<{ data: ScryCard[] }>(
+    `/cards/search?${new URLSearchParams({ q: `"${words}" game:paper`, unique: "prints", include_extras: "true", order: "edhrec" })}`,
+  );
+  const seen = new Set<string>();
+  const out: Printing[] = [];
+  for (const c of res?.data ?? []) {
+    const p = toPrinting(c);
+    // One tile per name as printed (the Worf printing of Mogis is its own tile next to plain Mogis).
+    const key = `${p.oracleId}|${p.flavorName ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+    if (out.length >= 15) break;
+  }
+  return out;
 }
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -170,11 +229,17 @@ async function scry<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
+// Scryfall's fuzzy search (it also knows flavor names like "Worf, Regent of Terok Nor"). When it finds nothing, try
+// again without the last word, up to twice: one misread letter at the end ("Nox" for "Nor") is enough to fail it.
 export async function cardByName(text: string): Promise<Printing | null> {
-  const clean = text.replace(/[^A-Za-z0-9',\- ]+/g, " ").replace(/\s+/g, " ").trim();
-  if (clean.length < 3) return null;
-  const c = await scry<ScryCard>(`/cards/named?${new URLSearchParams({ fuzzy: clean })}`);
-  return c ? toPrinting(c) : null;
+  let words = cleanNameRead(text).split(" ");
+  for (let tries = 0; tries < 3 && words.join(" ").length >= 3; tries++) {
+    const c = await scry<ScryCard>(`/cards/named?${new URLSearchParams({ fuzzy: words.join(" ") })}`);
+    if (c) return toPrinting(c);
+    if (words.length <= 2) break;
+    words = words.slice(0, -1);
+  }
+  return null;
 }
 
 export async function cardByExactName(name: string): Promise<Printing | null> {
