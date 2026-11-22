@@ -172,3 +172,57 @@ export class StripStack {
     return medianImage(this.frames, this.w * this.h);
   }
 }
+
+export interface BandOptions {
+  mergeGap?: number; // busy runs this close join (the corner's two lines)
+  maxRows?: number; // taller runs aren't text (a patterned surface past the card's edge)
+  pick?: "busiest" | "lowest"; // the corner is the card's last print, so its run is the lowest one with real text
+}
+
+// The rows holding text in a strip, found by counting sharp brightness changes along each row: letters make many,
+// a frame line or plain art few. Busy runs are joined across small gaps, runs too tall to be text are dropped, and
+// the busiest (or, for the corner, the lowest fairly busy) run wins, with a margin. Round 8 (Nov 22, 2026): David's
+// picture sheet showed the live outline sitting a little off the card, so fixed name boxes cut the name in half; the
+// strips are now cut taller than the card's own edges and trimmed to this. Picking the busiest run took Rabanastre's
+// flavor text for its corner, hence "lowest".
+export function textBand(gray: ArrayLike<number>, w: number, h: number, opts: BandOptions = {}): [number, number] | null {
+  const { mergeGap = 4, maxRows = h, pick = "busiest" } = opts;
+  const counts = new Float32Array(h);
+  for (let y = 0; y < h; y++) {
+    let n = 0;
+    for (let x = 1; x < w; x++) if (Math.abs(gray[y * w + x] - gray[y * w + x - 1]) > 30) n++;
+    counts[y] = n;
+  }
+  const smooth = new Float32Array(h);
+  for (let y = 0; y < h; y++) smooth[y] = (counts[Math.max(0, y - 1)] + counts[y] + counts[Math.min(h - 1, y + 1)]) / 3;
+  let peak = 0;
+  for (const v of smooth) peak = Math.max(peak, v);
+  if (peak < w * 0.015) return null;
+  const runs: [number, number, number][] = []; // start, end (inclusive), total
+  for (let y = 0; y < h; y++) {
+    if (smooth[y] < peak * 0.3) continue;
+    const last = runs[runs.length - 1];
+    if (last && y - last[1] - 1 <= mergeGap) {
+      last[1] = y;
+      last[2] += smooth[y];
+    } else runs.push([y, y, smooth[y]]);
+  }
+  // A run touching the strip's top or bottom edge is the surface past the card (the strips reach beyond it).
+  const text = runs.filter((r) => r[1] - r[0] + 1 <= maxRows && r[0] > 1 && r[1] < h - 2);
+  if (!text.length) return null;
+  let best = text[0];
+  for (const r of text) if (r[2] > best[2]) best = r;
+  if (pick === "lowest") {
+    const strongest = best[2];
+    for (const r of text) if (r[2] >= strongest * 0.25 && r[0] > best[0]) best = r;
+  }
+  const pad = Math.max(4, Math.round((best[1] - best[0] + 1) * 0.35));
+  return [Math.max(0, best[0] - pad), Math.min(h, best[1] + 1 + pad)];
+}
+
+// The rows y0..y1 of a strip.
+export function cropRows(gray: ArrayLike<number>, w: number, y0: number, y1: number): Uint8Array {
+  const out = new Uint8Array(w * (y1 - y0));
+  for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) out[(y - y0) * w + x] = gray[y * w + x];
+  return out;
+}

@@ -169,6 +169,9 @@ export function ScanLab() {
   const [frames, setFrames] = useState(0);
   const collectorRef = useRef<FrameCollector | null>(null);
   const attemptRef = useRef(false); // a read is running
+  const seenAtRef = useRef(0); // when the card now in view was first collected (0 = none)
+  const tries = useRef(0); // reads of the card now in view
+  const lastCardAt = useRef(0); // last frame with an outline
   const nextAtRef = useRef(5); // read again once the stack has this many frames
   const liftRef = useRef(false); // a card was just scanned: wait until it leaves the view
   const reviewOpenRef = useRef(false);
@@ -229,12 +232,19 @@ export function ScanLab() {
     if (!card) return;
     attemptRef.current = true;
     const used = c.count;
-    const collect = Math.round(performance.now() - c.firstAt);
+    // Timed from when this card first came into view, kept apart from the collector, which starts over during a
+    // read (round 7 counted from page load when the outline dropped mid-read: a 71 s average).
+    const startedAt = (seenAtRef.current ||= c.firstAt);
+    const collect = Math.round(performance.now() - startedAt);
+    tries.current++;
     try {
       const result = await scanCard(card, setStep, c.crops());
-      const waited = performance.now() - c.firstAt;
+      const waited = performance.now() - startedAt;
       const found = !!(result.nameMatch || result.linePrinting);
-      if (found || waited > 6000) {
+      // Round 8: stop when the name and the corner agree; with only one of them, look a little longer (more frames)
+      // for the other; with neither, start a fresh stack, since the first frame everything lines up with may be bad.
+      const both = !!(result.nameMatch && result.linePrinting && !result.disagree);
+      if (both || (found && (waited > 3500 || tries.current >= 3)) || waited > 6000) {
         setOut({
           ...result,
           timing: { collect, ...result.timing },
@@ -249,9 +259,14 @@ export function ScanLab() {
         liftRef.current = true;
         c.reset();
         nextAtRef.current = 5;
+        seenAtRef.current = 0;
+        tries.current = 0;
         beep(found);
+      } else if (found) {
+        nextAtRef.current = c.count + 4; // half there: read again with more frames
       } else {
-        nextAtRef.current = c.count + 4; // nothing yet: look longer, read again with more frames
+        c.reset(); // nothing: fresh stack, fresh edge measure
+        nextAtRef.current = 5;
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "The scan failed.");
@@ -265,17 +280,24 @@ export function ScanLab() {
   autoTickRef.current = (video, prev, s) => {
     const c = (collectorRef.current ??= new FrameCollector());
     if (reviewOpenRef.current) return;
+    const now = performance.now();
     if (!s.shown) {
+      // A blink of the outline isn't a lifted card: only a gap of 0.4 s more (on top of the tracker's own hold)
+      // resets the timer, otherwise a flickering outline could keep a card from ever timing out.
+      if (now - lastCardAt.current < 400) return;
       // No card in view: start fresh, and the last card counts as lifted.
       if (c.count) c.reset();
+      seenAtRef.current = 0;
+      tries.current = 0;
       liftRef.current = false;
       nextAtRef.current = 5;
       setFrames(0);
       return;
     }
+    lastCardAt.current = now;
     if (liftRef.current) return;
     if (prev && quadMove(prev, s.shown) >= TRACK.follow) {
-      c.reset(); // the outline jumped: another card, or the same one moved a lot
+      c.reset(); // the outline jumped: start the stack again (the give-up timer keeps running)
       nextAtRef.current = 5;
     }
     if (!c.count && s.steady < 1) return; // start once the outline settles
