@@ -92,9 +92,9 @@ export function closestName(text: string, index: NameIndex, maxShare = 0.34): Na
 
 /* ---------- set codes: fixing a misread code in the corner ---------- */
 
-// Letters and digits the reader mixes up in the small corner print (seen: SDS read as SOS, TRK read as TREK).
+// Letters and digits the reader mixes up in the small corner print (seen: SDS read as SOS, TRK as TREK, TRC as IRC).
 const LOOKALIKE: Record<string, string> = {
-  O: "D0Q", D: "O0", "0": "OD", Q: "O0", I: "1L", "1": "IL", L: "I1", S: "5", "5": "S", B: "8", "8": "B",
+  O: "D0Q", D: "O0", "0": "OD", Q: "O0", I: "1LT", T: "I", "1": "IL", L: "I1", S: "5", "5": "S", B: "8", "8": "B",
   Z: "2", "2": "Z", G: "C6", C: "G", "6": "G", E: "F", F: "E", U: "V", V: "U", M: "N", N: "M", H: "N", K: "X", X: "K",
 };
 
