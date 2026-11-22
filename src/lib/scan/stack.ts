@@ -262,6 +262,8 @@ export interface BandOptions {
   mergeGap?: number; // busy runs this close join (the corner's two lines)
   maxRows?: number; // taller runs aren't text (a patterned surface past the card's edge)
   pick?: "busiest" | "lowest"; // the corner is the card's last print, so its run is the lowest one with real text
+  pairGap?: number; // "lowest": a run this close above is offered joined to it too (the corner is two lines)
+  count?: number; // how many candidate bands to return
 }
 
 // The rows holding text in a strip, found by counting sharp brightness changes along each row: letters make many,
@@ -271,7 +273,15 @@ export interface BandOptions {
 // strips are now cut taller than the card's own edges and trimmed to this. Picking the busiest run took Rabanastre's
 // flavor text for its corner, hence "lowest".
 export function textBand(gray: ArrayLike<number>, w: number, h: number, opts: BandOptions = {}): [number, number] | null {
-  const { mergeGap = 4, maxRows = h, pick = "busiest" } = opts;
+  return textBands(gray, w, h, { ...opts, count: 1 })[0] ?? null;
+}
+
+// Several likely text bands, best first. Round 10: one pick wasn't reliable for the corner (David's sheet: the card's
+// bottom edge for Janeway, the type bar for Stomping Ground, rules text for Talon Gates, only the second line for
+// Scorched Geyser), so the reader tries a few and keeps the one that reads as a real corner. For "lowest": each run
+// from the bottom up, first joined with the run just above it (the corner's two lines), then alone.
+export function textBands(gray: ArrayLike<number>, w: number, h: number, opts: BandOptions = {}): [number, number][] {
+  const { mergeGap = 4, maxRows = h, pick = "busiest", pairGap = 0, count = 3 } = opts;
   const counts = new Float32Array(h);
   for (let y = 0; y < h; y++) {
     let n = 0;
@@ -282,7 +292,7 @@ export function textBand(gray: ArrayLike<number>, w: number, h: number, opts: Ba
   for (let y = 0; y < h; y++) smooth[y] = (counts[Math.max(0, y - 1)] + counts[y] + counts[Math.min(h - 1, y + 1)]) / 3;
   let peak = 0;
   for (const v of smooth) peak = Math.max(peak, v);
-  if (peak < w * 0.015) return null;
+  if (peak < w * 0.015) return [];
   const runs: [number, number, number][] = []; // start, end (inclusive), total
   for (let y = 0; y < h; y++) {
     if (smooth[y] < peak * 0.3) continue;
@@ -294,15 +304,28 @@ export function textBand(gray: ArrayLike<number>, w: number, h: number, opts: Ba
   }
   // A run touching the strip's top or bottom edge is the surface past the card (the strips reach beyond it).
   const text = runs.filter((r) => r[1] - r[0] + 1 <= maxRows && r[0] > 1 && r[1] < h - 2);
-  if (!text.length) return null;
-  let best = text[0];
-  for (const r of text) if (r[2] > best[2]) best = r;
-  if (pick === "lowest") {
-    const strongest = best[2];
-    for (const r of text) if (r[2] >= strongest * 0.2 && r[0] > best[0]) best = r;
+  if (!text.length) return [];
+  const strongest = Math.max(...text.map((r) => r[2]));
+  const picks: [number, number][] = [];
+  if (pick === "busiest") {
+    for (const r of [...text].sort((a, b) => b[2] - a[2])) picks.push([r[0], r[1]]);
+  } else {
+    const strong = text.filter((r) => r[2] >= strongest * 0.15).sort((a, b) => b[0] - a[0]);
+    for (const r of strong) {
+      const above = text.filter((a) => a[1] < r[0] && r[0] - a[1] <= pairGap).sort((a, b) => b[1] - a[1])[0];
+      if (above && r[1] - above[0] + 1 <= maxRows * 1.4) picks.push([above[0], r[1]]);
+      picks.push([r[0], r[1]]);
+    }
   }
-  const pad = Math.max(4, Math.round((best[1] - best[0] + 1) * 0.5));
-  return [Math.max(0, best[0] - pad), Math.min(h, best[1] + 1 + pad)];
+  const out: [number, number][] = [];
+  for (const [a, b] of picks) {
+    const pad = Math.max(4, Math.round((b - a + 1) * 0.5));
+    const band: [number, number] = [Math.max(0, a - pad), Math.min(h, b + 1 + pad)];
+    if (out.some((o) => Math.abs(o[0] - band[0]) < 4 && Math.abs(o[1] - band[1]) < 4)) continue;
+    out.push(band);
+    if (out.length >= count) break;
+  }
+  return out;
 }
 
 // The rows y0..y1 of a strip.

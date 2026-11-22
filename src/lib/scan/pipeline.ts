@@ -5,7 +5,7 @@
 
 import { parseCollectorLine, type CollectorLine } from "./collector-line";
 import { buildNameIndex, cleanNameRead, closestName, nameFits, printedNames, setCodeVariants, type NameIndex } from "./names";
-import { cropRows, textBand } from "./stack";
+import { cropRows, textBand, textBands } from "./stack";
 import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, homography, houghCorners, locateCardQuad, type Pt, type Quad, warp, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
 
 const API = "https://api.scryfall.com";
@@ -181,7 +181,7 @@ const bandOptions = (kind: "name" | "corner", h: number) => {
   const rows = h / TALL[kind].h; // strip rows per card height
   return kind === "name"
     ? { mergeGap: Math.round(rows * 0.003), maxRows: Math.round(rows * 0.05) }
-    : { mergeGap: Math.round(rows * 0.02), maxRows: Math.round(rows * 0.06), pick: "lowest" as const };
+    : { mergeGap: Math.round(rows * 0.02), maxRows: Math.round(rows * 0.06), pick: "lowest" as const, pairGap: Math.round(rows * 0.03) };
 };
 
 // The sizes the strips are read at (on a 630 × 880 card), also used for stacked frames.
@@ -198,11 +198,14 @@ const fixedRows = (tall: Rect, fixed: Rect, h: number): [number, number] => [
 // picture (auto scan: the sharpest single frame, the newest), then the old fixed box.
 export function stripCrops(gray: Uint8Array, kind: "name" | "corner", extras: (Uint8Array | null)[] = [], fixed = true): HTMLCanvasElement[] {
   const { w, h } = STRIP[kind];
-  const band = textBand(gray, w, h, bandOptions(kind, h));
+  // The corner offers its 3 likeliest bands, the name its 2; then the best one in black and white.
+  const bands = textBands(gray, w, h, { ...bandOptions(kind, h), count: kind === "corner" ? 3 : 2 });
+  const band = bands[0];
   const out: HTMLCanvasElement[] = [];
   const rows = (g: ArrayLike<number>, y0: number, y1: number, binary: boolean) => toOcrCanvas(cropRows(g, w, y0, y1), w, y1 - y0, binary);
   if (band) {
-    out.push(rows(gray, band[0], band[1], false), rows(gray, band[0], band[1], true));
+    for (const b of bands) out.push(rows(gray, b[0], b[1], false));
+    out.push(rows(gray, band[0], band[1], true));
     for (const extra of extras) {
       if (!extra) continue;
       const b2 = textBand(extra, w, h, bandOptions(kind, h));
@@ -482,10 +485,10 @@ async function cardByLine(line: CollectorLine, photo: PhotoPrints, nameMatch: Pr
   return { printing: pick, fixedFrom: pick.set !== line.set ? line.set : null };
 }
 
-// Every English paper printing of the card, promos and variants included (up to 525).
+// Every English paper printing of the card, promos and variants included (up to 525), newest first.
 export async function printingsOf(oracleId: string): Promise<Printing[]> {
   const out: Printing[] = [];
-  let path: string | null = `/cards/search?${new URLSearchParams({ q: `oracleid:${oracleId} game:paper`, unique: "prints", include_extras: "true", include_variations: "true", order: "released" })}`;
+  let path: string | null = `/cards/search?${new URLSearchParams({ q: `oracleid:${oracleId} game:paper`, unique: "prints", include_extras: "true", include_variations: "true", order: "released", dir: "desc" })}`;
   for (let page = 0; path && page < 3; page++) {
     const res: { data: ScryCard[]; next_page?: string } | null = await scry(path);
     if (!res) break;
@@ -715,7 +718,11 @@ export async function scanCard(
   const t2 = performance.now();
   if (oracleId && printings) {
     onStep?.("Comparing the picture with every printing…");
-    ({ candidates, artOrder } = await rank(prints, printings));
+    // At most the 150 newest printings (a basic land has over 500, which took 14 s in round 9). A corner reading
+    // that points elsewhere still counts: its printing is added.
+    const shortlist = printings.slice(0, 150);
+    if (linePrinting && linePrinting.oracleId === oracleId && !shortlist.some((p) => printingKey(p) === printingKey(linePrinting!))) shortlist.push(linePrinting);
+    ({ candidates, artOrder } = await rank(prints, shortlist));
   }
   timing.pictures = since(t2);
 
@@ -732,7 +739,10 @@ export async function scanCard(
       bySet.length > 1 && line.number
         ? [...bySet].sort((a, b) => Math.abs(num(a) - Number(line.number)) - Math.abs(num(b) - Number(line.number)))[0]
         : undefined;
-    const pick = (byNum.length === 1 ? byNum[0] : undefined) ?? (bySet.length === 1 ? bySet[0] : nearest);
+    // A number alone (no set read) only counts when it names one printing of a card with few: Swamp has 525 printings,
+    // and a misread "459" landed on CLB #459 (round 9).
+    const numberOnly = !line.set && candidates.length > 20 ? undefined : byNum.length === 1 ? byNum[0] : undefined;
+    const pick = numberOnly ?? (bySet.length === 1 ? bySet[0] : nearest);
     if (pick) {
       finalLine = pick;
       fixedFrom = `${(line.set ?? "?").toUpperCase()} #${line.number ?? "?"}`;

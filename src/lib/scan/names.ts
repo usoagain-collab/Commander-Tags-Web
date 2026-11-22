@@ -88,7 +88,16 @@ export function closestName(text: string, index: NameIndex, maxShare = 0.34): Na
       continue;
     }
     const d = editDistance(key, k, bestDistance);
-    if (d <= bestDistance && (!best || d < best.distance || (d === best.distance && k.length === key.length))) {
+    // On a tie, a name of the read's own length wins, but never over a card's own name with an alias (the "Swamp"
+    // face of "Swamp // Swamp" took over plain Swamp in round 10).
+    let tieWins = false;
+    if (best && d === best.distance) {
+      const bestFits = simplify(best.name).length === key.length;
+      const bestIsAlias = best.name !== best.target;
+      const isAlias = index.names[i] !== index.targets[i];
+      tieWins = (!bestFits && k.length === key.length) || (bestFits && k.length === key.length && bestIsAlias && !isAlias);
+    }
+    if (d <= bestDistance && (!best || d < best.distance || tieWins)) {
       best = { name: index.names[i], target: index.targets[i], distance: d, share: d / Math.max(key.length, k.length) };
       bestDistance = d;
     }

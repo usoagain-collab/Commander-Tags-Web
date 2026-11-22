@@ -4,7 +4,7 @@ import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBound
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
 import { buildNameIndex, cleanNameRead, closestName, editDistance, nameFits, printedNames, setCodeVariants } from "./names";
 import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4 } from "./track";
-import { alignShift, cropRows, medianImage, shiftImage, shiftTilted, StripStack, textBand, warpGray } from "./stack";
+import { alignShift, cropRows, medianImage, shiftImage, shiftTilted, StripStack, textBand, textBands, warpGray } from "./stack";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -450,5 +450,38 @@ describe("round 9: turned frames and bad frames", () => {
     expect(Math.abs(left[0] + 9) + Math.abs(left[1] - 14)).toBeLessThanOrEqual(2); // the correction to apply
     expect(Math.abs(right[0] + 5) + Math.abs(right[1] - 20)).toBeLessThanOrEqual(2);
     console.log(`corner strip, both halves: ${ms.toFixed(0)} ms`);
+  });
+});
+
+describe("round 10: several corner bands", () => {
+  const lines = (g: Uint8Array, w: number, y0: number, y1: number, period: number) => {
+    for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) if (Math.floor(x / period) % 3 === 0) g[y * w + x] = 30;
+  };
+  it("offers the two corner lines joined first, even when they're further apart than the join gap", () => {
+    const w = 300;
+    const h = 400;
+    const g = new Uint8Array(w * h).fill(210);
+    lines(g, w, 60, 100, 5); // a big type bar
+    lines(g, w, 200, 215, 4); // number line
+    lines(g, w, 235, 250, 4); // set line, 20 rows below
+    const bands = textBands(g, w, h, { mergeGap: 8, maxRows: 80, pick: "lowest", pairGap: 30, count: 4 });
+    expect(bands.length).toBeGreaterThanOrEqual(2);
+    expect(bands[0][0]).toBeLessThanOrEqual(200);
+    expect(bands[0][1]).toBeGreaterThanOrEqual(250);
+    expect(bands.some(([a, b]) => a <= 60 && b >= 100)).toBe(true); // the type bar is still offered, after the corner lines
+  });
+  it("keeps textBand as the first of textBands", () => {
+    const w = 300;
+    const h = 200;
+    const g = new Uint8Array(w * h).fill(210);
+    lines(g, w, 80, 100, 4);
+    expect(textBand(g, w, h)).toEqual(textBands(g, w, h)[0]);
+  });
+});
+
+describe("round 10: name ties", () => {
+  it("keeps a card's own name over another card's face of the same name", () => {
+    expect(closestName("Swamp", buildNameIndex(["Swamp // Swamp", "Swamp"]))?.target).toBe("Swamp");
+    expect(closestName("Swamp", buildNameIndex(["Swamp", "Swamp // Swamp"]))?.target).toBe("Swamp");
   });
 });
