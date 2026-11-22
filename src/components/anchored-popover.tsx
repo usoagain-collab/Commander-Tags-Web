@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 type Pos = { left: number; top: number; above: boolean; width: number };
 
 /** Open/close state plus a position measured from the anchor. Closes on scroll or resize so it never drifts. */
-export function useAnchoredPopover(width = 256, expectedHeight = 200) {
+export function useAnchoredPopover(width = 256, expectedHeight = 200, placement: "below" | "side" = "below") {
   const [pos, setPos] = useState<Pos | null>(null);
 
   const show = useCallback(
@@ -16,12 +16,24 @@ export function useAnchoredPopover(width = 256, expectedHeight = 200) {
       const r = anchor?.getBoundingClientRect();
       if (!r) return;
       const w = Math.min(width, window.innerWidth - 16);
+      if (placement === "side") {
+        // Beside the anchor (right, else left), so a list's next rows stay visible and reachable
+        // (David, Nov 21, 2026: the tag tree card covered the tags under the one hovered).
+        const right = r.right + 8;
+        const left = r.left - 8 - w;
+        const fits = right + w <= window.innerWidth - 8 ? right : left >= 8 ? left : null;
+        if (fits !== null) {
+          const top = Math.max(8, Math.min(r.top, window.innerHeight - expectedHeight - 8));
+          setPos({ left: fits, top, above: false, width: w });
+          return;
+        }
+      }
       const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
       // Below the anchor if there's room, otherwise above it.
       const above = r.bottom + expectedHeight > window.innerHeight && r.top > expectedHeight;
       setPos({ left, top: above ? r.top - 4 : r.bottom + 4, above, width: w });
     },
-    [width, expectedHeight],
+    [width, expectedHeight, placement],
   );
   const hide = useCallback(() => setPos(null), []);
 

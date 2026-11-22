@@ -19,7 +19,22 @@ export function railWidthOf(prefs: Record<string, unknown>) {
   return prefs.leftCollapsed === true ? RAIL_COLLAPSED : RAIL_DEFAULT;
 }
 
-export type PreviewMode = "float" | "docked" | "off";
+/**
+ * float = the far side of the screen; beside = right next to the hovered card (David, Nov 21, 2026: on big
+ * screens the far side was too far from the card); docked = its own column; off = none.
+ */
+export type PreviewMode = "float" | "beside" | "docked" | "off";
+
+export const PREVIEW_LABELS: Record<PreviewMode, string> = { beside: "Next to the card", float: "Far side", docked: "Docked", off: "Off" };
 
 export const readPreviewMode = (prefs: Record<string, unknown>): PreviewMode =>
-  prefs.previewMode === "docked" || prefs.previewMode === "off" ? prefs.previewMode : "float";
+  prefs.previewMode === "docked" || prefs.previewMode === "off" || prefs.previewMode === "beside" ? prefs.previewMode : "float";
+
+/** Where the beside preview goes: right of the card if it fits, else left, kept inside the window. */
+export function besidePosition(card: { left: number; right: number; top: number }, view: { width: number; height: number }, size = { width: 270, height: 520 }) {
+  const gap = 12;
+  const right = card.right + gap;
+  const left = right + size.width <= view.width - 8 ? right : Math.max(8, card.left - gap - size.width);
+  const top = Math.max(8, Math.min(card.top - 24, view.height - size.height - 8));
+  return { left, top };
+}

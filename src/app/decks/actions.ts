@@ -77,6 +77,21 @@ export async function renameDeck(formData: FormData) {
   revalidatePath(`/decks/${id}`);
 }
 
+/** Rename from the deck page: returns a sentence to show instead of throwing, and notices a deck it couldn't change. */
+export async function renameDeckFromPage(id: string, raw: string): Promise<string | null> {
+  const { supabase } = await requireUser();
+  const name = raw.trim().slice(0, 120);
+  if (!name) return "A deck needs a name.";
+  if (!UUID.test(id)) return "That deck wasn't found.";
+  const { data, error } = await supabase.from("decks").update({ name }).eq("id", id).select("id");
+  if (error) return "Couldn't rename the deck. Try again in a minute.";
+  // RLS lets only the owner change a deck; anyone else changes nothing and gets no error.
+  if (!data?.length) return "Only the deck's owner can rename it.";
+  revalidatePath("/decks");
+  revalidatePath(`/decks/${id}`);
+  return null;
+}
+
 export async function deleteDeck(formData: FormData) {
   const { supabase } = await requireUser();
   const id = String(formData.get("id"));

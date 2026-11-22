@@ -391,6 +391,17 @@ Legal notices (Nov 11, 2026): the footer in src/app/layout.tsx and the Terms pag
 
 - **Round 2 (Nov 10, 2026):** phones under 640 px get a header menu (`src/components/header-menu.tsx`; the Feedback dialog is a portal so it survives the menu closing); the deck page's narrow layout has a "What this deck needs" heading over the roles strip; a signed-out visitor on a deck they can't open sees `DeckUnavailable` (Sign in for the owner) instead of the login page; `next.config.ts` sends `frame-ancestors 'none'`, X-Frame-Options, nosniff and Referrer-Policy; Import offers "Did you mean" (`fuzzy_card_names`), lists cards already in the deck once (`ImportReport.alreadyIn`) and warns about off-color cards before adding (`offColor`); the Smart Cutter needs 4+ cards (commander weighted) behind an archetype (`CUTTER.archetypeMinCards`); Auto build starts at "Up to $5" and remembers the last cap on the device; privacy page has a contact email (David's Gmail, his choice); footer and terms carry the Wizards Fan Content Policy notice. The console error on 404 pages is the browser logging the 404 status itself, not a bug.
 
+## Quick wins from David's hour of use (Nov 21, 2026)
+
+- **Dead buttons in Edit targets:** `useDragReorder` used to capture the mouse on press, which sent the click to the row instead of the button under it, so Hide, ✦ Suggest, ⓘ and Top tags' row buttons did nothing while editing. It now captures only once a drag passes 6 px. Edit mode shows a gold frame, a gold **Done editing** at the top and another at the bottom of the panel.
+- **Card preview:** a fourth mode, **Next to the card** (`beside`, `besidePosition` in `layout-prefs.ts`), and a Preview menu in the deck toolbar (wide screens, signed in) besides Settings. Default is still Far side (`float`).
+- **Rename on the deck page:** owners click the name in the hero (`DeckName` in `deck-hero.tsx`, `renameDeckFromPage` in `decks/actions.ts`, which reports RLS refusals instead of failing silently). **About this deck ↓** in the hero jumps to `#about`; the section spans the whole grid now (it used to land in the narrow left column).
+- **Filters:** a Rarity row (`FilterForm.rarities`, `r:`) in Search and Suggested. Search's Colors row offers only the commander's colors plus colorless while "Only <commander>'s colors" is on (`colorChoices`).
+- **Tag tree card** (Top tags ⑂) opens beside the row (`useAnchoredPopover(..., "side")`) so the tags under it stay visible.
+- **Card sheet:** its keyboard/focus effect runs once per opening (callbacks kept in a ref), the wording hint has the same height as the Search button, and a drag that starts inside the dialog and ends on the backdrop no longer closes it. Together these were why highlighting rules text broke mid-drag.
+- **Feedback inbox:** `/admin/feedback` (admin only, like `/admin/stats`; not linked). The check-in email footer says Unsubscribe plus a link to Settings → Email (`/settings#email`).
+- Home page: the bottom "Browse public decks" shows only when the Fresh decks row (which links to Browse) is empty.
+
 ## Admin stats (David, Nov 13, 2026)
 
 - `/admin/stats` (`src/app/admin/stats/page.tsx`): accounts, signed in last 7 / 30 days, accounts with a deck, decks (new and edited this week), sign-ups and new decks per day for 30 days (Hawaii time), newest 15 accounts with name, join date, last sign-in and deck count. The Precons and test accounts (`SYSTEM_EMAILS` in `src/lib/admin/stats.ts`) aren't counted.

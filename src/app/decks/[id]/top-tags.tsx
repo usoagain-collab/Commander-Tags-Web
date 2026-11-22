@@ -136,7 +136,7 @@ const ROW_ICON =
 
 function TagRow({ tag, drag, dragging, ...props }: { tag: ThemeTag; drag: ReturnType<ReturnType<typeof useDragReorder>["rowProps"]>; dragging: boolean } & Props) {
   const row = useRef<HTMLLIElement>(null);
-  const { pos, open, show, hide } = useAnchoredPopover(260, 260);
+  const { pos, open, show, hide } = useAnchoredPopover(260, 260, "side");
   const active = props.highlight === highlightValue(tag);
   const card = open ? props.treeCardFor(tag.key) : null;
   const isRole = tag.kind === "o" && props.roleSlugs.has(tag.slug);

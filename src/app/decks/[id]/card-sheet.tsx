@@ -93,12 +93,18 @@ export function CardSheet(props: Props) {
       : details.faces[face]?.image;
 
   // Keyboard: Esc closes, arrow keys step through the deck. Lock page scroll while open.
+  // Once per opening: the editor passes new callbacks on every render, and re-running this each time moved focus
+  // and toggled the page scroll mid-selection, which broke highlighting rules text (David, Nov 21, 2026).
+  const keys = useRef({ onClose, onPrev, onNext });
+  keys.current = { onClose, onPrev, onNext };
+  // Where a press started: a text selection dragged out past the dialog mustn't close it.
+  const pressedBackdrop = useRef(false);
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowLeft") onPrev();
-      else if (e.key === "ArrowRight") onNext();
+      if (e.key === "Escape") keys.current.onClose();
+      else if (e.key === "ArrowLeft") keys.current.onPrev();
+      else if (e.key === "ArrowRight") keys.current.onNext();
     };
     window.addEventListener("keydown", onKey);
     const overflow = document.body.style.overflow;
@@ -107,7 +113,7 @@ export function CardSheet(props: Props) {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = overflow;
     };
-  }, [onClose, onPrev, onNext]);
+  }, []);
 
   useEffect(() => {
     setPanel("main");
@@ -123,7 +129,10 @@ export function CardSheet(props: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-[2px] sm:items-center sm:p-6"
-      onClick={onClose}
+      onPointerDown={(e) => (pressedBackdrop.current = e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && pressedBackdrop.current) onClose();
+      }}
       role="presentation"
     >
       <div

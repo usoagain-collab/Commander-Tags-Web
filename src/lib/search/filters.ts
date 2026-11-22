@@ -23,9 +23,19 @@ export type FilterForm = {
   sinceYear: number | null;
   noReserved: boolean;
   instantSpeed: boolean;
+  /** Printed at one of these rarities (common, uncommon, rare, mythic); several are OR'ed. */
+  rarities: string[];
 };
 
+export const RARITIES: { value: string; label: string }[] = [
+  { value: "common", label: "Common" },
+  { value: "uncommon", label: "Uncommon" },
+  { value: "rare", label: "Rare" },
+  { value: "mythic", label: "Mythic" },
+];
+
 export const EMPTY_FILTERS: FilterForm = {
+  rarities: [],
   colors: [],
   colorMode: "including",
   types: [],
@@ -62,6 +72,9 @@ export function filterSyntax(f: FilterForm): string {
   if (types.length === 1) parts.push(types[0]);
   else if (types.length > 1) parts.push(`(${types.join(" or ")})`);
   if (f.instantSpeed) parts.push("(t:instant or kw:flash)");
+  const rarities = (f.rarities ?? []).map((r) => `r:${r}`);
+  if (rarities.length === 1) parts.push(rarities[0]);
+  else if (rarities.length > 1) parts.push(`(${rarities.join(" or ")})`);
   if (f.text.trim()) parts.push(`o:${quote(f.text)}`);
   if (f.keyword.trim()) parts.push(`kw:${quote(f.keyword)}`);
   if (f.mvMin != null && f.mvMax != null && f.mvMin === f.mvMax) parts.push(`mv=${f.mvMin}`);
@@ -131,6 +144,7 @@ export const CHEAT_SHEET: { syntax: string; means: string }[] = [
   { syntax: "mv<=3", means: "Mana value (also =, >, >=, <)" },
   { syntax: "usd<=5", means: "Price in US dollars" },
   { syntax: "kw:flying", means: "Has a keyword" },
+  { syntax: "r:common / r>=rare", means: "Rarity it was printed at" },
   { syntax: "s:dsk / year>=2022", means: "Set code / year printed" },
   { syntax: "is:firstprint", means: "First printing only (no reprints)" },
   { syntax: "otag:ramp / art:dragon", means: "Scryfall Tagger function and art tags" },

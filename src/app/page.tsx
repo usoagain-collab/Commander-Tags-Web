@@ -242,9 +242,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
             <Link href="/precons" className="btn min-h-12 px-6">
               Browse precons
             </Link>
-            <Link href="/browse" className="btn min-h-12 px-6">
-              Browse public decks
-            </Link>
+            {/* Fresh decks above already links to Browse; say it once (David, Nov 21, 2026). */}
+            {recent.length === 0 && (
+              <Link href="/browse" className="btn min-h-12 px-6">
+                Browse public decks
+              </Link>
+            )}
           </div>
         </div>
       </section>

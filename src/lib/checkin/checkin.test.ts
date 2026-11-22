@@ -77,6 +77,8 @@ describe("the email", () => {
     expect(mail.text).toContain("How easy is Deck Genome to use?");
     expect(mail.text).toContain(links.answer);
     expect(mail.text).toContain(links.stopPage);
+    expect(links.settings).toBe("https://deckgenome.com/settings#email");
+    expect(mail.html).toContain('href="https://deckgenome.com/settings#email"');
     expect(links.answer).toMatch(/^https:\/\/deckgenome\.com\/checkin\?u=/);
     expect(mail.headers["List-Unsubscribe"]).toBe(`<${links.oneClick}>`);
     expect(mail.headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");

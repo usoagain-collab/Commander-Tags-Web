@@ -40,8 +40,8 @@ export function WordingSearch({
 
   if (!details) return null;
   const phrases = wordingPhrases(cardText(details), card.name, card.type_line, 8);
-  if (!phrases.length && !selected) return null;
 
+  // The hint and the button take the same height, so the sheet doesn't shift under the mouse while selecting.
   return (
     <div className="space-y-2 text-sm">
       {selected ? (
@@ -49,7 +49,9 @@ export function WordingSearch({
           <span className="min-w-0 truncate">Search cards that say “{selected}”</span>
         </button>
       ) : (
-        <p className="text-xs opacity-60">Search this wording: tap a phrase, or select any text above.</p>
+        <p className="flex min-h-11 items-center rounded-lg border border-dashed border-foreground/20 px-3 text-xs opacity-75">
+          🔎 Select any words in the rules text above to find other cards that say them{phrases.length ? ", or tap a phrase below." : "."}
+        </p>
       )}
       {phrases.length > 0 && <WordingChips phrases={phrases} onSearch={(q, p) => onSearch(q, `cards that say “${p}”`)} />}
     </div>
