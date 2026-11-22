@@ -144,43 +144,80 @@ function Stat({ good, children }: { good?: boolean; children: React.ReactNode })
   );
 }
 
-/** Less frequent tools, one click away. Closes on picking, clicking elsewhere, or Esc. */
-export function MoreMenu({ items }: { items: { key: string; label: string; active?: boolean; onPick: () => void }[] }) {
-  const [open, setOpen] = useState(false);
+export type MoreItem = { key: string; label: string; active?: boolean; onPick: () => void };
+export type MoreGroup = { title: string; items: MoreItem[] };
+
+/**
+ * Less frequent tools, one click away, under short headings (two columns from 640 px, so the list stays short).
+ * Opens toward the side of the screen with room and never runs past the bottom of the window (David, Nov 21, 2026:
+ * it hung off the right edge on his laptop). Closes on picking, clicking elsewhere, or Esc.
+ */
+export function MoreMenu({ groups }: { groups: MoreGroup[] }) {
+  const [place, setPlace] = useState<{ left: number; width: number; maxHeight: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const open = place !== null;
+  const shown = groups.filter((g) => g.items.length > 0);
+
+  function toggle() {
+    if (open) return setPlace(null);
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return;
+    const vw = window.innerWidth;
+    const width = Math.min(vw >= 640 ? 496 : 240, vw - 16);
+    // Hang from the button's right edge when it's in the right half of the screen (the usual spot on wide screens),
+    // its left edge otherwise, then nudge it so it stays 8 px inside the window either way.
+    const want = r.left + r.width / 2 > vw / 2 ? r.right - width : r.left;
+    const left = Math.max(8, Math.min(want, vw - width - 8));
+    // Left is relative to the button's box, which the menu is positioned in.
+    setPlace({ left: left - r.left, width, maxHeight: Math.max(240, window.innerHeight - r.bottom - 12) });
+  }
+
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
+      if (!box.current?.contains(e.target as Node)) setPlace(null);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setPlace(null);
+    const close = () => setPlace(null);
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
+    window.addEventListener("resize", close);
     return () => {
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", esc);
+      window.removeEventListener("resize", close);
     };
   }, [open]);
+
   return (
     <div ref={box} className="relative">
-      <button type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
         More <span aria-hidden>▾</span>
       </button>
-      {open && (
-        <div role="menu" className="panel absolute right-0 z-40 mt-1 w-44 overflow-hidden bg-panel-raised py-1 shadow-2xl sm:left-0 sm:right-auto">
-          {items.map((i) => (
-            <button
-              key={i.key}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                i.onPick();
-              }}
-              className={`block min-h-11 w-full px-4 text-left text-sm hover:bg-foreground/10 ${i.active ? "text-gold" : ""}`}
-            >
-              {i.label}
-            </button>
+      {place && (
+        <div
+          role="menu"
+          style={{ left: place.left, width: place.width, maxHeight: place.maxHeight }}
+          className="panel absolute z-40 mt-1 overflow-y-auto overscroll-contain bg-panel-raised px-1 py-2 shadow-2xl sm:columns-2 sm:gap-1"
+        >
+          {shown.map((g) => (
+            <div key={g.title} role="group" aria-label={g.title} className="mb-1 break-inside-avoid last:mb-0">
+              <div className="eyebrow px-3 pb-0.5 pt-2 text-[11px] opacity-60">{g.title}</div>
+              {g.items.map((i) => (
+                <button
+                  key={i.key}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setPlace(null);
+                    i.onPick();
+                  }}
+                  className={`block min-h-11 w-full rounded-md px-3 text-left text-sm hover:bg-foreground/10 ${i.active ? "text-gold" : ""}`}
+                >
+                  {i.label}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       )}

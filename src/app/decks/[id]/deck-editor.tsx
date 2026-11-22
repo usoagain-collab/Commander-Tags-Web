@@ -1670,40 +1670,66 @@ export function DeckEditor({
                 ↗ Share <span className="text-xs opacity-75">· {visibility === "public" ? "Public" : visibility === "unlisted" ? "Link only" : "Private"}</span>
               </HeaderButton>
             )}
+            {/* Grouped under headings (Nov 21, 2026): one flat list of 19 had grown too long to scan. */}
             <MoreMenu
-              items={[
-                ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
-                { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
-                { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
+              groups={[
                 {
-                  key: "compare",
-                  label: "Compare with another deck",
-                  active: panel === "compare",
-                  onPick: () => {
-                    setCompareWith(null);
-                    setPanel("compare");
-                  },
+                  title: "Build",
+                  items: [
+                    ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
+                    ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
+                    ...(ownerOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
+                    ...(userId ? [{ key: "packages", label: "Packages", active: panel === "packages", onPick: () => setPanel("packages") }] : []),
+                  ],
                 },
-                { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
-                ...(userId ? [{ key: "packages", label: "Packages", active: panel === "packages", onPick: () => setPanel("packages") }] : []),
-                ...(ownerOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
-                ...(readOnly || guest || !userId ? [] : [{ key: "cobuild", label: "Build together", active: panel === "cobuild", onPick: () => setPanel("cobuild") }]),
-                ...(suggestions.available && (!readOnly || visibility !== "private")
-                  ? [
-                      {
-                        key: "suggestions",
-                        label: readOnly ? "Suggest changes" : `Suggestions${suggestions.open.length ? ` (${suggestions.open.length})` : ""}`,
-                        active: panel === "suggestions",
-                        onPick: () => setPanel("suggestions"),
+                {
+                  title: "Review",
+                  items: [
+                    { key: "stats", label: "Stats", active: panel === "stats", onPick: () => setPanel("stats") },
+                    {
+                      key: "compare",
+                      label: "Compare with another deck",
+                      active: panel === "compare",
+                      onPick: () => {
+                        setCompareWith(null);
+                        setPanel("compare");
                       },
-                    ]
-                  : []),
-                ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
-                { key: "guide", label: "How to build a deck", active: false, onPick: () => window.open("/guide", "_blank", "noopener") },
-                ...(ownerOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
-                ...(ownerOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
-                ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
-                ...(readOnly ? [] : [{ key: "copy", label: copying ? "Copying…" : "Make a copy", active: false, onPick: copy }]),
+                    },
+                    { key: "similar", label: "Similar decks", active: panel === "similar", onPick: () => setPanel("similar") },
+                    ...(ownerOnly || guest ? [] : [{ key: "history", label: "History", active: panel === "history", onPick: () => setPanel("history") }]),
+                  ],
+                },
+                {
+                  title: "Play & friends",
+                  items: [
+                    ...(ownerOnly || !userId ? [] : [{ key: "games", label: "Game log", active: panel === "games", onPick: () => setPanel("games") }]),
+                    ...(readOnly || guest || !userId ? [] : [{ key: "cobuild", label: "Build together", active: panel === "cobuild", onPick: () => setPanel("cobuild") }]),
+                    ...(suggestions.available && (!readOnly || visibility !== "private")
+                      ? [
+                          {
+                            key: "suggestions",
+                            label: readOnly ? "Suggest changes" : `Suggestions${suggestions.open.length ? ` (${suggestions.open.length})` : ""}`,
+                            active: panel === "suggestions",
+                            onPick: () => setPanel("suggestions"),
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+                {
+                  title: "Deck",
+                  items: [
+                    { key: "export", label: "Export", active: panel === "export", onPick: () => setPanel("export") },
+                    ...(readOnly ? [] : [{ key: "copy", label: copying ? "Copying…" : "Make a copy", active: false, onPick: copy }]),
+                  ],
+                },
+                {
+                  title: "Help",
+                  items: [
+                    ...(readOnly ? [] : [{ key: "tour", label: "Take the quick tour", active: touring, onPick: () => setTouring(true) }]),
+                    { key: "guide", label: "How to build a deck ↗", active: false, onPick: () => window.open("/guide", "_blank", "noopener") },
+                  ],
+                },
               ]}
             />
           </>
