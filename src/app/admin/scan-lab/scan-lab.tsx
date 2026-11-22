@@ -432,6 +432,7 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
       nameVia: out.nameVia,
       linePrinting: lineKey,
       lineDisagrees: out.disagree,
+      lineFix: out.lineFixedFrom,
       candidates: candidates.length,
       cardRank,
       artRank,
@@ -465,6 +466,12 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
             </div>
             <div className="mt-1">
               → <b>{out.linePrinting ? `${out.linePrinting.name} (${out.linePrinting.setName} #${out.linePrinting.number})` : "no printing found"}</b>
+              {out.lineFixedFrom && out.linePrinting ? (
+                <span className="opacity-75">
+                  {" "}
+                  (set read as {out.lineFixedFrom.toUpperCase()}; {out.linePrinting.set.toUpperCase()} fits the picture)
+                </span>
+              ) : null}
             </div>
           </div>
           {out.disagree ? <div className="text-amber-400">The name and the corner point at different cards, so the name won.</div> : null}

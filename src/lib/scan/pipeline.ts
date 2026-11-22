@@ -4,7 +4,7 @@
 // Everything here runs in the browser; the photo never leaves the phone.
 
 import { parseCollectorLine, type CollectorLine } from "./collector-line";
-import { buildNameIndex, cleanNameRead, closestName, type NameIndex } from "./names";
+import { buildNameIndex, cleanNameRead, closestName, setCodeVariants, type NameIndex } from "./names";
 import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, homography, houghCorners, locateCardQuad, type Pt, type Quad, warp, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
 
 const API = "https://api.scryfall.com";
@@ -48,6 +48,7 @@ export interface ScanOutput {
   lineRead: string;
   line: CollectorLine;
   linePrinting: Printing | null;
+  lineFixedFrom: string | null; // the set code as read, when a lookalike real code was used instead
   disagree: boolean; // the name and the corner point at different cards
   prints: PhotoPrints;
   candidates: Ranked[]; // sorted by whole-card score, best first
@@ -158,10 +159,18 @@ export function ocrWorker(): Promise<TessWorker> {
   return workerPromise;
 }
 
-async function readText(image: HTMLCanvasElement, mode: "line" | "block"): Promise<string> {
+// The characters each read may produce. A card name has no digits (the reader turned "U.S.S." into "11S S"); the
+// corner is capitals, digits and a few marks (lower case let "SDS" come out "sDS").
+const NAME_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ,.'-:!&";
+const CORNER_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/•★*. ";
+
+async function readText(image: HTMLCanvasElement, mode: "name" | "corner"): Promise<string> {
   const w = await ocrWorker();
-  // Page segmentation modes: 7 = one line of text, 6 = one block.
-  await w.setParameters({ tessedit_pageseg_mode: (mode === "line" ? "7" : "6") as never });
+  // Page segmentation modes: 7 = one line of text (the name), 6 = one block (the corner's two lines).
+  await w.setParameters({
+    tessedit_pageseg_mode: (mode === "name" ? "7" : "6") as never,
+    tessedit_char_whitelist: mode === "name" ? NAME_CHARS : CORNER_CHARS,
+  });
   const { data } = await w.recognize(image);
   return data.text.trim();
 }
@@ -249,21 +258,87 @@ export async function cardByExactName(name: string): Promise<Printing | null> {
 
 let namesPromise: Promise<NameIndex> | null = null;
 
-// Scryfall's list of every card name, fetched once per visit (about 700 KB).
+// Printed flavor names and the real card each belongs to (about 1,000 printings, a few pages of search).
+async function flavorNames(): Promise<[string, string][]> {
+  const out = new Map<string, string>();
+  let path: string | null = `/cards/search?${new URLSearchParams({ q: "has:flavorname game:paper", unique: "prints", include_extras: "true" })}`;
+  for (let page = 0; path && page < 12; page++) {
+    const res: { data: ScryCard[]; next_page?: string } | null = await scry(path);
+    if (!res) break;
+    for (const c of res.data) if (c.flavor_name) out.set(c.flavor_name, c.name);
+    path = res.next_page ? res.next_page.replace(API, "") : null;
+  }
+  return [...out];
+}
+
+// Scryfall's list of every card name (about 700 KB) plus printed flavor names, fetched once per visit.
 export function nameIndex(): Promise<NameIndex> {
-  namesPromise ??= scry<{ data: string[] }>("/catalog/card-names").then((r) => {
-    if (!r) throw new Error("No card name list");
-    return buildNameIndex(r.data);
-  });
+  namesPromise ??= Promise.all([scry<{ data: string[] }>("/catalog/card-names"), flavorNames().catch(() => [] as [string, string][])]).then(
+    ([names, flavors]) => {
+      if (!names) throw new Error("No card name list");
+      return buildNameIndex(names.data, flavors);
+    },
+  );
   namesPromise.catch(() => (namesPromise = null));
   return namesPromise;
 }
 
-async function cardByLine(line: CollectorLine): Promise<Printing | null> {
-  if (!line.set || !line.number) return null;
-  const base = `/cards/${encodeURIComponent(line.set)}/${encodeURIComponent(line.number)}`;
-  const c = (line.lang ? await scry<ScryCard>(`${base}/${line.lang}`) : null) ?? (await scry<ScryCard>(base));
-  return c ? toPrinting(c) : null;
+let setsPromise: Promise<Set<string>> | null = null;
+
+// Every set code Scryfall knows (about 1,100), to tell a misread code from a real one. Kept a day on this device.
+export function setCodes(): Promise<Set<string>> {
+  setsPromise ??= (async () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("scan-lab:sets") ?? "null") as { at: number; codes: string[] } | null;
+      if (saved && Date.now() - saved.at < 86_400_000 && saved.codes.length > 500) return new Set(saved.codes);
+    } catch {
+      // read it fresh
+    }
+    const res = await scry<{ data: { code: string }[] }>("/sets");
+    const codes = (res?.data ?? []).map((s) => s.code.toLowerCase());
+    if (!codes.length) throw new Error("No set list");
+    localStorage.setItem("scan-lab:sets", JSON.stringify({ at: Date.now(), codes }));
+    return new Set(codes);
+  })();
+  setsPromise.catch(() => (setsPromise = null));
+  return setsPromise;
+}
+
+export interface LineLookup {
+  printing: Printing | null;
+  fixedFrom: string | null; // the set code as read, when a lookalike code fit better ("sos" read, "sds" used)
+}
+
+// The printing the corner names. The set code may be misread (SDS as SOS, TRK as TREK), so every real code one slip
+// away is tried; when the name was read, the printing of that card wins, otherwise the one whose picture is most like
+// the photo. A misread code that happens to be real ("sos") would point at another card, which the picture gives away.
+async function cardByLine(line: CollectorLine, photo: PhotoPrints, nameMatch: Printing | null): Promise<LineLookup> {
+  const none = { printing: null, fixedFrom: null };
+  if (!line.set || !line.number) return none;
+  const valid = await setCodes().catch(() => null);
+  const codes = valid ? setCodeVariants(line.set, valid) : [line.set];
+  const found: Printing[] = [];
+  for (const code of codes) {
+    const base = `/cards/${encodeURIComponent(code)}/${encodeURIComponent(line.number)}`;
+    const c = (line.lang && line.lang !== "en" ? await scry<ScryCard>(`${base}/${line.lang}`).catch(() => null) : null) ?? (await scry<ScryCard>(base).catch(() => null));
+    if (c) found.push(toPrinting(c));
+  }
+  if (!found.length) return none;
+  const named = nameMatch ? found.find((p) => p.oracleId === nameMatch.oracleId) : undefined;
+  let pick = named ?? found[0];
+  if (!named && found.length > 1) {
+    let bestScore = Infinity;
+    for (const p of found) {
+      const q = p.image ? await printsOfUrl(p.image) : null;
+      if (!q) continue;
+      const s = matchScore(hamming(photo.card, q.card), HASH * HASH, colorDistance(photo.cardColor, q.cardColor));
+      if (s < bestScore) {
+        bestScore = s;
+        pick = p;
+      }
+    }
+  }
+  return { printing: pick, fixedFrom: pick.set !== line.set ? line.set : null };
 }
 
 // Every English paper printing of the card, promos and variants included (up to 525).
@@ -346,20 +421,33 @@ export async function rank(photo: PhotoPrints, printings: Printing[]): Promise<{
 
 export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) => void): Promise<ScanOutput> {
   const started = performance.now();
-  const nameCrops = [ocrCrop(card, REGIONS.name, 900, false), ocrCrop(card, REGIONS.name, 900, true)];
-  const lineCrops = [ocrCrop(card, REGIONS.collector, 1100, false), ocrCrop(card, REGIONS.collector, 1100, true)];
+  // Each text is read from a few crops in turn (the box a little lower or higher, gray or black and white) until one
+  // works: frames differ, and the card's edges are found a few pixels off now and then.
+  const shifted = (r: Rect, dy: number, dh = 0): Rect => ({ ...r, y: r.y + dy, h: r.h + dh });
+  const nameCrops = [
+    ocrCrop(card, REGIONS.name, 900, false),
+    ocrCrop(card, shifted(REGIONS.name, 0.008, 0.012), 900, false),
+    ocrCrop(card, REGIONS.name, 900, true),
+  ];
+  const lineCrops = [
+    ocrCrop(card, REGIONS.collector, 1100, false),
+    ocrCrop(card, shifted(REGIONS.collector, 0.02, -0.01), 1100, false),
+    ocrCrop(card, shifted(REGIONS.collector, -0.03), 1100, false),
+    ocrCrop(card, REGIONS.collector, 1100, true),
+  ];
   const prints = photoPrints(card);
+  const validSets = await setCodes().catch(() => null);
 
   onStep?.("Reading the text (the first scan loads the reader, about 10 MB)…");
-  // The name is read gray first; if Scryfall's fuzzy search finds no card for that, again in black and white.
-  // If neither works, the closest name in Scryfall's full list of names (a wrong first letter defeats fuzzy search).
+  // The name: until Scryfall's fuzzy search finds a card for a read. If none does, the closest name in Scryfall's full
+  // list of names and flavor names (a wrong first letter defeats fuzzy search).
   let nameRead = "";
   let nameMatch: Printing | null = null;
   let nameVia: ScanOutput["nameVia"] = null;
   let nameCrop = nameCrops[0];
   const reads: { text: string; crop: HTMLCanvasElement }[] = [];
   for (const crop of nameCrops) {
-    const text = await readText(crop, "line");
+    const text = await readText(crop, "name");
     reads.push({ text, crop });
     const match = await cardByName(text).catch(() => null);
     if (match) {
@@ -374,27 +462,29 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     guesses.sort((a, b) => a.guess!.share - b.guess!.share);
     const best = guesses[0];
     if (best?.guess) {
-      const match = await cardByExactName(best.guess.name).catch(() => null);
+      const match = await cardByExactName(best.guess.target).catch(() => null);
       if (match) [nameRead, nameMatch, nameVia, nameCrop] = [best.text, match, "closest", best.crop];
     }
   }
-  // Read the corner gray first; if that doesn't give a set and a number, try the black-and-white version.
+  // The corner: until a read gives a number and a set code that is real or one slip from a real one.
+  const usable = (l: CollectorLine) => !!(l.set && l.number && (!validSets || setCodeVariants(l.set, validSets).length));
   let lineRead = "";
   let line = parseCollectorLine("");
   let lineCrop = lineCrops[0];
   for (const crop of lineCrops) {
-    const text = await readText(crop, "block");
+    const text = await readText(crop, "corner");
     const parsed = parseCollectorLine(text);
-    if (!lineRead || (parsed.set && parsed.number)) {
+    if (!lineRead || usable(parsed) || (parsed.set && parsed.number && !(line.set && line.number))) {
       lineRead = text;
       line = parsed;
       lineCrop = crop;
     }
-    if (parsed.set && parsed.number) break;
+    if (usable(parsed)) break;
   }
 
   onStep?.("Looking it up on Scryfall…");
-  const linePrinting = await cardByLine(line).catch(() => null);
+  const lookup = await cardByLine(line, prints, nameMatch).catch(() => ({ printing: null, fixedFrom: null }));
+  const linePrinting = lookup.printing;
   // The name and the corner check each other: a misread digit points at another card, which the name gives away.
   const agree = !!nameMatch && !!linePrinting && nameMatch.oracleId === linePrinting.oracleId;
   const oracleId = (agree || !nameMatch ? linePrinting?.oracleId : nameMatch.oracleId) || nameMatch?.oracleId;
@@ -419,6 +509,7 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     lineRead,
     line,
     linePrinting,
+    lineFixedFrom: lookup.fixedFrom,
     disagree: !!nameMatch && !!linePrinting && !agree,
     prints,
     candidates,

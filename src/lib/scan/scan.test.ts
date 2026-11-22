@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cleanNumber, parseCollectorLine } from "./collector-line";
 import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, hamming, homography, houghCorners, otsu, warp, type Pixels } from "./image";
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
-import { buildNameIndex, cleanNameRead, closestName, editDistance } from "./names";
+import { buildNameIndex, cleanNameRead, closestName, editDistance, setCodeVariants } from "./names";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -106,7 +106,7 @@ describe("lab results", () => {
   it("writes one tab-separated line per scan without breaking on newlines", () => {
     const text = resultsText([row({ note: "glare\nhere" })]);
     const lines = text.split("\n");
-    expect(lines[lines.length - 1].split("\t")).toHaveLength(24);
+    expect(lines[lines.length - 1].split("\t")).toHaveLength(25);
     expect(text).toContain("0263 U C21 • EN");
   });
 });
@@ -210,5 +210,21 @@ describe("finding a card's edges as lines", () => {
     const found = houghCorners(slantedCard(320, 400, corners));
     expect(found).not.toBeNull();
     found!.forEach(([x, y], i) => expect(Math.hypot(x - corners[i][0], y - corners[i][1])).toBeLessThan(6));
+  });
+});
+
+describe("misread set codes and flavor names", () => {
+  const valid = new Set(["sds", "sos", "trk", "trc", "mom", "c21"]);
+  it("offers real codes one slip away", () => {
+    expect(setCodeVariants("sos", valid)).toEqual(["sos", "sds"]);
+    expect(setCodeVariants("trek", valid)).toEqual(["trk"]);
+    expect(setCodeVariants("C2I", valid)).toEqual(["c21"]);
+    expect(setCodeVariants("zzz", valid)).toEqual([]);
+  });
+  it("finds a card by its printed flavor name, and reads a bar as L", () => {
+    const index = buildNameIndex(["Mogis, God of Slaughter", "U.S.S. Voyager, Lone Wanderer"], [["Worf, Regent of Terok Nor", "Mogis, God of Slaughter"]]);
+    expect(closestName("BE REeen of Terok Nor", index)).toBeNull(); // too far gone
+    expect(closestName("Worf. Regent of Terok Nox", index)?.target).toBe("Mogis, God of Slaughter");
+    expect(closestName("11S S Vovacer | one Wander", index)?.target).toBe("U.S.S. Voyager, Lone Wanderer");
   });
 });
