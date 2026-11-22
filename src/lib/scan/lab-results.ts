@@ -34,7 +34,12 @@ export interface LabResult {
   candidates: number;
   cardRank: number | null; // where the true printing came, comparing the whole card (1 = best)
   artRank: number | null; // comparing the art box only
-  ms: number; // time from capture to results
+  ms: number; // time from the start of reading to results
+  // Round 6 (Nov 22, 2026): the whole wait and where it went, and how the card's edges were found.
+  totalMs?: number; // from the tap to results, the photo included
+  steps?: string; // "photo 900 · find 300 · name 800 · …"
+  foundBy?: string; // edges, outline, live, turned, box, whole
+  size?: string; // the picture's size in pixels, "4000×3000"
 }
 
 export function readLabResults(raw: string | null): LabResult[] {
@@ -62,14 +67,21 @@ export interface LabSummary {
   cardTop1: number;
   artTop1: number;
   printingRightAny: number; // the line's printing if read, else the best picture match
+  cardFound: number; // the scanner named the right card by itself (name or corner), before any help
+  printingFound: number; // ... and its pick (corner, else best picture) was the right printing
+  wrongCard: number; // it named a card, and it was the wrong one
   avgMs: number;
+  avgTotalMs: number | null; // only scans saved since round 6 carry it
 }
 
 export function summarize(rows: LabResult[]): LabSummary {
   const s: LabSummary = {
     scans: rows.length, nameRight: 0, lineReadable: 0, linePrintingRight: 0, langRight: 0, foilScans: 0,
-    foilMarkRight: 0, foilMarkRead: 0, candidatesAvg: 0, cardTop1: 0, artTop1: 0, printingRightAny: 0, avgMs: 0,
+    foilMarkRight: 0, foilMarkRead: 0, candidatesAvg: 0, cardTop1: 0, artTop1: 0, printingRightAny: 0,
+    cardFound: 0, printingFound: 0, wrongCard: 0, avgMs: 0, avgTotalMs: null,
   };
+  let totals = 0;
+  let totalSum = 0;
   for (const r of rows) {
     if (sameName(r.nameMatch, r.trueName)) s.nameRight++;
     const readable = !!(r.lineSet && r.lineNumber);
@@ -87,7 +99,20 @@ export function summarize(rows: LabResult[]): LabSummary {
     if (r.cardRank === 1) s.cardTop1++;
     if (r.artRank === 1) s.artTop1++;
     // What a real scanner would do: trust the corner unless the name contradicts it, else the best picture match.
-    if (r.linePrinting && !r.lineDisagrees ? lineRight : r.cardRank === 1) s.printingRightAny++;
+    const pickRight = r.linePrinting && !r.lineDisagrees ? lineRight : r.cardRank === 1;
+    if (pickRight) s.printingRightAny++;
+    // The picture ranking is scored once David names the card, so it says nothing about finding the card. These
+    // count only what the scanner got by itself.
+    const nameRight = sameName(r.nameMatch, r.trueName);
+    const found = nameRight || lineRight;
+    if (found) {
+      s.cardFound++;
+      if (pickRight) s.printingFound++;
+    } else if (r.nameMatch || r.linePrinting) s.wrongCard++;
+    if (typeof r.totalMs === "number") {
+      totals++;
+      totalSum += r.totalMs;
+    }
     s.candidatesAvg += r.candidates;
     s.avgMs += r.ms;
   }
@@ -95,6 +120,7 @@ export function summarize(rows: LabResult[]): LabSummary {
     s.candidatesAvg = Math.round((s.candidatesAvg / rows.length) * 10) / 10;
     s.avgMs = Math.round(s.avgMs / rows.length);
   }
+  if (totals) s.avgTotalMs = Math.round(totalSum / totals);
   return s;
 }
 
@@ -109,13 +135,14 @@ export function resultsText(rows: LabResult[]): string {
     `Collector line readable: ${s.lineReadable}/${s.scans}; right printing from it: ${s.linePrintingRight}/${s.scans}; language right: ${s.langRight}/${s.lineReadable}`,
     `Foil mark read: ${s.foilMarkRead}, matching foil/nonfoil: ${s.foilMarkRight}; foil scans: ${s.foilScans}`,
     `Picture match top 1: whole card ${s.cardTop1}/${s.scans}, art only ${s.artTop1}/${s.scans} (avg ${s.candidatesAvg} printings to choose from)`,
-    `Right printing (corner unless the name disagrees, else picture): ${s.printingRightAny}/${s.scans} (${pct(s.printingRightAny, s.scans)})`,
-    `Average time: ${s.avgMs} ms`,
+    `Right printing once the card is known (corner unless the name disagrees, else picture): ${s.printingRightAny}/${s.scans} (${pct(s.printingRightAny, s.scans)})`,
+    `On its own: right card ${s.cardFound}/${s.scans}, right printing ${s.printingFound}/${s.scans}, wrong card named ${s.wrongCard}`,
+    `Average time: reading ${s.avgMs} ms${s.avgTotalMs !== null ? `, tap to result ${s.avgTotalMs} ms` : ""}`,
     "",
   ];
   const cols: (keyof LabResult)[] = [
     "at", "source", "trueName", "trueSet", "trueNumber", "trueLang", "foil", "sleeved", "nameRead", "nameMatch", "nameVia",
-    "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "lineFix", "truePrinting", "candidates", "cardRank", "artRank", "ms", "note",
+    "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "lineFix", "truePrinting", "candidates", "cardRank", "artRank", "ms", "totalMs", "steps", "foundBy", "size", "note",
   ];
   const clean = (v: unknown) => String(v ?? "").replace(/[\t\r\n]+/g, " ");
   return [...head, cols.join("\t"), ...rows.map((r) => cols.map((c) => clean(r[c])).join("\t"))].join("\n");

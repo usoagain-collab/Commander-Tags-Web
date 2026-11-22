@@ -112,3 +112,29 @@ export function setCodeVariants(code: string, valid: Set<string>, limit = 6): st
   for (let i = 0; i < up.length; i++) add(up.slice(0, i) + up.slice(i + 1));
   return out.slice(0, limit);
 }
+
+/* ---------- is a lookup believable? ---------- */
+
+// Every name printed on the card `realName` (its own name, each face, flavor names) from the index.
+export function printedNames(realName: string, index: NameIndex | null): string[] {
+  const out = [realName, ...realName.split(" // ")];
+  if (index) for (let i = 0; i < index.targets.length; i++) if (index.targets[i] === realName) out.push(index.names[i]);
+  return [...new Set(out)];
+}
+
+// Whether what OCR read could be one of `names`: a third of the letters off at most, after trailing junk is allowed
+// for ("Fortified Village dura"). Scryfall's fuzzy search answers almost anything: junk read off a Final Fantasy
+// card ("PE N a ry Ad Shr") came back as Vadrok, Apex of Thunder (David's round 5 scans), and a wrong card is worse
+// than none.
+export function nameFits(read: string, names: string[], maxShare = 0.4): boolean {
+  const key = simplify(cleanNameRead(read));
+  if (key.length < 3) return false;
+  return names.some((n) => {
+    const k = simplify(n);
+    if (!k) return false;
+    const limit = Math.floor(k.length * maxShare);
+    const whole = editDistance(key, k, limit);
+    const start = key.length > k.length ? editDistance(key.slice(0, k.length), k, limit) : whole;
+    return Math.min(whole, start) <= limit;
+  });
+}

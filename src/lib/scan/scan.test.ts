@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { cleanNumber, parseCollectorLine } from "./collector-line";
 import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, hamming, homography, houghCorners, otsu, warp, type Pixels } from "./image";
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
-import { buildNameIndex, cleanNameRead, closestName, editDistance, setCodeVariants } from "./names";
+import { buildNameIndex, cleanNameRead, closestName, editDistance, nameFits, printedNames, setCodeVariants } from "./names";
+import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4 } from "./track";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -98,6 +99,7 @@ describe("lab results", () => {
       row({ linePrinting: "c20/252", foilMark: "dot", foil: true }),
     ]);
     expect(s).toMatchObject({ scans: 3, nameRight: 2, lineReadable: 2, linePrintingRight: 1, foilScans: 2, foilMarkRead: 2, foilMarkRight: 1, cardTop1: 1, printingRightAny: 2, avgMs: 2000 });
+    expect(s).toMatchObject({ cardFound: 2, avgTotalMs: null });
   });
   it("drops bad saved data", () => {
     expect(readLabResults("not json")).toEqual([]);
@@ -106,7 +108,7 @@ describe("lab results", () => {
   it("writes one tab-separated line per scan without breaking on newlines", () => {
     const text = resultsText([row({ note: "glare\nhere" })]);
     const lines = text.split("\n");
-    expect(lines[lines.length - 1].split("\t")).toHaveLength(25);
+    expect(lines[lines.length - 1].split("\t")).toHaveLength(29);
     expect(text).toContain("0263 U C21 • EN");
   });
 });
@@ -236,5 +238,60 @@ describe("round 5 corner reads", () => {
   });
   it("treats T and I as lookalikes", () => {
     expect(setCodeVariants("irc", new Set(["trc", "trk"]))).toEqual(["trc"]);
+  });
+});
+
+describe("nameFits (round 6: no wrong card from junk)", () => {
+  it("accepts close reads and trailing junk", () => {
+    expect(nameFits("Fortified Village dura", ["Fortified Village"])).toBe(true);
+    expect(nameFits(": forest", ["Forest"])).toBe(true);
+    expect(nameFits("enova, Ancient Calamity", ["Jenova, Ancient Calamity"])).toBe(true);
+    expect(nameFits("Worf, Regent of Terok Nor", ["Mogis, God of Slaughter", "Worf, Regent of Terok Nor"])).toBe(true);
+  });
+  it("rejects junk that fuzzy search turned into a card", () => {
+    expect(nameFits("- PE . N a - ry Ad Shr", ["Vadrok, Apex of Thunder"])).toBe(false);
+    expect(nameFits("", ["Forest"])).toBe(false);
+  });
+  it("lists flavor names and faces of a card", () => {
+    const index = buildNameIndex(["Mogis, God of Slaughter", "Zenos yae Galvus // Shinryu, Transcendent Rival"], [["Worf, Regent of Terok Nor", "Mogis, God of Slaughter"]]);
+    expect(printedNames("Mogis, God of Slaughter", index)).toContain("Worf, Regent of Terok Nor");
+    expect(printedNames("Zenos yae Galvus // Shinryu, Transcendent Rival", index)).toContain("Zenos yae Galvus");
+  });
+});
+
+describe("tracker (round 6: a steady outline)", () => {
+  const card = (dx = 0, dy = 0): Quad4 => [
+    [0.2 + dx, 0.1 + dy],
+    [0.8 + dx, 0.1 + dy],
+    [0.8 + dx, 0.9 + dy],
+    [0.2 + dx, 0.9 + dy],
+  ];
+  it("shows an outline only once two frames agree", () => {
+    let s = stepTrack(startTrack(), card());
+    expect(s.shown).toBeNull();
+    s = stepTrack(s, card(0.005));
+    expect(s.shown).not.toBeNull();
+  });
+  it("ignores a one-frame glitch and keeps the outline through short misses", () => {
+    let s = stepTrack(stepTrack(startTrack(), card()), card());
+    s = stepTrack(s, card(0.3, 0)); // a stripe somewhere else
+    expect(quadMove(s.shown!, card())).toBeLessThan(0.01);
+    for (let i = 0; i < TRACK.hold; i++) s = stepTrack(s, null);
+    expect(s.shown).not.toBeNull();
+    s = stepTrack(s, null);
+    expect(s.shown).toBeNull();
+  });
+  it("jumps when the card really moved, and locks when held still", () => {
+    let s = stepTrack(stepTrack(startTrack(), card()), card());
+    s = stepTrack(stepTrack(s, card(0.2)), card(0.2));
+    expect(quadMove(s.shown!, card(0.2))).toBeLessThan(0.001);
+    expect(isLocked(s)).toBe(false);
+    for (let i = 0; i < TRACK.lockAfter; i++) s = stepTrack(s, card(0.2));
+    expect(isLocked(s)).toBe(true);
+  });
+  it("drops skewed shapes", () => {
+    expect(plausibleQuad(card())).toBe(true);
+    expect(plausibleQuad([[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.7, 0.9]])).toBe(false);
+    expect(plausibleQuad([[0.2, 0.1], [0.8, 0.9], [0.8, 0.1], [0.2, 0.9]])).toBe(false); // crossed
   });
 });
