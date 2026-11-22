@@ -3,9 +3,9 @@
 // Guided Scryfall filters (v2, Nov 8, 2026), shared by the Search panel's Filters drawer and the Suggest panel.
 // Each field writes syntax through filterSyntax (src/lib/search/filters.ts), shown under the fields as it's built.
 import type { ReactNode } from "react";
-import { FILTER_TYPES, type ColorMode, type FilterForm } from "@/lib/search/filters";
+import { FILTER_TYPES, RARITIES, type ColorMode, type FilterForm } from "@/lib/search/filters";
 
-export type FilterField = "colors" | "types" | "text" | "mv" | "price" | "keyword" | "set" | "since" | "noReserved" | "instantSpeed";
+export type FilterField = "colors" | "types" | "text" | "mv" | "price" | "keyword" | "set" | "since" | "noReserved" | "instantSpeed" | "rarity";
 
 const COLORS: { c: string; name: string }[] = [
   { c: "W", name: "White" },
@@ -30,11 +30,18 @@ export function FilterFields({
   value,
   onChange,
   fields,
+  colorChoices,
 }: {
   value: FilterForm;
   onChange: (next: FilterForm, immediate: boolean) => void;
   fields: FilterField[];
+  /**
+   * The colors worth offering (W U B R G C). Search passes the commander's colors plus colorless while it keeps to
+   * the commander's identity, since any other color could only return nothing (David, Nov 21, 2026).
+   */
+  colorChoices?: string[];
 }) {
+  const colors = colorChoices ? COLORS.filter(({ c }) => colorChoices.includes(c)) : COLORS;
   const has = (f: FilterField) => fields.includes(f);
   const set = (patch: Partial<FilterForm>, immediate = true) => onChange({ ...value, ...patch }, immediate);
   const toggle = (list: string[], item: string) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
@@ -53,10 +60,24 @@ export function FilterFields({
           </div>
         </Row>
       )}
-      {has("colors") && (
+      {has("rarity") && (
+        <Row label="Rarity">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Rarity">
+            {RARITIES.map((r) => {
+              const on = (value.rarities ?? []).includes(r.value);
+              return (
+                <button key={r.value} type="button" aria-pressed={on} onClick={() => set({ rarities: toggle(value.rarities ?? [], r.value) })} className={chip(on)}>
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
+        </Row>
+      )}
+      {has("colors") && colors.length > 1 && (
         <Row label="Colors">
           <div className="flex flex-wrap items-center gap-2">
-            {COLORS.map(({ c, name }) => (
+            {colors.map(({ c, name }) => (
               <button
                 key={c}
                 type="button"

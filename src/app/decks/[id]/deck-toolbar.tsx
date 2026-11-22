@@ -11,6 +11,7 @@ import {
   type ViewMode,
   type ViewSettings,
 } from "@/lib/deck/grouping";
+import { PREVIEW_LABELS, type PreviewMode } from "@/lib/tags/layout-prefs";
 
 /**
  * Everything remembered in profiles.tag_view: View / Group / Sort and the top-tags switches. One writer for the
@@ -69,12 +70,26 @@ export function useHiddenTags(initial: string[], userId: string | null) {
   return [hidden, toggle] as const;
 }
 
-export function DeckToolbar({ settings, onChange }: { settings: ViewSettings; onChange: (s: ViewSettings) => void }) {
+export function DeckToolbar({
+  settings,
+  onChange,
+  preview,
+}: {
+  settings: ViewSettings;
+  onChange: (s: ViewSettings) => void;
+  /** Card preview choice, right here as well as in Settings (wide screens only: phones open the card instead). */
+  preview?: { value: PreviewMode; onChange: (v: PreviewMode) => void };
+}) {
   return (
     <div className="flex items-center gap-x-1.5 text-sm sm:gap-x-3">
       <Select label="View" value={settings.view} options={VIEW_LABELS} onChange={(v) => onChange({ ...settings, view: v as ViewMode })} />
       <Select label="Group" value={settings.group} options={GROUP_LABELS} onChange={(v) => onChange({ ...settings, group: v as GroupBy })} />
       <Select label="Sort" value={settings.sort} options={SORT_LABELS} onChange={(v) => onChange({ ...settings, sort: v as SortBy })} />
+      {preview && (
+        <span className="hidden lg:contents">
+          <Select label="Preview" value={preview.value} options={PREVIEW_LABELS} onChange={(v) => preview.onChange(v as PreviewMode)} />
+        </span>
+      )}
     </div>
   );
 }

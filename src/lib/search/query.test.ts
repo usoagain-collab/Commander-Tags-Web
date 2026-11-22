@@ -129,6 +129,11 @@ describe("filterSyntax (v2)", () => {
     expect(quote('Time "Lord"')).toBe('"Time Lord"');
     expect(appendSyntax("  otag:ramp ", "mv<=2")).toBe("otag:ramp mv<=2");
   });
+
+  it("writes rarities, OR'ed when there are several", () => {
+    expect(filterSyntax({ ...EMPTY_FILTERS, rarities: ["common"] })).toBe("r:common");
+    expect(filterSyntax({ ...EMPTY_FILTERS, types: ["Creature"], rarities: ["common", "uncommon"] })).toBe("t:creature (r:common or r:uncommon)");
+  });
 });
 
 describe("plain words", () => {

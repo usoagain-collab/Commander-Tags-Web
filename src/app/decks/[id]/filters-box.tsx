@@ -8,6 +8,8 @@ import { appendSyntax, filterSyntax, type FilterForm } from "@/lib/search/filter
 
 export function FiltersBox(props: {
   fields: FilterField[];
+  /** Colors worth offering in the Colors row (see FilterFields). */
+  colorChoices?: string[];
   draft: FilterForm;
   onDraft: (next: FilterForm, immediate: boolean) => void;
   /** Suggested only: a box for any Scryfall syntax (Search has its own box for that). */
@@ -41,7 +43,7 @@ export function FiltersBox(props: {
             props.onApply();
           }}
         >
-          <FilterFields value={props.draft} onChange={props.onDraft} fields={props.fields} />
+          <FilterFields value={props.draft} onChange={props.onDraft} fields={props.fields} colorChoices={props.colorChoices} />
           {props.own && (
             <label className="mt-3 grid gap-1 text-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-3">
               <span className="text-xs font-medium opacity-70 sm:text-sm">Your own filter</span>

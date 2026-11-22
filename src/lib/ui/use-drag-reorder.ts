@@ -85,13 +85,9 @@ export function useDragReorder(group: string, keys: string[], onReorder: (keys: 
               setDragging(key);
               navigator.vibrate?.(10);
             }, HOLD_MS);
-          } else {
-            try {
-              e.currentTarget.setPointerCapture(e.pointerId);
-            } catch {
-              // Capture is a nicety (keeps moves coming when the pointer leaves the row); the drag works without it.
-            }
           }
+          // A mouse isn't captured yet: capturing on press sends the click to the row instead of the button under
+          // the pointer, which made every button inside an editable row dead (Hide, ✦ Suggest; David, Nov 21, 2026).
         },
         onPointerMove(e: React.PointerEvent<HTMLElement>) {
           const d = drag.current;
@@ -106,6 +102,14 @@ export function useDragReorder(group: string, keys: string[], onReorder: (keys: 
             if (!d.touch && far < 6) return;
             d.moved = true;
             setDragging(d.key);
+            if (!d.touch) {
+              try {
+                // Now it's a drag: keep moves coming when the pointer leaves the row.
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                // Capture is a nicety; the drag works without it.
+              }
+            }
           }
           moveTo(d, e.clientX, e.clientY);
         },

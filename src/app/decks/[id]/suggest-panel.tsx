@@ -365,7 +365,7 @@ export function SuggestPanel(props: Props) {
     <div>
       <StyleControls settings={score.settings} onChange={props.onSettings} />
       <FiltersBox
-        fields={["types", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
+        fields={["types", "rarity", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
         draft={filterDraft}
         onDraft={(next, immediate) => {
           setFilterDraft(next);

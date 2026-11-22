@@ -28,6 +28,8 @@ export function DeckHero({
   coverArt,
   coverArtist,
   genome,
+  onRename,
+  aboutLink,
 }: {
   name: string;
   commanders: CardSummary[];
@@ -53,6 +55,10 @@ export function DeckHero({
   coverArtist?: string | null;
   /** The genome strip, drawn full width along the bottom of the banner. */
   genome?: React.ReactNode;
+  /** Owners: click the name to rename the deck here (David, Nov 21, 2026: it only lived on My decks). Returns an error. */
+  onRename?: (name: string) => Promise<string | null>;
+  /** A link down to the About this deck section at the bottom of the page. */
+  aboutLink?: boolean;
 }) {
   const artCard = commanders.find((c) => c.image_art_crop);
   const art = coverArt || artCard?.image_art_crop;
@@ -109,7 +115,7 @@ export function DeckHero({
             )}
             {commanders.length > 0 && <span className="eyebrow min-w-0 !text-gold">{commanders.map((c) => c.name).join(" & ")}</span>}
           </div>
-          <h1 className="display mt-1 text-3xl leading-tight [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-[2.6rem]">{name}</h1>
+          <DeckName name={name} onRename={onRename} />
           {note}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
             {complete && <span className={`${celebrate ? "complete " : ""}inline-flex min-h-9 items-center rounded-full bg-gold px-3 font-semibold text-gold-ink`}>✦ Complete</span>}
@@ -120,6 +126,11 @@ export function DeckHero({
             </Stat>
             <Stat>${price.toFixed(0)}</Stat>
             {status}
+            {aboutLink && (
+              <a href="#about" className="inline-flex min-h-9 items-center rounded-full px-2 underline opacity-85 [text-shadow:0_1px_8px_var(--art-shadow)] hover:opacity-100">
+                About this deck ↓
+              </a>
+            )}
           </div>
           {plays && <div className="hidden sm:block">{plays}</div>}
         </div>
@@ -133,6 +144,89 @@ export function DeckHero({
       )}
       {celebrate && <ManaConfetti colors={pips.length ? pips : ["C"]} />}
     </header>
+  );
+}
+
+const NAME_CLASS = "display mt-1 text-3xl leading-tight [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-[2.6rem]";
+
+/** The deck's name. With onRename, a click turns it into a box: Enter or Save keeps it, Esc or Cancel doesn't. */
+function DeckName({ name, onRename }: { name: string; onRename?: (name: string) => Promise<string | null> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [shown, setShown] = useState(name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => setShown(name), [name]);
+  useEffect(() => {
+    if (editing) box.current?.select();
+  }, [editing]);
+
+  if (!onRename) return <h1 className={NAME_CLASS}>{shown}</h1>;
+  if (!editing)
+    return (
+      <h1 className={NAME_CLASS}>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(shown);
+            setError(null);
+            setEditing(true);
+          }}
+          title="Rename this deck"
+          className="group text-left"
+        >
+          {shown}
+          <span aria-hidden className="ml-2 align-middle text-base opacity-0 transition-opacity group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-60">
+            ✎
+          </span>
+          <span className="sr-only"> (rename)</span>
+        </button>
+      </h1>
+    );
+
+  const save = async () => {
+    const next = draft.trim().slice(0, 120);
+    if (!next) return setError("A deck needs a name.");
+    if (next === shown) return setEditing(false);
+    setBusy(true);
+    const problem = await onRename(next);
+    setBusy(false);
+    if (problem) return setError(problem);
+    setShown(next);
+    setEditing(false);
+  };
+  return (
+    <form
+      className="mt-1 flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <input
+        ref={box}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            setEditing(false);
+          }
+        }}
+        maxLength={120}
+        aria-label="Deck name"
+        disabled={busy}
+        className="display min-h-11 w-full max-w-xl rounded-lg border border-gold bg-background/80 px-3 text-2xl lg:text-3xl"
+      />
+      <button type="submit" disabled={busy} className="btn btn-gold min-h-11 px-4">
+        {busy ? "Saving…" : "Save"}
+      </button>
+      <button type="button" onClick={() => setEditing(false)} disabled={busy} className="btn min-h-11 px-4">
+        Cancel
+      </button>
+      {error && <p className="w-full text-sm text-red-400">{error}</p>}
+    </form>
   );
 }
 

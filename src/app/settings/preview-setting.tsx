@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { PreviewMode } from "@/lib/tags/layout-prefs";
 
 const OPTIONS: { value: PreviewMode; name: string; about: string }[] = [
-  { value: "float", name: "Floating", about: "Appears while your mouse is on a card, on the far side of the screen. The cards use the full width." },
+  { value: "beside", name: "Next to the card", about: "Appears right beside the card your mouse is on. The cards use the full width." },
+  { value: "float", name: "Far side", about: "Appears while your mouse is on a card, on the far side of the screen. The cards use the full width." },
   { value: "docked", name: "Docked", about: "Always on the right, with tags you can click. Takes a column of its own." },
   { value: "off", name: "Off", about: "No preview. The cards use the full width; click a card to see it and its tags." },
 ];

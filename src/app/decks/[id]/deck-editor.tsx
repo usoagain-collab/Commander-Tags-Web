@@ -115,7 +115,7 @@ import { CategoryPicker, MyTagsPanel, PanelMyTags, SheetMyTags } from "./my-tags
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { RoleProfile, RoleRail } from "./role-profile";
 import { RailHandle } from "./rail-handle";
-import { RAIL_COLLAPSED, RAIL_DEFAULT, railStage, railWidthOf, readPreviewMode, type RailStage } from "@/lib/tags/layout-prefs";
+import { besidePosition, RAIL_COLLAPSED, RAIL_DEFAULT, railStage, railWidthOf, readPreviewMode, type RailStage } from "@/lib/tags/layout-prefs";
 import { highlightValue, TopTags } from "./top-tags";
 import { SummaryBar } from "./summary-bar";
 import { prettyTag, roleColor } from "@/lib/tags/pretty";
@@ -124,7 +124,7 @@ import { DeckHero, MoreMenu, Toast } from "./deck-hero";
 import { GenomeStrip, type GenomeGroup } from "@/components/genome-strip";
 import { SpinPanel } from "./spin-panel";
 import type { Builder } from "./load-deck";
-import { copyDeck } from "../actions";
+import { copyDeck, renameDeckFromPage } from "../actions";
 import { deckAccentVars } from "@/lib/ui/deck-colors";
 import { bracketRolesOf, estimatePower } from "@/lib/brackets/power";
 import { applyManaValues, withManaValue, type ManaValues } from "@/lib/deck/mana-values";
@@ -362,6 +362,8 @@ export function DeckEditor({
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<CardSummary | null>(null);
   const [previewSide, setPreviewSide] = useState<"left" | "right">("right");
+  // Beside mode: where the preview goes, next to the hovered card.
+  const [previewAt, setPreviewAt] = useState<{ left: number; top: number } | null>(null);
   const [sheet, setSheet] = useState<{ oracle_id: string; board: Board } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -457,9 +459,12 @@ export function DeckEditor({
     updatePrefs({ railWidth: px });
   };
   const previewMode = readPreviewMode(prefs);
-  // The floating preview sits on the side away from the mouse, and goes away as soon as the mouse is off a card.
+  // The floating preview sits on the side away from the mouse (or, beside, right next to the hovered card), and
+  // goes away as soon as the mouse is off a card.
+  const floating = previewMode === "float" || previewMode === "beside";
   useEffect(() => {
-    if (previewMode !== "float") return;
+    if (!floating) return;
+    let lastCard: Element | null = null;
     let x = -1;
     let y = -1;
     const clear = () => setPreview(null);
@@ -468,11 +473,29 @@ export function DeckEditor({
       x = e.clientX;
       y = e.clientY;
       setPreviewSide(x < window.innerWidth / 2 ? "right" : "left");
-      if (!(e.target instanceof Element && e.target.closest("[data-preview-card]"))) clear();
+      const card = e.target instanceof Element ? e.target.closest("[data-preview-card]") : null;
+      if (!card) {
+        lastCard = null;
+        return clear();
+      }
+      if (previewMode === "beside" && card !== lastCard) {
+        lastCard = card;
+        setPreviewAt(besidePosition(card.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }));
+      }
     };
     // Scrolling moves the cards without moving the mouse.
     const onScroll = () => {
-      if (x >= 0 && !document.elementFromPoint(x, y)?.closest("[data-preview-card]")) clear();
+      if (x < 0) return;
+      const card = document.elementFromPoint(x, y)?.closest("[data-preview-card]");
+      if (!card) {
+        lastCard = null;
+        return clear();
+      }
+      // The card moved under a still mouse: the beside preview follows it.
+      if (previewMode === "beside") {
+        lastCard = card;
+        setPreviewAt(besidePosition(card.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }));
+      }
     };
     const root = document.documentElement;
     window.addEventListener("pointermove", onMove);
@@ -485,7 +508,7 @@ export function DeckEditor({
       window.removeEventListener("blur", clear);
       root.removeEventListener("mouseleave", clear);
     };
-  }, [previewMode]);
+  }, [floating, previewMode]);
   const themeSettings = readThemeSettings(prefs);
   const [hidden, toggleHidden] = useHiddenTags(hiddenTags, userId);
   const quickAdd = useRef<QuickAddHandle>(null);
@@ -1546,6 +1569,8 @@ export function DeckEditor({
         coverArtist={coverCard?.artist}
         wide={previewMode !== "docked"}
         name={deck.name}
+        onRename={ownerOnly || guest ? undefined : (next) => renameDeckFromPage(deck.id, next)}
+        aboutLink={!guest}
         commanders={commanders.map((l) => l.card)}
         identity={identity}
         size={size}
@@ -2165,7 +2190,7 @@ export function DeckEditor({
           {/* Stays in reach while scrolling a long deck. */}
           <div className="sticky top-0 z-20 -mx-4 mt-2 flex flex-wrap items-center gap-2 border-b border-foreground/10 bg-background/90 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0">
             <div className="min-w-0 basis-full sm:basis-auto">
-              <DeckToolbar settings={view} onChange={setView} />
+              <DeckToolbar settings={view} onChange={setView} preview={userId ? { value: previewMode, onChange: (v) => updatePrefs({ previewMode: v }) } : undefined} />
             </div>
             {!readOnly && (
               <div className="flex items-center gap-2 sm:ml-auto">
@@ -2266,11 +2291,17 @@ export function DeckEditor({
             />
           </div>
         </aside>}
-        {!guest && <DeckSocialSection deckId={deck.id} owner={!ownerOnly} signedIn={!!userId} visibility={visibility} />}
+        {/* Full width under the editor (it used to fall into the narrow left column on wide screens). */}
+        {!guest && (
+          <div id="about" className="col-span-full scroll-mt-6">
+            <DeckSocialSection deckId={deck.id} owner={!ownerOnly} signedIn={!!userId} visibility={visibility} />
+          </div>
+        )}
       </div>
-      {previewMode === "float" && preview && !sheet && (
+      {floating && preview && !sheet && (previewMode === "float" || previewAt) && (
         <FloatingPreview
           side={previewSide}
+          at={previewMode === "beside" ? previewAt : null}
           card={preview}
           roleKeys={shownLine ? lineRoleKeys(shownLine) : roleKeysOf(preview)}
           extra={<PanelMyTags tags={myTagsOfCard(preview.oracle_id)} highlight={highlight} onHighlight={() => {}} />}

@@ -23,8 +23,9 @@ export function CheckinSetting({ userId, initial }: { userId: string; initial: b
   }
 
   return (
-    <fieldset className="mt-6">
-      <legend className="display text-xl">Monthly check-in</legend>
+    // id="email": the check-in email's "email settings" link lands here.
+    <fieldset id="email" className="mt-6 scroll-mt-24">
+      <legend className="display text-xl">Email</legend>
       <label className="panel mt-3 flex min-h-14 cursor-pointer items-start gap-3 p-3">
         <input type="checkbox" checked={on} onChange={(e) => toggle(e.target.checked)} className="mt-1 h-4 w-4 accent-gold" />
         <span>

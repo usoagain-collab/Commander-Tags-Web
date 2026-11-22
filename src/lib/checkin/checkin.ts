@@ -112,6 +112,8 @@ export async function checkinLinks(origin: string, secret: string, userId: strin
     answer: `${origin}/checkin?${q(answer)}`,
     stopPage: `${origin}/checkin/stop?${q(stop)}`,
     oneClick: `${origin}/api/checkin/stop?${q(stop)}`,
+    /** The email section of Settings (needs a sign-in; the stop page doesn't). */
+    settings: `${origin}/settings#email`,
   };
 }
 
@@ -136,7 +138,8 @@ export function buildCheckinEmail(opts: { name: string | null; month: string; li
     "Thanks for building with Deck Genome.",
     "David",
     "",
-    `Don't want these emails? Turn them off: ${opts.links.stopPage}`,
+    `Unsubscribe (no sign-in needed): ${opts.links.stopPage}`,
+    `Email settings on your profile: ${opts.links.settings}`,
   ];
   const html = [
     `<p>${esc(hi)}</p>`,
@@ -144,7 +147,7 @@ export function buildCheckinEmail(opts: { name: string | null; month: string; li
     `<ol>${QUESTIONS.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ol>`,
     `<p><a href="${esc(opts.links.answer)}" style="display:inline-block;padding:10px 16px;background:#b8860b;color:#ffffff;text-decoration:none;border-radius:6px">Answer the 3 questions</a></p>`,
     "<p>Thanks for building with Deck Genome.<br>David</p>",
-    `<p style="font-size:12px;color:#666666">Don't want these emails? <a href="${esc(opts.links.stopPage)}">Turn them off</a>.</p>`,
+    `<p style="font-size:13px;color:#555555;border-top:1px solid #dddddd;padding-top:12px">Don't want these emails? <a href="${esc(opts.links.stopPage)}" style="color:#555555;font-weight:bold">Unsubscribe</a> (no sign-in needed) or change it in your <a href="${esc(opts.links.settings)}" style="color:#555555">email settings</a>.</p>`,
   ].join("\n");
   return {
     subject,

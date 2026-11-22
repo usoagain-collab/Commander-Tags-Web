@@ -444,7 +444,8 @@ export function CardSearch({ entries, identity, commanderName, onAdd, onPreview,
       </div>
 
       <FiltersBox
-        fields={["types", "colors", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
+        fields={["types", "colors", "rarity", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
+        colorChoices={identity && inIdentity ? [...["W", "U", "B", "R", "G"].filter((c) => identity.has(c)), "C"] : undefined}
         draft={filters}
         onDraft={(next) => setFilters(next)}
         applyLabel="Add to search"

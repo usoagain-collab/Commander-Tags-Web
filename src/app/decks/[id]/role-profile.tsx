@@ -59,7 +59,8 @@ export function RoleProfile(props: Props) {
   const reorder = useDragReorder("role", roles.map((r) => r.key), props.onReorder, adjust);
 
   return (
-    <div className="space-y-3" data-tour="roles">
+    // While editing, a gold frame and a gold Done (top and bottom) say so, so nobody forgets the mode is on.
+    <div className={`space-y-3 ${adjust ? "-m-2 rounded-lg p-2 ring-1 ring-gold/70" : ""}`} data-tour="roles">
       {(!props.hideTitle || !readOnly) && (
         <div className="flex items-baseline justify-between gap-2">
           {!props.hideTitle ? <h2 className="display text-lg">What this deck needs</h2> : <span />}
@@ -69,14 +70,14 @@ export function RoleProfile(props: Props) {
               onClick={() => props.onEditing(!adjust)}
               aria-expanded={adjust}
               title="Change targets, hide roles, and drag roles and top tags into your own order"
-              className="min-h-8 shrink-0 text-[13px] underline opacity-80 hover:opacity-100"
+              className={adjust ? "btn-gold min-h-8 shrink-0 rounded-md px-3 text-[13px]" : "min-h-8 shrink-0 text-[13px] underline opacity-80 hover:opacity-100"}
             >
-              {adjust ? "Done" : "Edit targets"}
+              {adjust ? "Done editing" : "Edit targets"}
             </button>
           )}
         </div>
       )}
-      {adjust && <p className="text-xs opacity-75">Drag a role or a top tag to move it. Your order is used in all your decks.</p>}
+      {adjust && <p className="text-xs text-gold">Editing targets. Drag a role or a top tag to move it; your order is used in all your decks.</p>}
       {roles.length === 0 && <p className="text-sm opacity-60">Loading roles…</p>}
       <ul className="space-y-3">
         {roles.map((r) => {
@@ -235,6 +236,9 @@ export function RoleProfile(props: Props) {
               {message}
             </p>
           )}
+          <button type="button" onClick={() => props.onEditing(false)} className="btn-gold min-h-9 w-full rounded-md text-sm">
+            Done editing
+          </button>
         </div>
       )}
     </div>
