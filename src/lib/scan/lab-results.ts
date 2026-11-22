@@ -29,6 +29,7 @@ export interface LabResult {
   foilMark: FoilMark;
   linePrinting: string | null; // "set/number" of the printing Scryfall found for the line
   lineDisagrees?: boolean; // the line pointed at a different card than the name did (a misread)
+  lineFix?: string | null; // the set code as read, when a lookalike real code was used instead ("sos" for sds)
   // Method 3: compare pictures with every printing of the card.
   candidates: number;
   cardRank: number | null; // where the true printing came, comparing the whole card (1 = best)
@@ -114,7 +115,7 @@ export function resultsText(rows: LabResult[]): string {
   ];
   const cols: (keyof LabResult)[] = [
     "at", "source", "trueName", "trueSet", "trueNumber", "trueLang", "foil", "sleeved", "nameRead", "nameMatch", "nameVia",
-    "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "truePrinting", "candidates", "cardRank", "artRank", "ms", "note",
+    "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "lineFix", "truePrinting", "candidates", "cardRank", "artRank", "ms", "note",
   ];
   const clean = (v: unknown) => String(v ?? "").replace(/[\t\r\n]+/g, " ");
   return [...head, cols.join("\t"), ...rows.map((r) => cols.map((c) => clean(r[c])).join("\t"))].join("\n");
