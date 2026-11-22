@@ -44,10 +44,14 @@ const EXAMPLE_GENOME: GenomeGroup[] = [
   { key: "other", label: "No role", color: "color-mix(in srgb, var(--foreground) 22%, transparent)", count: 30 },
 ];
 
-/** Two real cards for the "by function" example, with the reason Suggest would give. */
+/**
+ * Two real cards for the "by function" example, with the reason Suggest would give. Looked up by oracle id, which is
+ * indexed. cards has no index on the plain name, so the name lookup read the whole table (5-10 s, Nov 21, 2026) and
+ * signed-out visitors hit their 3 s cutoff and got blank boxes.
+ */
 const SAMPLE_PICKS = [
-  { name: "Tatyova, Benthic Druid", role: "Card advantage", tags: ["landfall", "draw", "lifegain"] },
-  { name: "Retreat to Coralhelm", role: "Ramp", tags: ["landfall", "untap", "tap down"] },
+  { id: "0715e860-3b3b-4331-9718-207973e94fee", name: "Tatyova, Benthic Druid", role: "Card advantage", tags: ["landfall", "draw", "lifegain"] },
+  { id: "c450f6b7-bb2a-4b8c-aec7-d27555137b63", name: "Retreat to Coralhelm", role: "Ramp", tags: ["landfall", "untap", "tap down"] },
 ];
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
@@ -65,14 +69,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       .limit(2),
     supabase
       .from("card_summaries")
-      .select("name, image_normal")
+      .select("oracle_id, image_normal")
       .in(
-        "name",
-        SAMPLE_PICKS.map((p) => p.name),
+        "oracle_id",
+        SAMPLE_PICKS.map((p) => p.id),
       ),
   ]);
   const art = (data ?? []) as { oracle_id: string; name: string; image_art_crop: string; artist: string | null }[];
-  const pickImage = new Map(((picks ?? []) as { name: string; image_normal: string | null }[]).map((p) => [p.name, p.image_normal]));
+  const pickImage = new Map(((picks ?? []) as { oracle_id: string; image_normal: string | null }[]).map((p) => [p.oracle_id, p.image_normal]));
   const start = user ? "/decks" : "/try";
 
   return (
@@ -175,8 +179,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         <div className="grid min-w-0 flex-[1_1_560px] gap-4 sm:grid-cols-2">
           {SAMPLE_PICKS.map((p) => (
             <div key={p.name} className="panel flex gap-4 p-4">
-              {pickImage.get(p.name) ? (
-                <img src={pickImage.get(p.name)!} alt={p.name} className="w-[96px] shrink-0 self-start rounded-[4.75%/3.5%]" />
+              {pickImage.get(p.id) ? (
+                <img src={pickImage.get(p.id)!} alt={p.name} className="w-[96px] shrink-0 self-start rounded-[4.75%/3.5%]" />
               ) : (
                 <span aria-hidden className="aspect-[63/88] w-[96px] shrink-0 rounded-lg bg-panel-raised" />
               )}
