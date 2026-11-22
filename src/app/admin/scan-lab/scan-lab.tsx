@@ -6,7 +6,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CARD_RATIO, houghCorners } from "@/lib/scan/image";
 import { LAB_KEY, pct, readLabResults, resultsText, summarize, type LabResult } from "@/lib/scan/lab-results";
-import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, searchCards, straighten, type Printing, type Ranked, type ScanOutput } from "@/lib/scan/pipeline";
+import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, searchCards, straighten, type Printing, type Ranked, type ScanOutput, type Straightened } from "@/lib/scan/pipeline";
+import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4, type TrackState } from "@/lib/scan/track";
+import { FrameCollector } from "@/lib/scan/frames";
 
 const LANGS: [string, string][] = [
   ["en", "English"], ["ja", "Japanese"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"],
@@ -24,23 +26,22 @@ function guideRect(vw: number, vh: number) {
   return { x: (vw - w) / 2, y: (vh - h) / 2, w, h };
 }
 
-type Quad4 = [number, number][]; // four corners as fractions of the video's width and height
-
-// Find the card in the current video frame, on a copy at most 240 px on its long side (about 3 times a second on a
-// phone), so the gold outline can follow the card at whatever angle David holds the phone (Nov 22, 2026: he tilts it
-// so his shadow doesn't fall on the card).
+// Find the card in the current video frame, on a copy at most 320 px on its long side, so the gold outline can follow
+// the card at whatever angle David holds the phone (Nov 22, 2026: he tilts it so his shadow doesn't fall on the card).
+// Round 6: 320 px instead of 240 (the outline sat a few pixels off), and skewed shapes are dropped before tracking.
 function trackCard(video: HTMLVideoElement, scratch: HTMLCanvasElement): Quad4 | null {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   if (!vw || !vh) return null;
-  const s = Math.min(1, 240 / Math.max(vw, vh));
+  const s = Math.min(1, 320 / Math.max(vw, vh));
   scratch.width = Math.round(vw * s);
   scratch.height = Math.round(vh * s);
   const ctx = scratch.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   ctx.drawImage(video, 0, 0, scratch.width, scratch.height);
   const corners = houghCorners(ctx.getImageData(0, 0, scratch.width, scratch.height), 1.5);
-  return corners ? corners.map(([x, y]) => [x / scratch.width, y / scratch.height]) : null;
+  const quad: Quad4 | null = corners ? corners.map(([x, y]) => [x / scratch.width, y / scratch.height]) : null;
+  return quad && plausibleQuad(quad, vw / vh) ? quad : null;
 }
 
 // The area to search at capture: around the live outline when there is one (plus 15%), else the guide (plus 20%).
@@ -67,6 +68,16 @@ function onPhoto(r: { x: number; y: number; w: number; h: number }, vw: number, 
   const ox = (pw - vw * k) / 2;
   const oy = (ph - vh * k) / 2;
   return { x: ox + r.x * k, y: oy + r.y * k, w: r.w * k, h: r.h * k };
+}
+
+type Corners = [[number, number], [number, number], [number, number], [number, number]];
+
+// The live outline's corners in the picture's own pixels (the same placement as onPhoto).
+function cornersOnPhoto(q: Quad4, vw: number, vh: number, pw: number, ph: number): Corners {
+  const k = Math.min(pw / vw, ph / vh);
+  const ox = (pw - vw * k) / 2;
+  const oy = (ph - vh * k) / 2;
+  return q.map(([x, y]) => [ox + x * vw * k, oy + y * vh * k]) as Corners;
 }
 
 type Source = LabResult["source"];
@@ -132,7 +143,7 @@ export function ScanLab() {
   const [torch, setTorch] = useState<boolean | null>(null); // null = this camera has no light control
   const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [out, setOut] = useState<(ScanOutput & { source: Source; n: number }) | null>(null);
+  const [out, setOut] = useState<ReviewInput | null>(null);
   const scans = useRef(0);
   const [rows, setRows] = useState<LabResult[]>([]);
   const [url, setUrl] = useState("");
@@ -143,29 +154,54 @@ export function ScanLab() {
   }, []);
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
 
-  // Live outline: find the card in the video about 3 times a second while the camera is on and nothing is scanning.
-  const [live, setLive] = useState<Quad4 | null>(null);
+  // Live outline: find the card in the video about 7 times a second while the camera is on and nothing is scanning,
+  // through the tracker (src/lib/scan/track.ts), so it holds steady and locks once the card stays put.
+  const [track, setTrack] = useState<TrackState>(startTrack);
+  const live = track.shown;
   const liveRef = useRef<Quad4 | null>(null);
+  const [quick, setQuick] = useState(false); // use the video picture instead of taking a full photo
+  // Auto scan (round 7): no tap. While the outline is on a card, every frame goes into a stack (FrameCollector);
+  // after 5 frames it reads the stacked picture, and if that finds nothing it keeps collecting and reads again with
+  // more frames, for up to about 6 s. Then it beeps and shows the result, and waits for the card to be lifted.
+  const [auto, setAuto] = useState(false);
+  const autoRef = useRef(false);
+  autoRef.current = auto;
+  const [frames, setFrames] = useState(0);
+  const collectorRef = useRef<FrameCollector | null>(null);
+  const attemptRef = useRef(false); // a read is running
+  const nextAtRef = useRef(5); // read again once the stack has this many frames
+  const liftRef = useRef(false); // a card was just scanned: wait until it leaves the view
+  const reviewOpenRef = useRef(false);
+  const audioRef = useRef<AudioContext | null>(null);
+  useEffect(() => {
+    setQuick(localStorage.getItem("scan-lab:quick") === "1");
+    setAuto(localStorage.getItem("scan-lab:auto") === "1");
+  }, []);
   const busyRef = useRef(false);
   busyRef.current = step !== null;
   useEffect(() => {
     if (camera !== "on") {
-      setLive(null);
+      setTrack(startTrack());
       liveRef.current = null;
       return;
     }
     const scratch = document.createElement("canvas");
     let timer = 0;
     let stopped = false;
+    let state = startTrack();
     const tick = () => {
       if (stopped) return;
       const video = videoRef.current;
-      if (video && !busyRef.current) {
-        const quad = trackCard(video, scratch);
-        liveRef.current = quad;
-        setLive(quad);
+      const t = performance.now();
+      if (video && (!busyRef.current || autoRef.current)) {
+        const prev = state.shown;
+        state = stepTrack(state, trackCard(video, scratch));
+        liveRef.current = state.shown;
+        setTrack(state);
+        if (autoRef.current) autoTickRef.current(video, prev, state);
       }
-      timer = window.setTimeout(tick, 300);
+      // About every 140 ms, less often when finding the card takes longer on this phone.
+      timer = window.setTimeout(tick, Math.max(60, 140 - (performance.now() - t)));
     };
     tick();
     return () => {
@@ -173,6 +209,81 @@ export function ScanLab() {
       window.clearTimeout(timer);
     };
   }, [camera]);
+
+  // A short beep and buzz when auto scan has a card (high = found, low = gave up).
+  const beep = (found: boolean) => {
+    navigator.vibrate?.(found ? 60 : [40, 60, 40]);
+    const ac = audioRef.current;
+    if (!ac) return;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.frequency.value = found ? 1046 : 330;
+    gain.gain.value = 0.15;
+    osc.connect(gain).connect(ac.destination);
+    osc.start();
+    osc.stop(ac.currentTime + 0.09);
+  };
+
+  const attempt = async (c: FrameCollector) => {
+    const card = c.card();
+    if (!card) return;
+    attemptRef.current = true;
+    const used = c.count;
+    const collect = Math.round(performance.now() - c.firstAt);
+    try {
+      const result = await scanCard(card, setStep, c.crops());
+      const waited = performance.now() - c.firstAt;
+      const found = !!(result.nameMatch || result.linePrinting);
+      if (found || waited > 6000) {
+        setOut({
+          ...result,
+          timing: { collect, ...result.timing },
+          source: "auto",
+          n: ++scans.current,
+          foundBy: "tracked",
+          totalMs: Math.round(waited),
+          size: c.videoSize,
+          frames: used,
+        });
+        reviewOpenRef.current = true;
+        liftRef.current = true;
+        c.reset();
+        nextAtRef.current = 5;
+        beep(found);
+      } else {
+        nextAtRef.current = c.count + 4; // nothing yet: look longer, read again with more frames
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The scan failed.");
+    } finally {
+      attemptRef.current = false;
+      setStep(null);
+    }
+  };
+
+  const autoTickRef = useRef<(video: HTMLVideoElement, prev: Quad4 | null, s: TrackState) => void>(() => {});
+  autoTickRef.current = (video, prev, s) => {
+    const c = (collectorRef.current ??= new FrameCollector());
+    if (reviewOpenRef.current) return;
+    if (!s.shown) {
+      // No card in view: start fresh, and the last card counts as lifted.
+      if (c.count) c.reset();
+      liftRef.current = false;
+      nextAtRef.current = 5;
+      setFrames(0);
+      return;
+    }
+    if (liftRef.current) return;
+    if (prev && quadMove(prev, s.shown) >= TRACK.follow) {
+      c.reset(); // the outline jumped: another card, or the same one moved a lot
+      nextAtRef.current = 5;
+    }
+    if (!c.count && s.steady < 1) return; // start once the outline settles
+    c.add(video, s.shown);
+    setFrames(c.count);
+    if (!attemptRef.current && c.count >= nextAtRef.current) void attempt(c);
+  };
+  reviewOpenRef.current = out !== null;
 
   const save = (next: LabResult[]) => {
     setRows(next);
@@ -182,6 +293,13 @@ export function ScanLab() {
   const startCamera = async () => {
     setError(null);
     setCamera("starting");
+    // Sound has to be switched on by a tap; this is one.
+    try {
+      audioRef.current ??= new AudioContext();
+      void audioRef.current.resume();
+    } catch {
+      // no beep, the buzz still works on Android
+    }
     ocrWorker().catch(() => {}); // start loading the reader while the camera opens
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -222,12 +340,14 @@ export function ScanLab() {
     }
   };
 
-  const run = useCallback(async (card: HTMLCanvasElement, source: Source) => {
+  // `found`: the straightened card; `t0`: the tap; `before`: ms spent before reading (the photo, finding the card).
+  const run = useCallback(async (found: Straightened, source: Source, t0: number, before: Record<string, number>, size: string) => {
     setError(null);
     setOut(null);
     try {
-      const result = await scanCard(card, setStep);
-      setOut({ ...result, source, n: ++scans.current });
+      const result = await scanCard(found.card, setStep);
+      const timing = { ...before, ...result.timing };
+      setOut({ ...result, timing, source, n: ++scans.current, foundBy: found.foundBy, totalMs: Math.round(performance.now() - t0), size });
     } catch (e) {
       setError(e instanceof Error ? e.message : "The scan failed.");
     } finally {
@@ -240,20 +360,29 @@ export function ScanLab() {
   const capture = async () => {
     const video = videoRef.current;
     if (!video || !size || step !== null) return;
+    const t0 = performance.now();
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    // Search around the live outline (wherever and however tilted the card is), else around the guide.
-    const guideBox = searchBox(liveRef.current, vw, vh);
-    const track = streamRef.current?.getVideoTracks()[0];
+    // Search around the live outline (wherever and however tilted the card is), else around the guide. The outline's
+    // corners go along too, in case the photo itself doesn't show the edges clearly enough.
+    const quad = liveRef.current;
+    const guideBox = searchBox(quad, vw, vh);
+    const videoTrack = streamRef.current?.getVideoTracks()[0];
     const Capture = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { takePhoto(): Promise<Blob> } }).ImageCapture;
-    if (Capture && track) {
+    if (Capture && videoTrack && !quick) {
       setStep("Taking the photo…");
       try {
-        const bitmap = await createImageBitmap(await new Capture(track).takePhoto());
+        const bitmap = await createImageBitmap(await new Capture(videoTrack).takePhoto());
         // Only when the photo has the preview's shape (portrait or landscape); otherwise the outline can't be placed on it.
         if (bitmap.width > bitmap.height === vw > vh) {
+          const photo = Math.round(performance.now() - t0);
+          setStep("Finding the card…");
+          const t1 = performance.now();
           const rect = onPhoto(guideBox, vw, vh, bitmap.width, bitmap.height);
-          await run(await straighten(bitmap, bitmap.width, bitmap.height, rect, true), "still");
+          const corners = quad ? cornersOnPhoto(quad, vw, vh, bitmap.width, bitmap.height) : null;
+          const found = await straighten(bitmap, bitmap.width, bitmap.height, rect, true, corners);
+          const find = Math.round(performance.now() - t1);
+          await run(found, "still", t0, { photo, find }, `${bitmap.width}×${bitmap.height}`);
           bitmap.close();
           return;
         }
@@ -267,16 +396,23 @@ export function ScanLab() {
     frame.width = vw;
     frame.height = vh;
     frame.getContext("2d")?.drawImage(video, 0, 0);
+    const photo = Math.round(performance.now() - t0);
     setStep("Finding the card…");
-    await run(await straighten(frame, vw, vh, guideBox, true), "camera");
+    const t1 = performance.now();
+    const corners = quad ? cornersOnPhoto(quad, vw, vh, vw, vh) : null;
+    const found = await straighten(frame, vw, vh, guideBox, true, corners);
+    await run(found, "camera", t0, { photo, find: Math.round(performance.now() - t1) }, `${vw}×${vh}`);
   };
 
   const fromFile = async (file: File | undefined) => {
     if (!file) return;
     const src = URL.createObjectURL(file);
     try {
+      const t0 = performance.now();
       const img = await loadImage(src);
-      await run(await straighten(img, img.naturalWidth, img.naturalHeight, null, true), "photo");
+      const t1 = performance.now();
+      const found = await straighten(img, img.naturalWidth, img.naturalHeight, null, true);
+      await run(found, "photo", t0, { photo: Math.round(t1 - t0), find: Math.round(performance.now() - t1) }, `${img.naturalWidth}×${img.naturalHeight}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read that photo.");
     } finally {
@@ -287,8 +423,23 @@ export function ScanLab() {
   const fromUrl = async () => {
     if (!url.trim()) return;
     try {
+      const t0 = performance.now();
       const img = await loadImage(url.trim());
-      await run(await straighten(img, img.naturalWidth, img.naturalHeight, null, true), "url");
+      const t1 = performance.now();
+      // A Scryfall image has no surface around the card, so its edges are the picture's edges and the edge finder
+      // takes inner lines (the name bar, the text box) instead. Lay it on white paper first, like a real photo.
+      const pad = Math.round(img.naturalWidth * 0.08);
+      const paper = document.createElement("canvas");
+      paper.width = img.naturalWidth + 2 * pad;
+      paper.height = img.naturalHeight + 2 * pad;
+      const pctx = paper.getContext("2d");
+      if (pctx) {
+        pctx.fillStyle = "#f4f1ea";
+        pctx.fillRect(0, 0, paper.width, paper.height);
+        pctx.drawImage(img, pad, pad);
+      }
+      const found = await straighten(paper, paper.width, paper.height, null, true);
+      await run(found, "url", t0, { photo: Math.round(t1 - t0), find: Math.round(performance.now() - t1) }, `${img.naturalWidth}×${img.naturalHeight}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load that image.");
     }
@@ -296,6 +447,7 @@ export function ScanLab() {
 
   const guide = size ? guideRect(size.w, size.h) : null;
   const busy = step !== null;
+  const locked = isLocked(track);
 
   return (
     <div className="mt-6 space-y-6">
@@ -319,7 +471,17 @@ export function ScanLab() {
           <video ref={videoRef} playsInline muted className="block h-full w-full" />
           {camera === "on" ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-sm font-semibold text-white" style={{ textShadow: "0 1px 3px #000" }}>
-              {busy ? step : live ? "Gold outline found the card: tap to take the photo" : "Point at the card; any angle is fine"}
+              {busy
+                ? step
+                : auto && liftRef.current
+                  ? "Got it. Lift the card and put the next one down"
+                  : auto && frames
+                    ? `Auto scan: looking (${frames} frame${frames === 1 ? "" : "s"} so far)`
+                    : locked
+                  ? "Locked on the card: tap to scan"
+                  : live
+                    ? "Found the card: hold still a moment"
+                    : "Point at the card; any angle is fine"}
             </div>
           ) : null}
           {live ? (
@@ -327,9 +489,10 @@ export function ScanLab() {
             <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
               <polygon
                 points={live.map(([x, y]) => `${x},${y}`).join(" ")}
-                fill="rgba(212,168,75,0.12)"
+                fill={locked ? "rgba(212,168,75,0.18)" : "rgba(212,168,75,0.06)"}
                 stroke="var(--color-gold,#d4a84b)"
-                strokeWidth={3}
+                strokeWidth={locked ? 4 : 2}
+                strokeDasharray={locked ? undefined : "8 6"}
                 vectorEffect="non-scaling-stroke"
                 strokeLinejoin="round"
               />
@@ -383,6 +546,40 @@ export function ScanLab() {
             />
           </label>
         </div>
+        <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-5 w-5"
+            checked={auto}
+            onChange={(e) => {
+              setAuto(e.target.checked);
+              localStorage.setItem("scan-lab:auto", e.target.checked ? "1" : "0");
+              collectorRef.current?.reset();
+              try {
+                audioRef.current ??= new AudioContext();
+                void audioRef.current.resume();
+              } catch {
+                // no beep
+              }
+            }}
+          />
+          <span>
+            <b>Auto scan</b>: no tap. Hold the card in view; it collects video frames, stacks them into a cleaner picture and reads
+            it, looking longer when it can&apos;t read it yet. Beeps when done.
+          </span>
+        </label>
+        <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-5 w-5"
+            checked={quick}
+            onChange={(e) => {
+              setQuick(e.target.checked);
+              localStorage.setItem("scan-lab:quick", e.target.checked ? "1" : "0");
+            }}
+          />
+          Fast capture: use the video picture instead of taking a full photo (quicker, but the corner print may be too small)
+        </label>
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer opacity-75">Test with an image link</summary>
           <div className="mt-2 flex gap-2">
@@ -432,7 +629,25 @@ export function ScanLab() {
   );
 }
 
-function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Source }; onSave: (r: LabResult) => void; onSkip: () => void }) {
+type ReviewInput = ScanOutput & { source: Source; n: number; foundBy: string; totalMs: number; size: string; frames?: number };
+
+const FOUND_BY: Record<string, string> = {
+  tracked: "the live outline, frame by frame",
+  edges: "its four edges",
+  outline: "its outline",
+  live: "the gold outline (the photo's own edges weren't clear)",
+  turned: "a turned rectangle (rough)",
+  box: "plain edge finding (rough)",
+  whole: "nothing: the whole picture was used",
+};
+
+const stepsText = (t: Record<string, number>) =>
+  ["collect", "photo", "find", "prepare", "name", "corner", "lookup", "pictures"]
+    .filter((k) => typeof t[k] === "number")
+    .map((k) => `${k} ${t[k]}`)
+    .join(" · ");
+
+function ScanReview({ out, onSave, onSkip }: { out: ReviewInput; onSave: (r: LabResult) => void; onSkip: () => void }) {
   const [candidates, setCandidates] = useState<Ranked[]>(out.candidates);
   const [artOrder, setArtOrder] = useState<string[]>(out.artOrder);
   const lineKey = out.linePrinting ? printingKey(out.linePrinting) : null;
@@ -509,6 +724,11 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
       cardRank,
       artRank,
       ms: out.ms,
+      totalMs: out.totalMs,
+      steps: stepsText(out.timing),
+      foundBy: out.foundBy,
+      size: out.size,
+      frames: out.frames,
     });
   };
 
@@ -547,7 +767,13 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
             </div>
           </div>
           {out.disagree ? <div className="text-amber-400">The name and the corner point at different cards, so the name won.</div> : null}
-          <div className="opacity-75">{(out.ms / 1000).toFixed(1)} s</div>
+          <div className="opacity-75">
+            Card found by {FOUND_BY[out.foundBy] ?? out.foundBy} · {out.size} px
+            {out.frames ? ` · ${out.frames} video frames stacked` : ""}
+          </div>
+          <div className="opacity-75">
+            {(out.totalMs / 1000).toFixed(1)} s {out.source === "auto" ? "from the first frame" : "from the tap"} ({stepsText(out.timing)} ms; the name and the corner are read at the same time)
+          </div>
         </div>
       </div>
 
@@ -666,8 +892,12 @@ function Summary({ rows, onClear, onUndo }: { rows: LabResult[]; onClear: () => 
     ["Foil mark matches foil", `${s.foilMarkRight} of ${s.foilMarkRead} read`],
     ["Picture match: whole card best", `${s.cardTop1} (${pct(s.cardTop1, s.scans)})`],
     ["Picture match: art only best", `${s.artTop1} (${pct(s.artTop1, s.scans)})`],
-    ["Right printing, corner then picture", `${s.printingRightAny} (${pct(s.printingRightAny, s.scans)})`],
-    ["Average time", `${(s.avgMs / 1000).toFixed(1)} s`],
+    ["Right printing once the card is known", `${s.printingRightAny} (${pct(s.printingRightAny, s.scans)})`],
+    ["On its own: right card", `${s.cardFound} (${pct(s.cardFound, s.scans)})`],
+    ["On its own: right printing", `${s.printingFound} (${pct(s.printingFound, s.scans)})`],
+    ["Named a wrong card", String(s.wrongCard)],
+    ["Average time reading", `${(s.avgMs / 1000).toFixed(1)} s`],
+    ...(s.avgTotalMs !== null ? ([["Average time from the tap", `${(s.avgTotalMs / 1000).toFixed(1)} s`]] as [string, string][]) : []),
   ];
   const copy = async () => {
     await navigator.clipboard.writeText(resultsText(rows));
@@ -691,6 +921,9 @@ function Summary({ rows, onClear, onUndo }: { rows: LabResult[]; onClear: () => 
         <button type="button" className="btn btn-gold min-h-11" onClick={copy} disabled={!rows.length}>
           {copied ? "Copied" : "Copy results"}
         </button>
+        <button type="button" className="btn min-h-11" onClick={() => void savePictureSheet(rows)} disabled={!rows.length}>
+          Save pictures
+        </button>
         <button type="button" className="btn min-h-11" onClick={onUndo} disabled={!rows.length}>
           Remove last scan
         </button>
@@ -703,7 +936,10 @@ function Summary({ rows, onClear, onUndo }: { rows: LabResult[]; onClear: () => 
           Clear all
         </button>
       </div>
-      <p className="mt-2 text-xs opacity-70">Copy results and paste them into the chat with Claude when you&apos;re done.</p>
+      <p className="mt-2 text-xs opacity-70">
+        Copy results and paste them into the chat with Claude when you&apos;re done. Save pictures downloads one image of every
+        scan that went wrong (the straightened card, and what the reader saw for the name and the corner): attach it too.
+      </p>
       <ScanGallery rows={rows} />
     </section>
   );
@@ -763,4 +999,58 @@ function ScanGallery({ rows }: { rows: LabResult[] }) {
       ) : null}
     </div>
   );
+}
+
+// One image of every failed scan (or every scan when none failed): the straightened card, the name and corner crops
+// as the reader saw them, and what came out. Downloaded, so David can attach it to the chat (round 6: five rounds
+// were tuned without seeing a single crop).
+async function savePictureSheet(rows: LabResult[]) {
+  const images = readImages();
+  const failed = rows.filter((r) => nameWrong(r) || cornerWrong(r));
+  const list = (failed.length ? failed : rows).filter((r) => images[r.at]).slice(-16);
+  if (!list.length) {
+    window.alert("No pictures are kept for these scans (only scans saved on this phone have them).");
+    return;
+  }
+  const W = 1100;
+  const H = 330;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H * list.length;
+  const ctx = c.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  const fit = async (src: string, x: number, y: number, maxW: number, maxH: number) => {
+    try {
+      const img = await loadImage(src);
+      const k = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+      ctx.drawImage(img, x, y, img.naturalWidth * k, img.naturalHeight * k);
+      return img.naturalHeight * k;
+    } catch {
+      return 0;
+    }
+  };
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    const img = images[r.at];
+    const y = i * H;
+    ctx.fillStyle = "#ddd";
+    ctx.fillRect(0, y, W, 2);
+    await fit(img.card, 10, y + 10, 220, H - 20);
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 18px sans-serif";
+    ctx.fillText(`${r.trueName} · ${r.trueSet.toUpperCase()} #${r.trueNumber}${r.foil ? " · foil" : ""} · ${r.foundBy ?? "?"}`.slice(0, 90), 245, y + 28);
+    ctx.font = "15px sans-serif";
+    const nameH = await fit(img.name, 245, y + 40, 840, 70);
+    ctx.fillStyle = nameWrong(r) ? "#b00" : "#060";
+    ctx.fillText(`Name: "${r.nameRead}" -> ${r.nameMatch ?? "no match"}`.slice(0, 110), 245, y + 58 + nameH);
+    const lineH = await fit(img.line, 245, y + 72 + nameH, 840, 150);
+    ctx.fillStyle = cornerWrong(r) ? "#b00" : "#060";
+    ctx.fillText(`Corner: "${r.lineRead}" -> ${r.linePrinting ?? "no printing"}`.slice(0, 110), 245, y + 92 + nameH + lineH);
+  }
+  const a = document.createElement("a");
+  a.href = c.toDataURL("image/jpeg", 0.85);
+  a.download = `scan-lab-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.jpg`;
+  a.click();
 }

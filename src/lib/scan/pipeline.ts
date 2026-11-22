@@ -4,7 +4,7 @@
 // Everything here runs in the browser; the photo never leaves the phone.
 
 import { parseCollectorLine, type CollectorLine } from "./collector-line";
-import { buildNameIndex, cleanNameRead, closestName, setCodeVariants, type NameIndex } from "./names";
+import { buildNameIndex, cleanNameRead, closestName, nameFits, printedNames, setCodeVariants, type NameIndex } from "./names";
 import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, homography, houghCorners, locateCardQuad, type Pt, type Quad, warp, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
 
 const API = "https://api.scryfall.com";
@@ -53,6 +53,7 @@ export interface ScanOutput {
   prints: PhotoPrints;
   candidates: Ranked[]; // sorted by whole-card score, best first
   artOrder: string[]; // printing keys sorted by art score
+  timing: Record<string, number>; // ms per step (name and corner overlap)
   ms: number;
 }
 
@@ -71,26 +72,54 @@ function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContex
 
 const pixelsOf = (ctx: CanvasRenderingContext2D, w: number, h: number): Pixels => ctx.getImageData(0, 0, w, h);
 
+// How the card's edges were found at capture (shown in the review and saved with each scan).
+export type FoundBy = "edges" | "outline" | "live" | "turned" | "box" | "whole";
+
+export interface Straightened {
+  card: HTMLCanvasElement;
+  foundBy: FoundBy;
+}
+
 // Cut `rect` out of the source, find the card inside it (on a smaller copy, for speed) and flatten it upright.
 // First choice: the card's four edges as straight lines (houghCorners), then its outline's corners (both fix tilt
-// and a photo taken at an angle, where the card is a trapezoid); then a turned rectangle; then plain edge finding;
-// else the whole crop.
-export async function straighten(source: CanvasImageSource, srcW: number, srcH: number, rect: Rect | null, refine: boolean): Promise<HTMLCanvasElement> {
+// and a photo taken at an angle, where the card is a trapezoid). `live`: the corners the gold outline showed at the
+// tap, in source pixels; used when neither finds the card here, or when what they found is much smaller than the
+// outline (an inner line, like the art's edge, taken for the card's). Then a turned rectangle; then plain edge
+// finding; else the whole crop.
+export async function straighten(
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  rect: Rect | null,
+  refine: boolean,
+  live: [Pt, Pt, Pt, Pt] | null = null,
+): Promise<Straightened> {
   const r = rect ?? { x: 0, y: 0, w: srcW, h: srcH };
   let quad: Quad = { cx: r.w / 2, cy: r.h / 2, w: r.w, h: r.h, angle: 0 };
+  let foundBy: FoundBy = "whole";
   if (refine) {
-    const s = Math.min(1, 600 / Math.max(r.w, r.h));
+    // 500 px is plenty to place the edges (the flatten itself uses the full photo); round 5 used 600 at finer angles.
+    const s = Math.min(1, 500 / Math.max(r.w, r.h));
     const [sc, sctx] = canvas(r.w * s, r.h * s);
     sctx.drawImage(source, r.x, r.y, r.w, r.h, 0, 0, sc.width, sc.height);
     const small = pixelsOf(sctx, sc.width, sc.height);
-    const corners = houghCorners(small) ?? cardCorners(small);
-    if (corners) return flatten(source, r, corners.map(([x, y]) => [x / s, y / s]) as [Pt, Pt, Pt, Pt]);
+    const hough = houghCorners(small, 1);
+    const found = hough ?? cardCorners(small);
+    const inCrop = live ? (live.map(([x, y]) => [x - r.x, y - r.y]) as [Pt, Pt, Pt, Pt]) : null;
+    const area = (q: Pt[]) => Math.abs(q.reduce((t, [x, y], i) => t + x * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * y, 0)) / 2;
+    if (found) {
+      const corners = found.map(([x, y]) => [x / s, y / s]) as [Pt, Pt, Pt, Pt];
+      if (!inCrop || area(corners) > area(inCrop) * 0.7) return { card: flatten(source, r, corners), foundBy: hough ? "edges" : "outline" };
+    }
+    if (inCrop) return { card: flatten(source, r, inCrop), foundBy: "live" };
     const q = locateCardQuad(small);
     if (q) {
       quad = { cx: q.cx / s, cy: q.cy / s, w: q.w / s, h: q.h / s, angle: q.angle };
+      foundBy = "turned";
     } else {
       const b = findCardBounds(small);
       quad = { cx: (b.x + b.w / 2) / s, cy: (b.y + b.h / 2) / s, w: b.w / s, h: b.h / s, angle: 0 };
+      foundBy = "box";
     }
   }
   const w = Math.round(Math.min(MAX_W, Math.max(MIN_W, quad.w)));
@@ -102,7 +131,7 @@ export async function straighten(source: CanvasImageSource, srcW: number, srcH: 
   ctx.scale(w / quad.w, h / quad.h);
   ctx.rotate(-quad.angle);
   ctx.drawImage(source, r.x, r.y, r.w, r.h, -quad.cx, -quad.cy, r.w, r.h);
-  return c;
+  return { card: c, foundBy };
 }
 
 // Perspective-correct the card from its four corners (in crop pixels) onto an upright canvas.
@@ -131,11 +160,23 @@ function ocrCrop(card: HTMLCanvasElement, region: Rect, width: number, binary: b
   const [c, ctx] = canvas(width, (width * r.h) / r.w);
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(card, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
-  const img = ctx.getImageData(0, 0, c.width, c.height);
-  const gray = toGray(img);
-  const t = otsu(gray);
+  return toOcrCanvas(toGray(ctx.getImageData(0, 0, c.width, c.height)), c.width, c.height, binary, c);
+}
+
+// The sizes the name and corner are read at (the crops above, on a 630 × 880 card), also used for stacked frames.
+export const STRIP = {
+  name: { w: 900, h: Math.round((900 * REGIONS.name.h * 880) / (REGIONS.name.w * 630)) },
+  corner: { w: 1100, h: Math.round((1100 * REGIONS.collector.h * 880) / (REGIONS.collector.w * 630)) },
+};
+
+// Gray pixels to what the reader gets: dark text on light (light text on a dark border is flipped), or black and
+// white with Otsu's threshold when `binary`.
+export function toOcrCanvas(gray: ArrayLike<number>, w: number, h: number, binary: boolean, into?: HTMLCanvasElement): HTMLCanvasElement {
+  const [c, ctx] = into ? [into, into.getContext("2d", { willReadFrequently: true })!] : canvas(w, h);
+  const img = ctx.createImageData(w, h);
+  const t = otsu(Float32Array.from(gray));
   let dark = 0;
-  for (const v of gray) if (v <= t) dark++;
+  for (let i = 0; i < gray.length; i++) if (gray[i] <= t) dark++;
   const invert = dark > gray.length / 2; // light text on a dark border
   for (let i = 0; i < gray.length; i++) {
     let v = invert ? 255 - gray[i] : gray[i];
@@ -150,28 +191,41 @@ function ocrCrop(card: HTMLCanvasElement, region: Rect, width: number, binary: b
 /* ---------- OCR ---------- */
 
 type TessWorker = Awaited<ReturnType<typeof import("tesseract.js").createWorker>>;
-let workerPromise: Promise<TessWorker> | null = null;
-
-// Loaded on first use: about 10 MB the first time (Tesseract's engine and English data, from the jsDelivr CDN), cached after.
-export function ocrWorker(): Promise<TessWorker> {
-  workerPromise ??= import("tesseract.js").then(({ createWorker }) => createWorker("eng"));
-  workerPromise.catch(() => (workerPromise = null));
-  return workerPromise;
-}
+type Mode = "name" | "corner";
+const workers: Partial<Record<Mode, Promise<TessWorker>>> = {};
 
 // The characters each read may produce. A card name has no digits (the reader turned "U.S.S." into "11S S"); the
 // corner is capitals, digits and a few marks (lower case let "SDS" come out "sDS").
 const NAME_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ,.'-:!&";
 const CORNER_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/•★*. ";
 
-async function readText(image: HTMLCanvasElement, mode: "name" | "corner"): Promise<string> {
-  const w = await ocrWorker();
-  // Page segmentation modes: 7 = one line of text (the name), 6 = one block (the corner's two lines).
-  await w.setParameters({
-    tessedit_pageseg_mode: (mode === "name" ? "7" : "6") as never,
-    tessedit_char_whitelist: mode === "name" ? NAME_CHARS : CORNER_CHARS,
-  });
-  const { data } = await w.recognize(image);
+// One reader for the name and one for the corner, so both read at the same time (round 6: scans were slow, and
+// phones have several cores). Loaded on first use: about 10 MB the first time (Tesseract's engine and English data,
+// from the jsDelivr CDN), cached after; the second reader loads from that cache. Settings are set once per reader.
+function worker(mode: Mode): Promise<TessWorker> {
+  let w = workers[mode];
+  if (!w) {
+    w = import("tesseract.js").then(async ({ createWorker }) => {
+      const tw = await createWorker("eng");
+      // Page segmentation modes: 7 = one line of text (the name), 6 = one block (the corner's two lines).
+      await tw.setParameters({
+        tessedit_pageseg_mode: (mode === "name" ? "7" : "6") as never,
+        tessedit_char_whitelist: mode === "name" ? NAME_CHARS : CORNER_CHARS,
+      });
+      return tw;
+    });
+    workers[mode] = w;
+    w.catch(() => delete workers[mode]);
+  }
+  return w;
+}
+
+export function ocrWorker(): Promise<unknown> {
+  return Promise.all([worker("name"), worker("corner")]);
+}
+
+async function readText(image: HTMLCanvasElement, mode: Mode): Promise<string> {
+  const { data } = await (await worker(mode)).recognize(image);
   return data.text.trim();
 }
 
@@ -230,8 +284,22 @@ export async function searchCards(text: string): Promise<Printing[]> {
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Scryfall asks for 10 requests a second at most. Calls queue through one gate that waits only when the previous call
+// started under 100 ms ago (round 5 paused 100 ms before every call, even after a long OCR read).
+let gate: Promise<void> = Promise.resolve();
+let lastCall = 0;
+function turn(): Promise<void> {
+  const mine = gate.then(async () => {
+    const wait = lastCall + 100 - performance.now();
+    if (wait > 0) await pause(wait);
+    lastCall = performance.now();
+  });
+  gate = mine;
+  return mine;
+}
+
 async function scry<T>(path: string): Promise<T | null> {
-  await pause(100); // Scryfall asks for 10 requests a second at most
+  await turn();
   const res = await fetch(`${API}${path}`, { headers: { Accept: "application/json" } });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Scryfall answered ${res.status}`);
@@ -321,7 +389,10 @@ async function cardByLine(line: CollectorLine, photo: PhotoPrints, nameMatch: Pr
   for (const code of codes) {
     const base = `/cards/${encodeURIComponent(code)}/${encodeURIComponent(line.number)}`;
     const c = (line.lang && line.lang !== "en" ? await scry<ScryCard>(`${base}/${line.lang}`).catch(() => null) : null) ?? (await scry<ScryCard>(base).catch(() => null));
-    if (c) found.push(toPrinting(c));
+    if (!c) continue;
+    found.push(toPrinting(c));
+    // The named card's printing: no need to try the other codes (round 5 always tried all of them, up to 12 calls).
+    if (nameMatch && found[found.length - 1].oracleId === nameMatch.oracleId) break;
   }
   if (!found.length) return none;
   const named = nameMatch ? found.find((p) => p.oracleId === nameMatch.oracleId) : undefined;
@@ -400,8 +471,8 @@ function printsOfUrl(src: string): Promise<PhotoPrints | null> {
 
 export async function rank(photo: PhotoPrints, printings: Printing[]): Promise<{ candidates: Ranked[]; artOrder: string[] }> {
   const ranked: Ranked[] = [];
-  for (let i = 0; i < printings.length; i += 8) {
-    const batch = printings.slice(i, i + 8);
+  for (let i = 0; i < printings.length; i += 16) {
+    const batch = printings.slice(i, i + 16);
     const prints = await Promise.all(batch.map((p) => (p.image ? printsOfUrl(p.image) : Promise.resolve(null))));
     batch.forEach((p, j) => {
       const q = prints[j];
@@ -419,59 +490,55 @@ export async function rank(photo: PhotoPrints, printings: Printing[]): Promise<{
 
 /* ---------- one scan ---------- */
 
-export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) => void): Promise<ScanOutput> {
-  const started = performance.now();
-  // Each text is read from a few crops in turn (the box a little lower or higher, gray or black and white) until one
-  // works: frames differ, and the card's edges are found a few pixels off now and then.
-  const shifted = (r: Rect, dy: number, dh = 0): Rect => ({ ...r, y: r.y + dy, h: r.h + dh });
-  const nameCrops = [
-    ocrCrop(card, REGIONS.name, 900, false),
-    ocrCrop(card, shifted(REGIONS.name, 0.008, 0.012), 900, false),
-    ocrCrop(card, REGIONS.name, 900, true),
-  ];
-  const lineCrops = [
-    ocrCrop(card, REGIONS.collector, 1100, false),
-    ocrCrop(card, shifted(REGIONS.collector, 0.02, -0.01), 1100, false),
-    ocrCrop(card, shifted(REGIONS.collector, -0.03), 1100, false),
-    ocrCrop(card, REGIONS.collector, 1100, true),
-  ];
-  const prints = photoPrints(card);
-  const validSets = await setCodes().catch(() => null);
+// The value of a promise that has already settled, else null (don't hold a scan up for a list still loading).
+function ifReady<T>(p: Promise<T>): Promise<T | null> {
+  return Promise.race([p.catch(() => null), Promise.resolve(null)]);
+}
 
-  onStep?.("Reading the text (the first scan loads the reader, about 10 MB)…");
-  // The name: until Scryfall's fuzzy search finds a card for a read. If none does, the closest name in Scryfall's full
-  // list of names and flavor names (a wrong first letter defeats fuzzy search).
-  let nameRead = "";
-  let nameMatch: Printing | null = null;
-  let nameVia: ScanOutput["nameVia"] = null;
-  let nameCrop = nameCrops[0];
+interface NameResult {
+  nameRead: string;
+  nameMatch: Printing | null;
+  nameVia: ScanOutput["nameVia"];
+  nameCrop: HTMLCanvasElement;
+}
+
+// The name, from each crop in turn until one names a card: first the closest name in the full list (no fuzzy search
+// when the read is close), then Scryfall's fuzzy search, kept only if the read really looks like the card it
+// returned. If none works, the closest name allowing more mistakes.
+async function readName(crops: HTMLCanvasElement[], index: NameIndex | null): Promise<NameResult> {
   const reads: { text: string; crop: HTMLCanvasElement }[] = [];
-  for (const crop of nameCrops) {
+  for (const crop of crops) {
     const text = await readText(crop, "name");
     reads.push({ text, crop });
+    const near = index ? closestName(text, index, 0.25) : null;
+    if (near) {
+      const match = await cardByExactName(near.target).catch(() => null);
+      if (match) return { nameRead: text, nameMatch: match, nameVia: "closest", nameCrop: crop };
+    }
     const match = await cardByName(text).catch(() => null);
-    if (match) {
-      [nameRead, nameMatch, nameVia, nameCrop] = [text, match, "scryfall", crop];
-      break;
+    if (match && (!index || nameFits(text, [...printedNames(match.name, index), match.flavorName ?? ""]))) {
+      return { nameRead: text, nameMatch: match, nameVia: "scryfall", nameCrop: crop };
     }
   }
-  if (!nameMatch) {
-    nameRead = reads[0].text;
-    const index = await nameIndex().catch(() => null);
-    const guesses = index ? reads.map((r) => ({ ...r, guess: closestName(r.text, index) })).filter((r) => r.guess) : [];
+  if (index) {
+    const guesses = reads.map((r) => ({ ...r, guess: closestName(r.text, index) })).filter((r) => r.guess);
     guesses.sort((a, b) => a.guess!.share - b.guess!.share);
     const best = guesses[0];
     if (best?.guess) {
       const match = await cardByExactName(best.guess.target).catch(() => null);
-      if (match) [nameRead, nameMatch, nameVia, nameCrop] = [best.text, match, "closest", best.crop];
+      if (match) return { nameRead: best.text, nameMatch: match, nameVia: "closest", nameCrop: best.crop };
     }
   }
-  // The corner: until a read gives a number and a set code that is real or one slip from a real one.
+  return { nameRead: reads.find((r) => r.text)?.text ?? "", nameMatch: null, nameVia: null, nameCrop: crops[0] };
+}
+
+// The corner: until a read gives a number and a set code that is real or one slip from a real one.
+async function readCorner(crops: HTMLCanvasElement[], validSets: Set<string> | null) {
   const usable = (l: CollectorLine) => !!(l.set && l.number && (!validSets || setCodeVariants(l.set, validSets).length));
   let lineRead = "";
   let line = parseCollectorLine("");
-  let lineCrop = lineCrops[0];
-  for (const crop of lineCrops) {
+  let lineCrop = crops[0];
+  for (const crop of crops) {
     const text = await readText(crop, "corner");
     const parsed = parseCollectorLine(text);
     if (!lineRead || usable(parsed) || (parsed.set && parsed.number && !(line.set && line.number))) {
@@ -481,37 +548,93 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     }
     if (usable(parsed)) break;
   }
+  return { lineRead, line, lineCrop };
+}
+
+// `given`: name and corner crops to read instead of cutting them from `card` (auto scan passes crops stacked from
+// many video frames).
+export async function scanCard(
+  card: HTMLCanvasElement,
+  onStep?: (step: string) => void,
+  given?: { name: HTMLCanvasElement[]; line: HTMLCanvasElement[] },
+): Promise<ScanOutput> {
+  const started = performance.now();
+  const timing: Record<string, number> = {};
+  const since = (t: number) => Math.round(performance.now() - t);
+  // Each text is read from a few crops in turn (the box a little lower or higher, gray or black and white) until one
+  // works: frames differ, and the card's edges are found a few pixels off now and then.
+  const shifted = (r: Rect, dy: number, dh = 0): Rect => ({ ...r, y: r.y + dy, h: r.h + dh });
+  const nameCrops = given?.name ?? [
+    ocrCrop(card, REGIONS.name, 900, false),
+    ocrCrop(card, shifted(REGIONS.name, 0.008, 0.012), 900, false),
+    ocrCrop(card, REGIONS.name, 900, true),
+  ];
+  const lineCrops = given?.line ?? [
+    ocrCrop(card, REGIONS.collector, 1100, false),
+    ocrCrop(card, shifted(REGIONS.collector, 0.02, -0.01), 1100, false),
+    ocrCrop(card, shifted(REGIONS.collector, -0.03), 1100, false),
+    ocrCrop(card, REGIONS.collector, 1100, true),
+  ];
+  const prints = photoPrints(card);
+  const validSets = await setCodes().catch(() => null);
+  const index = await ifReady(nameIndex());
+  timing.prepare = since(started);
+
+  onStep?.("Reading the name and the corner (the first scan loads the reader, about 10 MB)…");
+  // Name and corner are read at the same time, by two readers.
+  const t0 = performance.now();
+  const [named, corner] = await Promise.all([
+    readName(nameCrops, index).finally(() => (timing.name = since(t0))),
+    readCorner(lineCrops, validSets).finally(() => (timing.corner = since(t0))),
+  ]);
+  const { nameRead, nameMatch, nameVia, nameCrop } = named;
+  const { lineRead, line, lineCrop } = corner;
 
   onStep?.("Looking it up on Scryfall…");
-  const lookup = await cardByLine(line, prints, nameMatch).catch(() => ({ printing: null, fixedFrom: null }));
-  const linePrinting = lookup.printing;
+  const t1 = performance.now();
+  const setsFor = (code: string | null) => (code ? (validSets ? setCodeVariants(code, validSets) : [code]) : []);
+  // With the name found, the corner is first matched against that card's own printings: no extra calls.
+  let printings: Printing[] | null = nameMatch ? await printingsOf(nameMatch.oracleId) : null;
+  let linePrinting: Printing | null = null;
+  let fixedFrom: string | null = null;
+  if (printings && line.set && line.number) {
+    const sets = setsFor(line.set);
+    const exact = printings.find((p) => sets.includes(p.set) && p.number === line.number);
+    if (exact) [linePrinting, fixedFrom] = [exact, exact.set !== line.set ? line.set : null];
+  }
+  if (!linePrinting) {
+    const lookup = await cardByLine(line, prints, nameMatch).catch(() => ({ printing: null, fixedFrom: null }));
+    [linePrinting, fixedFrom] = [lookup.printing, lookup.fixedFrom];
+  }
   // The name and the corner check each other: a misread digit points at another card, which the name gives away.
   const agree = !!nameMatch && !!linePrinting && nameMatch.oracleId === linePrinting.oracleId;
   const oracleId = (agree || !nameMatch ? linePrinting?.oracleId : nameMatch.oracleId) || nameMatch?.oracleId;
+  if (oracleId && (!printings || printings[0]?.oracleId !== oracleId)) printings = await printingsOf(oracleId);
+  timing.lookup = since(t1);
 
   let candidates: Ranked[] = [];
   let artOrder: string[] = [];
-  if (oracleId) {
+  const t2 = performance.now();
+  if (oracleId && printings) {
     onStep?.("Comparing the picture with every printing…");
-    ({ candidates, artOrder } = await rank(prints, await printingsOf(oracleId)));
+    ({ candidates, artOrder } = await rank(prints, printings));
   }
+  timing.pictures = since(t2);
 
   // When the name found the card but the corner didn't land on one of its printings (a misread digit: "C002" for
   // 0012; an unreadable set code: "TEV" for TRK), the corner only has to pick among that card's own printings:
-  // set and number both, else the only printing with that number, else the only one (or the nearest number) in that set.
+  // the only printing with that number, else the only one (or the nearest number) in that set.
   let finalLine = linePrinting;
-  let fixedFrom = lookup.fixedFrom;
   if (nameMatch && candidates.length && (!linePrinting || linePrinting.oracleId !== nameMatch.oracleId) && (line.set || line.number)) {
-    const sets = line.set ? (validSets ? setCodeVariants(line.set, validSets) : [line.set]) : [];
+    const sets = setsFor(line.set);
     const num = (p: { number: string }) => parseInt(p.number, 10);
-    const bySetNum = candidates.find((c) => sets.includes(c.set) && c.number === line.number);
     const byNum = candidates.filter((c) => c.number === line.number);
     const bySet = candidates.filter((c) => sets.includes(c.set));
     const nearest =
       bySet.length > 1 && line.number
         ? [...bySet].sort((a, b) => Math.abs(num(a) - Number(line.number)) - Math.abs(num(b) - Number(line.number)))[0]
         : undefined;
-    const pick = bySetNum ?? (byNum.length === 1 ? byNum[0] : undefined) ?? (bySet.length === 1 ? bySet[0] : nearest);
+    const pick = (byNum.length === 1 ? byNum[0] : undefined) ?? (bySet.length === 1 ? bySet[0] : nearest);
     if (pick) {
       finalLine = pick;
       fixedFrom = `${(line.set ?? "?").toUpperCase()} #${line.number ?? "?"}`;
@@ -537,6 +660,7 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     prints,
     candidates,
     artOrder,
+    timing,
     ms: Math.round(performance.now() - started),
   };
 }
