@@ -83,7 +83,7 @@ export const GUIDE_STEPS: GuideStep[] = [
     title: "8. Cut down to 100",
     points: [
       "Most decks end up too big. When yours is over 100, a ✂ Cut button shows how many to go.",
-      "The Smart Cutter lists what to cut and why, keeping each role near its target. Lock any card you never want suggested.",
+      "The Deck Sequencer lists what to cut and why, keeping each role near its target, and checks your land count and curve. Lock any card you never want suggested.",
     ],
   },
   {

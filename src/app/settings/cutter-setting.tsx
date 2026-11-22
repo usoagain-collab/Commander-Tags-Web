@@ -28,7 +28,7 @@ export function CutterSetting({ userId, initial }: { userId: string; initial: un
 
   return (
     <fieldset className="mt-6">
-      <legend className="display text-xl">Smart Cutter</legend>
+      <legend className="display text-xl">Deck Sequencer</legend>
       <p className="mt-1 text-sm opacity-80">Suggests what to cut from a deck using its roles, targets and themes, and explains each pick.</p>
       <div className="mt-3 space-y-2 text-sm">
         <Toggle on={prefs.power} onChange={(on) => toggle("power", on)} name="Power user mode" about="Weights, reasons for dismissing, curve overrides, custom archetypes, and the walkthrough, head to head, 2-for-1 and what-if tools." />
@@ -125,7 +125,7 @@ function ArchetypeEditor({ archetypes, onChange }: { archetypes: Archetype[]; on
   return (
     <div className="panel mt-4 space-y-3 p-4 text-sm">
       <h3 className="font-medium">Your archetypes</h3>
-      <p className="opacity-80">Offered next to the built-in ones in every deck. Detected from the tags you list; the curve sets what the Cutter expects.</p>
+      <p className="opacity-80">Offered next to the built-in ones in every deck. Detected from the tags you list; the curve sets what the Sequencer expects.</p>
       {archetypes.length > 0 && (
         <ul className="space-y-1">
           {archetypes.map((a) => (

@@ -33,7 +33,7 @@ export function useCutterState(deckId: string, initial: CutterState, readOnly: b
       ? null
       : async (cutter) => {
           const { error } = await supabase.from("decks").update({ cutter }).eq("id", deckId);
-          return error ? `Couldn't save Smart Cutter settings: ${error.message}` : null;
+          return error ? `Couldn't save Deck Sequencer settings: ${error.message}` : null;
         },
   );
   return { state: s.value, setState: s.setValue, saveError: s.saveError };
@@ -46,7 +46,7 @@ export function useCutterPrefs(userId: string | null, initial: CutterPrefs) {
     userId
       ? async (cutter_prefs) => {
           const { error } = await supabase.from("profiles").update({ cutter_prefs }).eq("id", userId);
-          return error ? `Couldn't save your Smart Cutter settings: ${error.message}` : null;
+          return error ? `Couldn't save your Deck Sequencer settings: ${error.message}` : null;
         }
       : null,
   );

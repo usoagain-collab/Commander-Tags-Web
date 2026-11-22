@@ -113,7 +113,7 @@ export function CardLine({ item, readOnly, onOpen, onHover, onQuantity, drag }: 
           </span>
         )}
         {item.locked && (
-          <span title="Locked: the Smart Cutter never suggests cutting it" className="shrink-0 text-xs">
+          <span title="Locked: the Deck Sequencer never suggests cutting it" className="shrink-0 text-xs">
             🔒
           </span>
         )}

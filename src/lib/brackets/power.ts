@@ -12,7 +12,7 @@ import type { BracketEstimate } from "./evaluate";
 import { resolveRoles, rolesOf, STANDARD_ROLES } from "@/lib/tags/roles";
 import type { TagTree } from "@/lib/tags/tree";
 import type { Archetype } from "@/lib/cutter/archetypes";
-import { landAdvice } from "@/lib/deck/mana-checkup";
+import { landAdvice, landsText } from "@/lib/deck/mana-checkup";
 import { estimateSpeed, SPEED, turnWords, type SpeedEstimate } from "./speed";
 
 /**
@@ -222,7 +222,7 @@ export function estimatePower(input: PowerInput): PowerEstimate {
     const redundancyPts = capped(routeCards.length, C.redundancy.per, C.redundancy.max);
 
     const lands = landAdvice(input.lines.filter((l) => l.board === "commander" || l.board === "main"), (l) => role(l, "ramp") || role(l, "draw"));
-    const off = Math.abs(lands.lands - lands.recommended);
+    const off = Math.abs(lands.effective - lands.recommended);
     const manaPts = off <= C.manaBase.close ? C.manaBase.max : off <= C.manaBase.near ? C.manaBase.max / 2 : 0;
 
     const points = Math.min(C.max, tutorPts + drawPts + selectionPts + redundancyPts + manaPts);
@@ -231,7 +231,7 @@ export function estimatePower(input: PowerInput): PowerEstimate {
       `${sumQ(draw)} draw, ${plural(sumQ(engines), "engine", "engines")} among them (${round1(drawPts)})`,
       `${sumQ(selection)} card selection (${round1(selectionPts)})`,
       route ? `${plural(routeCards.length, "piece", "pieces")} for the ${route.label} (${round1(redundancyPts)})` : "no combo or cheat route to back up (0)",
-      `${lands.lands} lands against a suggested ${lands.recommended} (${round1(manaPts)})`,
+      `${landsText(lands.effective)} lands against a suggested ${lands.recommended} (${round1(manaPts)})`,
     ];
     parts.push({ key: "consistency", label: "Consistency", points, max: C.max, detail: bits.join("; "), cards: ids([...tutors, ...engines, ...selection]) });
   }

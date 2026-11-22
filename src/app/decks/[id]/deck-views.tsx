@@ -485,7 +485,7 @@ function TileBadges({ item, quantity }: { item: DeckItem; quantity: number }) {
       )}
       {item.tutor && <TutorBadge />}
       {item.locked && (
-        <span title="Locked: the Smart Cutter never suggests cutting it" className="rounded bg-black/80 px-1.5 py-0.5 text-xs text-white">
+        <span title="Locked: the Deck Sequencer never suggests cutting it" className="rounded bg-black/80 px-1.5 py-0.5 text-xs text-white">
           🔒
         </span>
       )}
