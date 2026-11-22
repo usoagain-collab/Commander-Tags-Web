@@ -319,6 +319,7 @@ After v2. Recorded so they aren't lost; nothing here is scheduled.
 | Deck descriptions, comments and likes | David's own V3 ideas (Nov 11, 2026): a description on each deck, and comments and likes from other players. **Built Nov 15, 2026 (V3), needs migration 0059:** an About this deck section under every deck. The owner writes a description (up to 1000 characters) and can turn comments off. On a deck shared by link or public, anyone signed in can like it (not their own) and comment (up to 1000 characters, about 10 per 10 minutes). The comment author or the deck owner can delete a comment. Signed-out visitors read and get a Sign in link. Descriptions are in Download my data. Until 0059 runs, the owner can still write a description and comments and likes stay hidden | Nov 15, 2026 |
 | Deck health score | One score and a small chart built from the role bars, curve and mana checks. Effort: small to medium. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9). **Built Nov 15, 2026, with the Mana base checkup** in Stats. Checkup: Frank Karsten's 99-card formula (31.42 + 3.13 x average mana value of nonland cards - 0.28 x cheap ramp or draw at mana value 2 or less), kept between 30 and 45, with a button to set the Lands target; lands read from oracle text as always, sometimes or never tapped; a warning when over half of 4+ ramp cards are artifacts. Score: 0-100 from roles (35), land count against the suggestion (25), curve (15, full marks at average mana value 3.2 or less), color sources (15) and always-tapped lands past 2 (10), each part shown as a bar with its reason. Weights are a first guess to tune | Nov 14, 2026 |
 | Playgroups | Friends grouped into a playgroup with shared game history and win rates per deck and player. Builds on the Game log. Effort: large. From the Mythic Tools and TappedOut check (Nov 14, 2026; David added all 9) **Built Nov 15, 2026 (V3), needs migration 0062:** Playgroups in the header. Make a playgroup, copy its invite link, and friends with an account join from it (up to 30). Log a game: date, 2 to 8 seats (a member, or someone else by name), each player's deck (your own Deck Genome decks to pick from, others typed), who won and a note. The page shows standings per player and per deck and the game history. The maker can rename it, make a new invite link (the old one stops working), remove members or delete it; others can leave. Kept apart from a deck's own Game log for now. Until 0062 runs, the pages say it isn't switched on yet | Nov 14, 2026 |
+| Card scanner | Add cards to the collection (or a deck) from the phone camera, in the web app. Research and plan in "Card scanner research (Nov 21, 2026)": read the bottom-left corner for the exact printing, never guess a printing silently, foil and language as batch settings, a review list with guesses first. **Experiment built Nov 21, 2026** (`/admin/scan-lab`, admin only); the real scanner waits for David's test results. A store app comes later, once the site settles (David, Nov 21, 2026) | Nov 21, 2026 |
 
 ## v4 backlog
 
@@ -565,6 +566,65 @@ Done Oct 18, 2026, from each site's own feedback board (vote counts) and a 2026 
 | Print-friendly export; native mobile app | Moxfield, 165 and 140 votes | Out of scope for v1 |
 
 **Sources:** [Moxfield top requests](https://moxfield.nolt.io/top) · [Moxfield instant search](https://moxfield.nolt.io/1181) · [Moxfield loading issues](https://moxfield.nolt.io/1201) · [Moxfield playtest ads](https://moxfield.nolt.io/1645) · [Archidekt changelogs](https://archidekt.com/forum/thread/2320849/1) · [Archidekt large decks](https://archidekt.com/forum/thread/2377567/1) · [Archidekt slowdown](https://archidekt.com/forum/thread/10643647?orderBy=-points&page=1) · [Archidekt subcategories](https://archidekt.com/forum/thread/3298946) · [Archidekt auto-categories](https://archidekt.com/forum/thread/4173294/1) · [Archidekt mobile critique](https://archidekt.com/forum/thread/418475) · [Archidekt phone usability](https://archidekt.com/forum/thread/2324250) · [Grimdeck 2026 comparison](https://grimdeck.com/blog/best-mtg-deck-builder-sites)
+
+## Card scanner research (Nov 21, 2026)
+
+David asked how apps like ManaBox add cards from the phone camera, what people complain about, and whether the web app could do it (no store app yet). **Status: step 1 (the experiment) built Nov 21, 2026 at `/admin/scan-lab`, on David's go-ahead; the scanner itself is on the v3 backlog.** Reddit blocks automated reading again, so complaints come from app store reviews, forums, feedback boards and the apps' own help pages; treat them as anecdotes, since no independent accuracy test exists.
+
+### How scanners work
+
+Every scanner runs the same four steps on each camera frame:
+
+1. **Find the card:** look for the card's rectangle (edges against the background), then straighten it to a flat, upright image (a "perspective transform"). That's why every app asks for a plain, contrasting background.
+2. **Work out which card it is**, one of three ways:
+   - **Art matching (ManaBox, most apps):** a fingerprint of every printing's picture is made ahead of time (a "perceptual hash", a few bytes that stay nearly the same when the picture is blurred or darker); the camera image's fingerprint is compared against all of them and the closest wins. ManaBox's FAQ says plainly that it detects cards by their art.
+   - **Reading the text (OCR):** read the card name and look it up with a forgiving name match. Open-source projects found free OCR (Tesseract) reads the Magic title font poorly.
+   - **A trained recognition model:** a small neural network turns the image into a list of numbers and finds the nearest printing. More forgiving of glare and angle, but the index of every printing is large.
+3. **Pick the printing** (set, collector number, foil, language). This is where most mistakes happen.
+4. **Review and save:** a list of what was scanned, editable, then added to the collection.
+
+### What people complain about
+
+| Complaint | Why it happens |
+| --- | --- |
+| Right card, **wrong version** (reprint with the same art, showcase logged as regular, Unlimited vs Revised) | Art matching can't tell apart printings that share a picture. ManaBox's "Quick mode" takes the first match; users found hundreds of wrong versions only later |
+| **Foil marked wrong** (nonfoil logged as foil, raised foil as plain foil) | Foil is guessed from glare, or from a "prioritize foils" setting |
+| **Wrong language** (English card logged as German) | Language guessed from the art, which is the same in every language |
+| **Foils, borderless and etched cards won't scan** (one reviewer: 3 of 20 borderless foils failed) | Glare and the missing border break step 1 |
+| Sleeves, bad light, overlapping cards fail | Plastic glare hides the card's edge |
+| **Mistakes are found long after scanning** | The review list doesn't point out guesses |
+| Export files that don't import elsewhere (Delver Lens set names not matching Deckbox) | Each app names sets its own way |
+| Subscriptions for scanning, crashes in long sessions | Business model; a scan session held only in memory |
+
+### What a web app can do
+
+- **The camera works in phone browsers** over HTTPS (deckgenome.com is HTTPS): live video (`getUserMedia`) on Android and iPhone, or simply taking a photo (a file box with `capture`), which works everywhere and asks for no camera permission. iPhone Safari asks for camera permission again on each visit unless the site is added to the home screen.
+- **Recognition can run in the browser** (WebAssembly; ONNX Runtime Web runs on iPhone Safari), so photos never need to leave the phone and nothing costs per scan.
+- **The card tells us its printing.** Cards since Magic 2015 print the collector number, rarity, set code and language in the bottom-left corner. Set + number names one exact printing (Scryfall `/cards/<set>/<number>/<lang>`, or our existing `/cards/collection` lookup), and showcase, borderless and extended-art versions have their own numbers. Reading that line fixes the top complaint for most cards printed since 2014, plus the language complaint. Recent cards are also said to swap the dot between set and language for a ★ on foils; **check on David's own cards** before relying on it.
+- **Art fingerprints are small:** about 110,000 paper printings at 8-16 bytes each is 1-2 MB, small enough to send to the browser as one cached file (like the tag tree). Building it means the nightly job downloads each new printing's small Scryfall image once (the first run downloads all of them, roughly 1 GB). Scryfall provides images for making Magic software and doesn't rate-limit its image servers; its docs don't mention computer vision, so ask Scryfall if in doubt.
+- **Pieces we already have:** `collection_cards` already stores "printing unknown" honestly (`printing_id` null) with a **Which printing?** fixer, the printing picker, `fuzzy_card_names` for misread names, Import that keeps Scryfall ids, and owned badges in decks.
+
+### How we'd answer each complaint
+
+- **Never guess a printing silently.** Use the collector line when it's readable. When it isn't and several printings share the art, show them side by side as pictures for one tap, or save as "printing unknown" (fixable later in the collection), not as a wrong printing.
+- **Foil and language are batch settings you choose** ("these are foils", "these are Japanese"), shown big on screen, taken from the card only when the collector line says so. Never from glare.
+- **The review list sorts guesses first,** each showing your photo next to the matched card, with "sure" / "check this" marks. Nothing is saved until you press Add.
+- **When the camera fails,** fall back to typing the name (quick add with "Did you mean"), so a stubborn foil costs seconds, not a retry loop.
+- **Long sessions survive** a crash or a closed tab (kept in the browser like the playtester's game), saved to the collection in batches.
+- **Free**, no export step (it is the collection), and a scan can also go into a deck (scanning a physical deck to import it) or the wish list.
+- **Possible extra:** one photo of a binder page or 9 cards laid out, instead of one card at a time.
+
+### Proposed steps (not scheduled)
+
+1. **Experiment first:** a hidden test page; David photographs 30-50 of his own cards (foils, showcase, borderless, sleeved, pre-2014, non-English) and we measure how often each method gets the card and the printing right. Decides between free OCR in the browser and art fingerprints, and confirms the foil ★. **Built Nov 21, 2026:** `/admin/scan-lab` (admin only). Camera with a card-shaped guide (or a phone photo); reads the name and the corner with Tesseract.js in the browser, looks both up on Scryfall, and ranks every printing of the card by picture likeness (16 × 16 difference hash plus a 4 × 4 color grid, whole card and art box). David taps the printing he really scanned; results stay in the browser and **Copy results** gives a text summary to paste back. First run on 6 simulated photos (Scryfall images blurred, tilted 1.5°, JPEG 70%): name right 4 of 6, corner gave the right printing 2 of 6, picture match top 1 for 4 of 6. A misread corner digit pointed at another card twice and the name check caught both. The Sol Ring miss shows the known problem: many Commander printings share its art and frame, so only the corner could tell them apart. Pre-2014 frames (7th Edition Counterspell) failed both text reads.
+2. **Photo scan into the collection:** one card per photo, collector line plus name, review list, Add.
+3. **Live camera:** continuous scanning with a beep per card, batch foil and language switches.
+4. **Art fingerprints** for older cards and unreadable collector lines (nightly job plus the cached file).
+5. **Scan into a deck or the wish list**, then multi-card photos.
+
+A paid vision AI (send the photo, get name, set and number back) would likely be the most accurate, but costs per scan and needs an API key, like Smart Search; at most a fallback for failed scans.
+
+**Sources:** [ManaBox scanner FAQ](https://manabox.app/guides/scanner/faq) · [ManaBox getting started](https://manabox.app/guides/scanner/getting-started/) · [Scrytics 2026 scanner comparison (a competitor's page)](https://scrytics.com/blog/best-mtg-card-scanner-app-2026) · [TCGplayer app reviews](https://apps.apple.com/us/app/tcgplayer/id1247645833) · [Deckbox forum: foil and language misreads](https://deckbox.org/forum/posts/129676) · [Deckbox forum: Delver Lens set names](https://deckbox.org/forum/topics/31175) · [TappedOut: Delver Lens CSV errors](https://tappedout.net/mtg-forum/tappedout/delver-lens-csv-file-errors) · [CardNexus: raised foils mapped wrong](https://cardnexus.featurebase.app/p/cards-are-mapped-incorrectly) · [CSC100 scanner listing (showcase review)](https://shop.app/products/10822078759105/csc100) · [Card detector write-up (pHash pipeline)](https://tmikonen.github.io/quantitatively/2020-01-01-magic-card-detector) · [mtgscan (OCR approach)](https://github.com/fortierq/mtgscan) · [Yet Another Magic Card Recognizer](https://github.com/ForOhForError/Yet-Another-Magic-Card-Recognizer) · [ONNX Runtime Web](https://npmjs.com/package/onnxruntime-web) · [Camera access in the browser](https://dynamsoft.com/codepool/web-browser-javascript-camera-access.html) · [Scryfall rate limits](https://scryfall.com/docs/api/rate-limits) · [Collector number (MTG Wiki)](https://mtg.wiki/page/Card_number)
 
 ## Suggestion check against EDHREC (Oct 19, 2026)
 

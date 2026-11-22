@@ -399,6 +399,11 @@ Legal notices (Nov 11, 2026): the footer in src/app/layout.tsx and the Terms pag
 - Access: server-only env var **`ADMIN_USER_IDS`** on Vercel (Production; Preview too if wanted), Supabase user ids, comma-separated. Empty or missing means nobody gets in. Ids, not emails, because an id can't be claimed by signing up with someone's address.
 - Reads with the service-role key (`auth.admin.listUsers` plus `decks`), server-side only; no migration. Logic and tests: `src/lib/admin/access.ts`, `stats.ts`, `require-admin.ts`.
 
+## Scanner lab (experiment, built Nov 21, 2026)
+- `/admin/scan-lab` (requireAdmin, not linked): measures card recognition from a phone before a real scanner is built. Research, complaints and the plan: `docs/spec.md` → "Card scanner research (Nov 21, 2026)".
+- Logic in `src/lib/scan/`: `collector-line.ts` (parses the corner: number with rarity before or after, set, language, dot or ★; forgiving of OCR slips), `image.ts` (card edge finding inside a rough crop, dHash, color grid, Otsu), `lab-results.ts` (scores, Copy results text), all tested in `scan.test.ts`; `pipeline.ts` is browser-only (canvas, Tesseract.js loaded on first scan from the jsDelivr CDN, Scryfall calls 100 ms apart, picture ranking against every printing). The name and the corner must agree on the card, otherwise the name wins.
+- Results live in local storage (`scan-lab:results`), nothing in the database. **Testing locally:** ADMIN_USER_IDS isn't in `.env.local`; add the test account's id while testing and take it out after. The "Test with an image link" box takes any CORS image (Scryfall's, or a blob URL built in the page).
+
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
 
 - Full design, build order (C1-C6) and open risks: `docs/spec.md` → "Smart Cutter (v2 design)". David's choices: selected tags = roles + top 15 gameplay themes; its own full-screen overlay whose cutting-room floor lives only there (session storage until Apply / Discard), Apply = one `Change` = one Timeline entry, removing cards or sending them to the maybeboard; lands never suggested, MDFCs scored like spells; protection = a cut would put any role below target (Lands left out of that check).
