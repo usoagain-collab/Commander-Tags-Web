@@ -21,7 +21,7 @@ export default async function DecksPage({ searchParams }: { searchParams: Promis
   // RLS allows public decks plus the user's own; this page shows only their own.
   const { data: decks, error } = await supabase
     .from("decks")
-    .select("id, name, updated_at, cover_oracle_id, deck_cards(quantity, board, oracle_id, printing_id, printing_info)")
+    .select("id, name, updated_at, visibility, cover_oracle_id, deck_cards(quantity, board, oracle_id, printing_id, printing_info)")
     .eq("owner_id", user!.id)
     .order("updated_at", { ascending: false });
 
@@ -80,6 +80,7 @@ export default async function DecksPage({ searchParams }: { searchParams: Promis
       commander: own.map((c) => c.name).join(" & ") || null,
       identity: [...new Set(own.flatMap((c) => c.color_identity))],
       folder_id: folderOf.get(d.id as string) ?? null,
+      visibility: d.visibility as DeckTile["visibility"],
     };
   });
   const counts = folderCounts(rows.map((r) => ({ folder_id: r.folder_id ?? null })));

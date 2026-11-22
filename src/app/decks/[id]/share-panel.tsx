@@ -1,16 +1,17 @@
 "use client";
 
 // Share links (Phase 7a): the owner picks who can open the deck and copies its link. Viewers see it read-only.
-// Unlisted = anyone with the link (served by shared_deck(), migration 0020); public = anyone, and listable later.
-import { useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+// Unlisted = anyone with the link (served by shared_deck(), migration 0020); public = anyone, listed in Browse and on
+// the home page. New decks start public (Nov 21, 2026).
+import { useState } from "react";
+import { setDeckVisibility } from "../actions";
 import { Panel } from "./deck-text-panel";
 import type { Visibility } from "./deck-editor";
 
 const OPTIONS: { value: Visibility; title: string; blurb: string }[] = [
   { value: "private", title: "Private", blurb: "Only you can open it." },
   { value: "unlisted", title: "Anyone with the link", blurb: "Not listed anywhere; people need the link. Read-only for them." },
-  { value: "public", title: "Public", blurb: "Anyone can open it. Read-only for others." },
+  { value: "public", title: "Public", blurb: "Listed in Browse and on the home page. Read-only for others." },
 ];
 
 export function SharePanel({
@@ -27,7 +28,6 @@ export function SharePanel({
   /** What a pasted link shows in Discord and other chats. */
   preview: { name: string; art: string | null; line: string };
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const link = typeof window !== "undefined" ? `${window.location.origin}/decks/${deckId}` : `/decks/${deckId}`;
@@ -35,15 +35,16 @@ export function SharePanel({
   async function choose(v: Visibility) {
     const before = visibility;
     onChange(v);
-    const { error } = await supabase.from("decks").update({ visibility: v }).eq("id", deckId);
-    if (error) {
+    // Through the server action, so Browse and the home page drop a deck made private straight away.
+    const res = await setDeckVisibility(deckId, v);
+    if ("error" in res) {
       onChange(before);
-      setError(`Couldn't save: ${error.message}`);
+      setError(res.error);
     } else setError(null);
   }
 
   return (
-    <Panel title="Share" onClose={onClose}>
+    <Panel title="Who can see this deck" onClose={onClose}>
       <div className="space-y-3 text-sm">
         <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Who can open this deck">
           {OPTIONS.map((o) => (

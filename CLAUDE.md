@@ -335,6 +335,11 @@ The GitHub repository is connected to a Supabase project and a Vercel project. A
 - `/commanders/[id]` (oracle id): card, its oracle tags (rarest first, labels from `tags`), precons and public decks it leads, **Build a deck with …** (createDeck takes a `commander` field and adds it to the commander board). Cached an hour. Sitemap lists a page per commander of a public deck.
 - No migration. Builder names aren't on the tiles: profiles are private and `deck_builder` is one call per deck.
 
+## Public by default (David, Nov 21, 2026)
+- New decks (New deck, Copy / Make a copy / Start a deck from this precon, and /try saves) insert `visibility: "public"` explicitly; the column default is still `private`, so no migration. Existing decks were left as they were.
+- One-tap switch on each My decks tile (`deck-row.tsx`, Public / Private; "Link only" is still picked under Share). The deck page button always says the state ("Share · Private"). Both save through `setDeckVisibility` (`src/app/decks/actions.ts`), which calls `revalidateTag("browse")` so Browse and the home page update at once.
+- Home page **Fresh decks** row under the hero (`recentPublicDecks` in `src/lib/browse/cached.ts`, shared with /browse): the 8 newest public decks with a commander; while there are fewer than 4, the newest precons fill it. Tile: `src/components/public-deck-tile.tsx`.
+
 ## Card language (v2, built Nov 8, 2026)
 
 - **Why:** David saw Japanese cards in the Star Trek precons. Not our data: Scryfall shows Japanese preview scans for some English printings before release (Command Subadjunct TRK #9, labeled `lang: en`, `image_status: highres_scan`; nothing in the data flags it). Scryfall swaps in English scans after release.

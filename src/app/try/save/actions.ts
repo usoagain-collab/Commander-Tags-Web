@@ -23,6 +23,7 @@ export async function saveGuestDeck(name: string, payload: SavePayload): Promise
     .insert({
       name: String(name ?? "").trim().slice(0, 120) || "My first deck",
       target_bracket: 3,
+      visibility: "public",
       role_targets: withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...(profile?.default_role_targets ?? {}) }),
       custom_roles: profile?.custom_roles ?? [],
     })
