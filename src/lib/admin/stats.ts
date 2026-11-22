@@ -91,3 +91,39 @@ export function buildStats(
       .map((u) => ({ id: u.id, joined: u.created_at, lastSignIn: u.last_sign_in_at ?? null, decks: deckCount.get(u.id) ?? 0 })),
   };
 }
+
+// Who made the new decks behind a number on the stats page (David, Nov 21, 2026): "week" = the last 7 days,
+// like the Decks card; a day key (YYYY-MM-DD, Hawaii time) = that row of the 30-day table.
+export type NewDeck = { id: string; name: string; created_at: string; visibility: string };
+export type DeckMaker = { id: string; email: string | null; joined: string | null; decks: NewDeck[] };
+
+export function newDecksByAccount(
+  allUsers: StatUser[],
+  allDecks: (StatDeck & Partial<NewDeck>)[],
+  now: Date,
+  pick: "week" | string,
+  timeZone = STATS_TIME_ZONE,
+): DeckMaker[] {
+  const system = new Set(allUsers.filter((u) => u.email && SYSTEM_EMAILS.has(u.email.toLowerCase())).map((u) => u.id));
+  const users = new Map(allUsers.map((u) => [u.id, u]));
+  const picked = allDecks.filter(
+    (d) => !system.has(d.owner_id) && (pick === "week" ? within(d.created_at, now, 7) : dayKey(d.created_at, timeZone) === pick),
+  );
+  const byOwner = new Map<string, DeckMaker>();
+  for (const d of picked) {
+    let row = byOwner.get(d.owner_id);
+    if (!row) {
+      const u = users.get(d.owner_id);
+      row = { id: d.owner_id, email: u?.email ?? null, joined: u?.created_at ?? null, decks: [] };
+      byOwner.set(d.owner_id, row);
+    }
+    row.decks.push({ id: d.id ?? "", name: d.name ?? "", created_at: d.created_at, visibility: d.visibility ?? "private" });
+  }
+  for (const row of byOwner.values()) row.decks.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // Most decks first; ties go to whoever made one most recently.
+  return [...byOwner.values()].sort(
+    (a, b) => b.decks.length - a.decks.length || b.decks[0].created_at.localeCompare(a.decks[0].created_at),
+  );
+}
+
+export const isDayKey = (s: string | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);

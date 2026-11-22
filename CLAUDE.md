@@ -394,6 +394,7 @@ Legal notices (Nov 11, 2026): the footer in src/app/layout.tsx and the Terms pag
 ## Admin stats (David, Nov 13, 2026)
 
 - `/admin/stats` (`src/app/admin/stats/page.tsx`): accounts, signed in last 7 / 30 days, accounts with a deck, decks (new and edited this week), sign-ups and new decks per day for 30 days (Hawaii time), newest 15 accounts with name, join date, last sign-in and deck count. The Precons and test accounts (`SYSTEM_EMAILS` in `src/lib/admin/stats.ts`) aren't counted.
+- **Who made the new decks (Nov 21, 2026):** the "N new" on the Decks card and each day's New decks number link to `?decks=week` / `?decks=<YYYY-MM-DD>`, which opens a list under the cards: each account (name, else email) with the decks it made (public and link-only ones link to the deck). `newDecksByAccount` in `stats.ts`.
 - **Not linked anywhere** (David bookmarks it, his choice). `requireAdmin()` (`src/lib/admin/require-admin.ts`) shows the ordinary 404 to anyone not listed, signed out included, and `generateMetadata` gives them the "Page not found" title so the 404 doesn't reveal the page. `noindex`.
 - Access: server-only env var **`ADMIN_USER_IDS`** on Vercel (Production; Preview too if wanted), Supabase user ids, comma-separated. Empty or missing means nobody gets in. Ids, not emails, because an id can't be claimed by signing up with someone's address.
 - Reads with the service-role key (`auth.admin.listUsers` plus `decks`), server-side only; no migration. Logic and tests: `src/lib/admin/access.ts`, `stats.ts`, `require-admin.ts`.

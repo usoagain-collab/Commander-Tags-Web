@@ -2,9 +2,19 @@
 // Not linked anywhere on the site; David bookmarks /admin/stats. Everyone else gets "page not found" (requireAdmin).
 // Reads with the service-role key on the server only; the page sends nothing but the numbers to the browser.
 import type { Metadata } from "next";
+import Link from "next/link";
 import { isAdmin } from "@/lib/admin/access";
 import { requireAdmin } from "@/lib/admin/require-admin";
-import { buildStats, STATS_TIME_ZONE, type StatDeck, type StatUser } from "@/lib/admin/stats";
+import {
+  buildStats,
+  isDayKey,
+  newDecksByAccount,
+  STATS_TIME_ZONE,
+  type DeckMaker,
+  type NewDeck,
+  type StatDeck,
+  type StatUser,
+} from "@/lib/admin/stats";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/user";
 
@@ -30,10 +40,10 @@ async function loadUsers(admin: ReturnType<typeof createAdminClient>): Promise<S
 }
 
 // PostgREST returns at most 1,000 rows per request, so read in pages.
-async function loadDecks(admin: ReturnType<typeof createAdminClient>): Promise<StatDeck[]> {
-  const out: StatDeck[] = [];
+async function loadDecks(admin: ReturnType<typeof createAdminClient>): Promise<(StatDeck & NewDeck)[]> {
+  const out: (StatDeck & NewDeck)[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await admin.from("decks").select("owner_id, created_at, updated_at").order("id").range(from, from + 999);
+    const { data, error } = await admin.from("decks").select("id, name, visibility, owner_id, created_at, updated_at").order("id").range(from, from + 999);
     if (error) throw new Error(error.message);
     out.push(...(data ?? []));
     if (!data || data.length < 1000) return out;
@@ -47,16 +57,22 @@ const when = (iso: string | null) =>
 const shortDay = (day: string) =>
   new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${day}T00:00:00Z`));
 
-export default async function AdminStatsPage() {
+export default async function AdminStatsPage({ searchParams }: { searchParams: Promise<{ decks?: string }> }) {
   const me = await requireAdmin();
   const admin = createAdminClient();
+  // ?decks=week or ?decks=YYYY-MM-DD opens "who made them" for that number.
+  const asked = (await searchParams).decks;
+  const pick = asked === "week" || isDayKey(asked) ? asked : null;
 
   let stats: ReturnType<typeof buildStats>;
+  let makers: DeckMaker[] = [];
   let names = new Map<string, string>();
   try {
     const [users, decks] = await Promise.all([loadUsers(admin), loadDecks(admin)]);
-    stats = buildStats(users, decks, new Date());
-    const ids = stats.recent.map((r) => r.id);
+    const now = new Date();
+    stats = buildStats(users, decks, now);
+    if (pick) makers = newDecksByAccount(users, decks, now, pick);
+    const ids = [...new Set([...stats.recent.map((r) => r.id), ...makers.map((m) => m.id)])];
     if (ids.length) {
       const { data } = await admin.from("profiles").select("id, display_name").in("id", ids);
       names = new Map((data ?? []).map((p) => [p.id as string, (p.display_name as string | null) ?? ""]));
@@ -71,11 +87,20 @@ export default async function AdminStatsPage() {
   }
 
   const t = stats.totals;
-  const cards: [string, number, string][] = [
+  const cards: [string, number, React.ReactNode][] = [
     ["Accounts", t.users, `${t.newUsers7} new this week`],
     ["Signed in, last 7 days", t.active7, `${t.active30} in the last 30 days`],
     ["Accounts with a deck", t.usersWithDecks, `of ${t.users}`],
-    ["Decks", t.decks, `${t.newDecks7} new, ${t.editedDecks7} edited this week`],
+    [
+      "Decks",
+      t.decks,
+      <>
+        <DecksLink pick="week" count={t.newDecks7} current={pick === "week"}>
+          {t.newDecks7} new
+        </DecksLink>
+        , {t.editedDecks7} edited this week
+      </>,
+    ],
   ];
   const peak = Math.max(1, ...stats.daily.map((d) => Math.max(d.signUps, d.decks)));
 
@@ -97,6 +122,8 @@ export default async function AdminStatsPage() {
         ))}
       </div>
 
+      {pick ? <NewDeckList pick={pick} makers={makers} names={names} meId={me.id} /> : null}
+
       <h2 className="display mt-10 text-xl">Last 30 days</h2>
       <table className="mt-3 w-full text-sm">
         <thead>
@@ -114,7 +141,13 @@ export default async function AdminStatsPage() {
                 <Bar value={d.signUps} peak={peak} className="bg-gold" />
               </td>
               <td className="w-2/5 py-1.5">
-                <Bar value={d.decks} peak={peak} className="bg-foreground/50" />
+                <Bar
+                  value={d.decks}
+                  peak={peak}
+                  className="bg-foreground/50"
+                  link={d.decks > 0 ? `?decks=${d.day}#new-decks` : undefined}
+                  current={pick === d.day}
+                />
               </td>
             </tr>
           ))}
@@ -153,13 +186,104 @@ export default async function AdminStatsPage() {
   );
 }
 
-function Bar({ value, peak, className }: { value: number; peak: number; className: string }) {
+function Bar({
+  value,
+  peak,
+  className,
+  link,
+  current,
+}: {
+  value: number;
+  peak: number;
+  className: string;
+  link?: string;
+  current?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-6 text-right tabular-nums">{value}</span>
+      {link ? (
+        <Link
+          href={link}
+          title="Who made them"
+          className={`-my-1 w-8 rounded py-1 text-right tabular-nums underline decoration-dotted underline-offset-2 hover:text-gold ${current ? "text-gold" : ""}`}
+        >
+          {value}
+        </Link>
+      ) : (
+        <span className="w-8 text-right tabular-nums">{value}</span>
+      )}
       <span className="h-2 flex-1 rounded bg-foreground/5">
         {value > 0 ? <span className={`block h-2 rounded ${className}`} style={{ width: `${(value / peak) * 100}%` }} /> : null}
       </span>
     </div>
+  );
+}
+
+function DecksLink({ pick, count, current, children }: { pick: string; count: number; current: boolean; children: React.ReactNode }) {
+  if (count === 0) return <>{children}</>;
+  return (
+    <Link
+      href={`?decks=${pick}#new-decks`}
+      title="Who made them"
+      className={`underline decoration-dotted underline-offset-2 hover:text-gold ${current ? "text-gold" : ""}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+// The accounts behind a "new decks" number, with each deck they made. Public and link-only decks link to the deck;
+// private ones open only for their owner, so they're plain text.
+function NewDeckList({ pick, makers, names, meId }: { pick: string; makers: DeckMaker[]; names: Map<string, string>; meId: string }) {
+  const total = makers.reduce((n, m) => n + m.decks.length, 0);
+  const label = pick === "week" ? "last 7 days" : shortDay(pick);
+  return (
+    <section id="new-decks" className="panel mt-6 scroll-mt-4 p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="display text-xl">New decks, {label}</h2>
+        <Link href="/admin/stats" className="btn px-3 py-1 text-sm">
+          Close
+        </Link>
+      </div>
+      <p className="mt-1 text-sm opacity-75">
+        {total} {total === 1 ? "deck" : "decks"} from {makers.length} {makers.length === 1 ? "account" : "accounts"}.
+      </p>
+      {makers.length === 0 ? (
+        <p className="mt-3 opacity-75">No new decks.</p>
+      ) : (
+        <ul className="mt-3 space-y-3">
+          {makers.map((m) => (
+            <li key={m.id} className="border-t border-foreground/10 pt-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <span className="font-medium">
+                  {names.get(m.id) || m.email || "No name"}
+                  {m.id === meId ? <span className="font-normal opacity-60"> (you)</span> : null}
+                </span>
+                <span className="text-xs opacity-75">
+                  {m.decks.length} {m.decks.length === 1 ? "deck" : "decks"} · joined {when(m.joined)}
+                </span>
+              </div>
+              <ul className="mt-1 space-y-0.5 text-sm">
+                {m.decks.map((d) => (
+                  <li key={d.id} className="flex items-baseline justify-between gap-3">
+                    {d.visibility === "private" ? (
+                      <span className="truncate">{d.name || "Untitled deck"}</span>
+                    ) : (
+                      <Link href={`/decks/${d.id}`} className="truncate underline decoration-dotted underline-offset-2 hover:text-gold">
+                        {d.name || "Untitled deck"}
+                      </Link>
+                    )}
+                    <span className="shrink-0 text-xs whitespace-nowrap opacity-60">
+                      {d.visibility === "private" ? "Private · " : d.visibility === "unlisted" ? "Link only · " : ""}
+                      {when(d.created_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
