@@ -7,7 +7,7 @@ export const LAB_KEY = "scan-lab:results";
 
 export interface LabResult {
   at: string; // ISO time
-  source: "camera" | "photo" | "url";
+  source: "camera" | "still" | "photo" | "url"; // still = a full-resolution photo taken from the live camera
   // The truth David picked.
   trueName: string;
   truePrinting: string; // "set/number" of the printing David picked (language is separate)
@@ -19,7 +19,8 @@ export interface LabResult {
   note: string;
   // Method 1: read the name.
   nameRead: string;
-  nameMatch: string | null; // card name Scryfall's fuzzy search found
+  nameMatch: string | null; // card name found from the read
+  nameVia?: "scryfall" | "closest" | null; // Scryfall's fuzzy search, or the closest name in the full list
   // Method 2: read the collector line.
   lineRead: string;
   lineSet: string | null;
@@ -112,7 +113,7 @@ export function resultsText(rows: LabResult[]): string {
     "",
   ];
   const cols: (keyof LabResult)[] = [
-    "at", "source", "trueName", "trueSet", "trueNumber", "trueLang", "foil", "sleeved", "nameRead", "nameMatch",
+    "at", "source", "trueName", "trueSet", "trueNumber", "trueLang", "foil", "sleeved", "nameRead", "nameMatch", "nameVia",
     "lineRead", "lineSet", "lineNumber", "lineLang", "foilMark", "linePrinting", "lineDisagrees", "truePrinting", "candidates", "cardRank", "artRank", "ms", "note",
   ];
   const clean = (v: unknown) => String(v ?? "").replace(/[\t\r\n]+/g, " ");

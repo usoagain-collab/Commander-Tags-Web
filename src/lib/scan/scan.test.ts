@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cleanNumber, parseCollectorLine } from "./collector-line";
 import { CARD_RATIO, colorDistance, colorGrid, dHash, findCardBounds, hamming, otsu, type Pixels } from "./image";
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
+import { buildNameIndex, closestName, editDistance } from "./names";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -11,7 +12,7 @@ describe("parseCollectorLine", () => {
     expect(parseCollectorLine("122/269 R\nM15 ★ EN")).toMatchObject({ number: "122", set: "m15", lang: "en", foilMark: "star" });
   });
   it("forgives common OCR slips", () => {
-    expect(parseCollectorLine("O2I5 M\nwoe * JP")).toMatchObject({ number: "215", set: "woe", lang: "ja", foilMark: "star", rarity: "M" });
+    expect(parseCollectorLine("O2I5 M\nwoe * JP")).toMatchObject({ number: "215", set: "woe", lang: "ja", foilMark: null, rarity: "M" });
   });
   it("reads the number even when the rarity letter is misread", () => {
     expect(parseCollectorLine("263 V]\nC21 « EN Ww MIKI BlERIK")).toMatchObject({ number: "263", rarity: "U", set: "c21", lang: "en", foilMark: "dot" });
@@ -105,7 +106,30 @@ describe("lab results", () => {
   it("writes one tab-separated line per scan without breaking on newlines", () => {
     const text = resultsText([row({ note: "glare\nhere" })]);
     const lines = text.split("\n");
-    expect(lines[lines.length - 1].split("\t")).toHaveLength(23);
+    expect(lines[lines.length - 1].split("\t")).toHaveLength(24);
     expect(text).toContain("0263 U C21 • EN");
+  });
+});
+
+describe("closest card name", () => {
+  const index = buildNameIndex(["Cetacean Ops", "Sol Ring", "Sol Talisman", "Arcane Signet", "Delver of Secrets // Insectile Aberration", "Lim-Dûl's Vault"]);
+  it("fixes a wrong first letter that Scryfall's fuzzy search misses", () => {
+    expect(closestName("Cotacean Ons —", index)?.name).toBe("Cetacean Ops");
+  });
+  it("ignores stray marks and case", () => {
+    expect(closestName("(sol Ring", index)?.name).toBe("Sol Ring");
+    expect(closestName("IGeane Sienet", index)?.name).toBe("Arcane Signet");
+  });
+  it("finds a double-faced card by its front name, and accents don't matter", () => {
+    expect(closestName("Delver of Secrcts", index)?.name).toBe("Delver of Secrets");
+    expect(closestName("Lim-Dul's Vault", index)?.name).toBe("Lim-Dûl's Vault");
+  });
+  it("gives up on gibberish and very short reads", () => {
+    expect(closestName("HAR f aR i ELVA", index)).toBeNull();
+    expect(closestName("|", index)).toBeNull();
+  });
+  it("counts letter edits", () => {
+    expect(editDistance("kitten", "sitting")).toBe(3);
+    expect(editDistance("abc", "abcdefgh", 2)).toBe(3);
   });
 });

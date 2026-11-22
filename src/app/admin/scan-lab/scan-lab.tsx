@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CARD_RATIO } from "@/lib/scan/image";
 import { LAB_KEY, pct, readLabResults, resultsText, summarize, type LabResult } from "@/lib/scan/lab-results";
-import { cardByName, loadImage, ocrWorker, printingKey, printingsOf, rank, scanCard, straighten, type Ranked, type ScanOutput } from "@/lib/scan/pipeline";
+import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, straighten, type Ranked, type ScanOutput } from "@/lib/scan/pipeline";
 
 const LANGS: [string, string][] = [
   ["en", "English"], ["ja", "Japanese"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"],
@@ -33,7 +33,68 @@ function withMargin(r: { x: number; y: number; w: number; h: number }, vw: numbe
   return { x, y, w: Math.min(vw, r.x + r.w + mx) - x, h: Math.min(vh, r.y + r.h + my) - y };
 }
 
+// The preview shows the middle of the photo when their shapes differ, so place the outline the same way on the photo.
+function onPhoto(r: { x: number; y: number; w: number; h: number }, vw: number, vh: number, pw: number, ph: number) {
+  const k = Math.min(pw / vw, ph / vh);
+  const ox = (pw - vw * k) / 2;
+  const oy = (ph - vh * k) / 2;
+  return { x: ox + r.x * k, y: oy + r.y * k, w: r.w * k, h: r.h * k };
+}
+
 type Source = LabResult["source"];
+
+/* ---------- crop pictures kept with each saved scan ---------- */
+
+const IMAGES_KEY = "scan-lab:images";
+type ScanImages = { card: string; name: string; line: string };
+
+function readImages(): Record<string, ScanImages> {
+  try {
+    const v = JSON.parse(localStorage.getItem(IMAGES_KEY) ?? "{}");
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeImages(all: Record<string, ScanImages>) {
+  // Local storage holds about 5 MB; when full, drop the oldest scans' pictures (their results stay).
+  const keys = Object.keys(all).sort();
+  for (;;) {
+    try {
+      localStorage.setItem(IMAGES_KEY, JSON.stringify(all));
+      return;
+    } catch {
+      const oldest = keys.shift();
+      if (!oldest) return;
+      delete all[oldest];
+    }
+  }
+}
+
+function dropImages(ats: string[]) {
+  const all = readImages();
+  for (const at of ats) delete all[at];
+  writeImages(all);
+}
+
+async function shrink(src: string, width: number): Promise<string> {
+  const img = await loadImage(src);
+  const c = document.createElement("canvas");
+  c.width = Math.min(width, img.naturalWidth);
+  c.height = Math.round((img.naturalHeight * c.width) / img.naturalWidth);
+  c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.7);
+}
+
+async function saveImages(at: string, out: ScanOutput) {
+  try {
+    const [card, name, line] = await Promise.all([shrink(out.cardImage, 200), shrink(out.nameImage, 450), shrink(out.lineImage, 550)]);
+    writeImages({ ...readImages(), [at]: { card, name, line } });
+  } catch {
+    // pictures are a nice-to-have; the result itself is already saved
+  }
+}
 
 export function ScanLab() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,7 +109,10 @@ export function ScanLab() {
   const [rows, setRows] = useState<LabResult[]>([]);
   const [url, setUrl] = useState("");
 
-  useEffect(() => setRows(readLabResults(localStorage.getItem(LAB_KEY))), []);
+  useEffect(() => {
+    setRows(readLabResults(localStorage.getItem(LAB_KEY)));
+    nameIndex().catch(() => {}); // fetch the card name list early, so the first scan doesn't wait for it
+  }, []);
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
 
   const save = (next: LabResult[]) => {
@@ -112,12 +176,33 @@ export function ScanLab() {
     }
   }, []);
 
-  const capture = () => {
+  // Tap the preview (or Scan): take a full-resolution photo where the browser can (Chrome on Android), because the
+  // corner print is too small for a video frame; otherwise use the current video frame (iPhone Safari).
+  const capture = async () => {
     const video = videoRef.current;
-    if (!video || !size) return;
+    if (!video || !size || step !== null) return;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    void run(straighten(video, vw, vh, withMargin(guideRect(vw, vh), vw, vh), true), "camera");
+    const guideBox = withMargin(guideRect(vw, vh), vw, vh);
+    const track = streamRef.current?.getVideoTracks()[0];
+    const Capture = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { takePhoto(): Promise<Blob> } }).ImageCapture;
+    if (Capture && track) {
+      setStep("Taking the photo…");
+      try {
+        const bitmap = await createImageBitmap(await new Capture(track).takePhoto());
+        // Only when the photo has the preview's shape (portrait or landscape); otherwise the outline can't be placed on it.
+        if (bitmap.width > bitmap.height === vw > vh) {
+          const rect = onPhoto(guideBox, vw, vh, bitmap.width, bitmap.height);
+          await run(straighten(bitmap, bitmap.width, bitmap.height, rect, true), "still");
+          bitmap.close();
+          return;
+        }
+        bitmap.close();
+      } catch {
+        // fall back to the video frame
+      }
+    }
+    await run(straighten(video, vw, vh, guideBox, true), "camera");
   };
 
   const fromFile = async (file: File | undefined) => {
@@ -157,10 +242,20 @@ export function ScanLab() {
         </ul>
 
         <div
-          className="relative mx-auto mt-4 overflow-hidden rounded-lg bg-black"
+          className={`relative mx-auto mt-4 overflow-hidden rounded-lg bg-black ${camera === "on" ? "cursor-pointer" : ""}`}
           style={size ? { aspectRatio: `${size.w} / ${size.h}`, width: `min(100%, calc(70vh * ${size.w / size.h}))` } : { display: camera === "on" ? undefined : "none" }}
+          onClick={() => {
+            if (camera === "on") void capture();
+          }}
+          role={camera === "on" ? "button" : undefined}
+          aria-label={camera === "on" ? "Take the photo" : undefined}
         >
           <video ref={videoRef} playsInline muted className="block h-full w-full" />
+          {camera === "on" ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-sm font-semibold text-white" style={{ textShadow: "0 1px 3px #000" }}>
+              {busy ? step : "Tap the card to take the photo"}
+            </div>
+          ) : null}
           {guide && size ? (
             <div
               className="pointer-events-none absolute rounded-[4%] border-2 border-[var(--color-gold,#d4a84b)]"
@@ -178,7 +273,7 @@ export function ScanLab() {
         <div className="mt-4 flex flex-wrap gap-3">
           {camera === "on" ? (
             <>
-              <button type="button" className="btn btn-gold min-h-12 flex-1 text-lg" onClick={capture} disabled={busy}>
+              <button type="button" className="btn btn-gold min-h-12 flex-1 text-lg" onClick={() => void capture()} disabled={busy}>
                 {busy ? "Scanning…" : "Scan"}
               </button>
               {torch !== null ? (
@@ -230,9 +325,31 @@ export function ScanLab() {
         {error ? <p className="mt-3 text-sm text-red-400" role="alert">{error}</p> : null}
       </section>
 
-      {out ? <ScanReview key={out.n} out={out} onSave={(r) => { save([...rows, r]); setOut(null); }} onSkip={() => setOut(null)} /> : null}
+      {out ? (
+        <ScanReview
+          key={out.n}
+          out={out}
+          onSave={(r) => {
+            save([...rows, r]);
+            void saveImages(r.at, out);
+            setOut(null);
+          }}
+          onSkip={() => setOut(null)}
+        />
+      ) : null}
 
-      <Summary rows={rows} onClear={() => save([])} onUndo={() => save(rows.slice(0, -1))} />
+      <Summary
+        rows={rows}
+        onClear={() => {
+          save([]);
+          localStorage.removeItem(IMAGES_KEY);
+        }}
+        onUndo={() => {
+          const last = rows[rows.length - 1];
+          save(rows.slice(0, -1));
+          if (last) dropImages([last.at]);
+        }}
+      />
     </div>
   );
 }
@@ -298,6 +415,7 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
       lineNumber: out.line.number,
       lineLang: out.line.lang,
       foilMark: out.line.foilMark,
+      nameVia: out.nameVia,
       linePrinting: lineKey,
       lineDisagrees: out.disagree,
       candidates: candidates.length,
@@ -320,6 +438,7 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
             <img src={out.nameImage} alt="" className="mt-1 max-h-10 max-w-full rounded bg-white" />
             <div className="mt-1">
               “{out.nameRead || "nothing"}” → <b>{out.nameMatch?.name ?? "no match"}</b>
+              {out.nameVia === "closest" ? <span className="opacity-75"> (closest name in the full list)</span> : null}
             </div>
           </div>
           <div>
@@ -479,6 +598,63 @@ function Summary({ rows, onClear, onUndo }: { rows: LabResult[]; onClear: () => 
         </button>
       </div>
       <p className="mt-2 text-xs opacity-70">Copy results and paste them into the chat with Claude when you&apos;re done.</p>
+      <ScanGallery rows={rows} />
     </section>
+  );
+}
+
+const nameWrong = (r: LabResult) => (r.nameMatch ?? "").toLowerCase() !== r.trueName.toLowerCase();
+const cornerWrong = (r: LabResult) => r.linePrinting !== r.truePrinting;
+
+// What each scan saw, so a failed read can be screenshotted and looked at (glare, blur or a wrong crop).
+function ScanGallery({ rows }: { rows: LabResult[] }) {
+  const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
+  if (!rows.length) return null;
+  const failed = rows.filter((r) => nameWrong(r) || cornerWrong(r));
+  const shown = (all ? rows : failed).slice().reverse();
+  const images = open ? readImages() : {};
+  return (
+    <div className="mt-5">
+      <button type="button" className="btn min-h-11 w-full" onClick={() => setOpen(!open)}>
+        {open ? "Hide" : "Show"} failed reads ({failed.length})
+      </button>
+      {open ? (
+        <>
+          <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" className="h-5 w-5" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show every scan, not only failed ones
+          </label>
+          <ul className="mt-2 space-y-4">
+            {shown.map((r) => {
+              const img = images[r.at];
+              return (
+                <li key={r.at} className="border-t border-foreground/10 pt-3 text-sm">
+                  <div className="font-semibold">
+                    {r.trueName} · {r.trueSet.toUpperCase()} #{r.trueNumber}
+                    {r.foil ? " · foil" : ""}
+                    {r.sleeved ? " · sleeved" : ""} · {r.source}
+                  </div>
+                  <div className="mt-2 flex gap-3">
+                    {img ? <img src={img.card} alt="" className="w-24 shrink-0 self-start rounded" /> : null}
+                    <div className="min-w-0 flex-1 space-y-2">
+                      {img ? <img src={img.name} alt="" className="max-h-8 max-w-full rounded bg-white" /> : null}
+                      <div className={nameWrong(r) ? "text-red-400" : ""}>
+                        Name: “{r.nameRead || "nothing"}” → {r.nameMatch ?? "no match"}
+                        {r.nameVia === "closest" ? " (closest name)" : ""}
+                      </div>
+                      {img ? <img src={img.line} alt="" className="max-h-12 max-w-full rounded bg-white" /> : null}
+                      <div className={cornerWrong(r) ? "text-red-400" : ""}>
+                        Corner: “{r.lineRead.slice(0, 80) || "nothing"}” → {r.linePrinting ?? "no printing"}
+                      </div>
+                      {!img ? <div className="text-xs opacity-60">No pictures kept for this scan.</div> : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
+    </div>
   );
 }
