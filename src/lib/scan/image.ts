@@ -20,7 +20,7 @@ export const CARD_RATIO = 63 / 88;
 // Parts of an upright card, as fractions of its width and height (measured on Scryfall's large images).
 export const REGIONS = {
   name: { x: 0.06, y: 0.035, w: 0.66, h: 0.06 },
-  collector: { x: 0.03, y: 0.925, w: 0.46, h: 0.06 },
+  collector: { x: 0.03, y: 0.905, w: 0.5, h: 0.08 }, // tall enough for both lines even when the edges are found a little off
   art: { x: 0.09, y: 0.12, w: 0.82, h: 0.44 },
 } satisfies Record<string, Rect>;
 

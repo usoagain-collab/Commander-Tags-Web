@@ -23,7 +23,8 @@ const LANGS: Record<string, string> = {
 
 const RARITIES = new Set(["C", "U", "R", "M", "S", "L", "T", "P"]);
 const DOTS = new Set(["•", "·", ".", "-", "–", "+", "°", "o", "e", "«", "»"]); // OCR reads the dot as « often
-const STARS = new Set(["★", "*", "☆", "x", "X", "%", "#"]);
+// Only a real star counts: the reader also turns the dot into "*", so "*" means "can't tell" (seen Nov 22, 2026).
+const STARS = new Set(["★", "☆"]);
 
 // In a number, OCR often reads 0 as O, 1 as I or l, 5 as S, 8 as B.
 function digitsFrom(raw: string): string {

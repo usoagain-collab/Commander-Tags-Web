@@ -4,6 +4,7 @@
 // Everything here runs in the browser; the photo never leaves the phone.
 
 import { parseCollectorLine, type CollectorLine } from "./collector-line";
+import { buildNameIndex, closestName, type NameIndex } from "./names";
 import { CARD_RATIO, colorDistance, colorGrid, dHash, findCardBounds, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
 
 const API = "https://api.scryfall.com";
@@ -42,6 +43,7 @@ export interface ScanOutput {
   lineImage: string; // what OCR saw for the collector line
   nameRead: string;
   nameMatch: Printing | null;
+  nameVia: "scryfall" | "closest" | null; // Scryfall's fuzzy search, or the closest name in the full list
   lineRead: string;
   line: CollectorLine;
   linePrinting: Printing | null;
@@ -175,6 +177,23 @@ export async function cardByName(text: string): Promise<Printing | null> {
   return c ? toPrinting(c) : null;
 }
 
+export async function cardByExactName(name: string): Promise<Printing | null> {
+  const c = await scry<ScryCard>(`/cards/named?${new URLSearchParams({ exact: name })}`);
+  return c ? toPrinting(c) : null;
+}
+
+let namesPromise: Promise<NameIndex> | null = null;
+
+// Scryfall's list of every card name, fetched once per visit (about 700 KB).
+export function nameIndex(): Promise<NameIndex> {
+  namesPromise ??= scry<{ data: string[] }>("/catalog/card-names").then((r) => {
+    if (!r) throw new Error("No card name list");
+    return buildNameIndex(r.data);
+  });
+  namesPromise.catch(() => (namesPromise = null));
+  return namesPromise;
+}
+
 async function cardByLine(line: CollectorLine): Promise<Printing | null> {
   if (!line.set || !line.number) return null;
   const base = `/cards/${encodeURIComponent(line.set)}/${encodeURIComponent(line.number)}`;
@@ -267,19 +286,32 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
   const prints = photoPrints(card);
 
   onStep?.("Reading the text (the first scan loads the reader, about 10 MB)…");
-  // The name is read gray first; if Scryfall finds no card for that, again in black and white.
+  // The name is read gray first; if Scryfall's fuzzy search finds no card for that, again in black and white.
+  // If neither works, the closest name in Scryfall's full list of names (a wrong first letter defeats fuzzy search).
   let nameRead = "";
   let nameMatch: Printing | null = null;
+  let nameVia: ScanOutput["nameVia"] = null;
   let nameCrop = nameCrops[0];
+  const reads: { text: string; crop: HTMLCanvasElement }[] = [];
   for (const crop of nameCrops) {
     const text = await readText(crop, "line");
+    reads.push({ text, crop });
     const match = await cardByName(text).catch(() => null);
-    if (!nameRead || match) {
-      nameRead = text;
-      nameMatch = match;
-      nameCrop = crop;
+    if (match) {
+      [nameRead, nameMatch, nameVia, nameCrop] = [text, match, "scryfall", crop];
+      break;
     }
-    if (match) break;
+  }
+  if (!nameMatch) {
+    nameRead = reads[0].text;
+    const index = await nameIndex().catch(() => null);
+    const guesses = index ? reads.map((r) => ({ ...r, guess: closestName(r.text, index) })).filter((r) => r.guess) : [];
+    guesses.sort((a, b) => a.guess!.share - b.guess!.share);
+    const best = guesses[0];
+    if (best?.guess) {
+      const match = await cardByExactName(best.guess.name).catch(() => null);
+      if (match) [nameRead, nameMatch, nameVia, nameCrop] = [best.text, match, "closest", best.crop];
+    }
   }
   // Read the corner gray first; if that doesn't give a set and a number, try the black-and-white version.
   let lineRead = "";
@@ -318,6 +350,7 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     lineImage: lineCrop.toDataURL("image/png"),
     nameRead,
     nameMatch,
+    nameVia,
     lineRead,
     line,
     linePrinting,
