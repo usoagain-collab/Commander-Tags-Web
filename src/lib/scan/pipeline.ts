@@ -5,6 +5,7 @@
 
 import { parseCollectorLine, type CollectorLine } from "./collector-line";
 import { buildNameIndex, cleanNameRead, closestName, nameFits, printedNames, setCodeVariants, type NameIndex } from "./names";
+import { cropRows, textBand } from "./stack";
 import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, homography, houghCorners, locateCardQuad, type Pt, type Quad, warp, hamming, matchScore, otsu, REGIONS, scaleRect, toGray, type Pixels, type Rect } from "./image";
 
 const API = "https://api.scryfall.com";
@@ -163,11 +164,58 @@ function ocrCrop(card: HTMLCanvasElement, region: Rect, width: number, binary: b
   return toOcrCanvas(toGray(ctx.getImageData(0, 0, c.width, c.height)), c.width, c.height, binary, c);
 }
 
-// The sizes the name and corner are read at (the crops above, on a 630 × 880 card), also used for stacked frames.
-export const STRIP = {
-  name: { w: 900, h: Math.round((900 * REGIONS.name.h * 880) / (REGIONS.name.w * 630)) },
-  corner: { w: 1100, h: Math.round((1100 * REGIONS.collector.h * 880) / (REGIONS.collector.w * 630)) },
-};
+// Round 8: taller strips around the name and the corner, trimmed to the rows that hold text (textBand), so a card
+// found a little off (an outline above the card's top, or past its bottom onto the table) doesn't cut the text.
+// They reach a little past the card's top and bottom: an edge found slightly inside the card (a black border on a
+// dark surface) still leaves the text in the strip.
+export const TALL = {
+  name: { x: 0.04, y: -0.03, w: 0.7, h: 0.155 },
+  corner: { x: 0.03, y: 0.85, w: 0.5, h: 0.21 },
+} satisfies Record<string, Rect>;
+
+// How each strip is trimmed to its text: the name line is at most about 5% of the card's height, the corner's two
+// lines about 6%, in strip rows.
+const bandOptions = (kind: "name" | "corner", h: number) =>
+  kind === "name"
+    ? { mergeGap: 3, maxRows: Math.round((h * 0.05) / TALL.name.h) }
+    : { mergeGap: Math.round(h * 0.05), maxRows: Math.round((h * 0.06) / TALL.corner.h), pick: "lowest" as const };
+
+// The sizes the strips are read at (on a 630 × 880 card), also used for stacked frames.
+const stripSize = (r: Rect, w: number) => ({ w, h: Math.round((w * r.h * 880) / (r.w * 630)) });
+export const STRIP = { name: stripSize(TALL.name, 900), corner: stripSize(TALL.corner, 1100) };
+
+// Where the old fixed boxes sit inside the tall strips, in rows (a fallback when no text band is found).
+const fixedRows = (tall: Rect, fixed: Rect, h: number): [number, number] => [
+  Math.max(0, Math.round(((fixed.y - tall.y) / tall.h) * h)),
+  Math.min(h, Math.round(((fixed.y + fixed.h - tall.y) / tall.h) * h)),
+];
+
+// What the reader gets from a tall strip: its text rows (gray, then black and white), then the old fixed box.
+export function stripCrops(gray: Uint8Array, kind: "name" | "corner", extra: Uint8Array | null = null): HTMLCanvasElement[] {
+  const { w, h } = STRIP[kind];
+  const band = textBand(gray, w, h, bandOptions(kind, h));
+  const out: HTMLCanvasElement[] = [];
+  const rows = (g: ArrayLike<number>, y0: number, y1: number, binary: boolean) => toOcrCanvas(cropRows(g, w, y0, y1), w, y1 - y0, binary);
+  if (band) {
+    out.push(rows(gray, band[0], band[1], false), rows(gray, band[0], band[1], true));
+    if (extra) {
+      const b2 = textBand(extra, w, h, bandOptions(kind, h));
+      if (b2) out.push(rows(extra, b2[0], b2[1], false));
+    }
+  }
+  const [f0, f1] = fixedRows(TALL[kind], kind === "name" ? REGIONS.name : REGIONS.collector, h);
+  out.push(rows(gray, f0, f1, false));
+  return out;
+}
+
+// A region of the card as gray pixels at `size`.
+function regionGray(card: HTMLCanvasElement, region: Rect, size: { w: number; h: number }): Uint8Array {
+  const r = scaleRect(region, card.width, card.height);
+  const [, ctx] = canvas(size.w, size.h);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(card, r.x, r.y, r.w, r.h, 0, 0, size.w, size.h);
+  return Uint8Array.from(toGray(ctx.getImageData(0, 0, size.w, size.h)));
+}
 
 // Gray pixels to what the reader gets: dark text on light (light text on a dark border is flipped), or black and
 // white with Otsu's threshold when `binary`.
@@ -396,8 +444,10 @@ async function cardByLine(line: CollectorLine, photo: PhotoPrints, nameMatch: Pr
   }
   if (!found.length) return none;
   const named = nameMatch ? found.find((p) => p.oracleId === nameMatch.oracleId) : undefined;
-  let pick = named ?? found[0];
-  if (!named && found.length > 1) {
+  // A "T" rarity is a token: Scryfall files those under "t" + the printed set code (FIN tokens are TFIN).
+  const token = line.rarity === "T" ? found.find((p) => p.set === `t${line.set}`) : undefined;
+  let pick = named ?? token ?? found[0];
+  if (!named && !token && found.length > 1) {
     let bestScore = Infinity;
     for (const p of found) {
       const q = p.image ? await printsOfUrl(p.image) : null;
@@ -490,9 +540,11 @@ export async function rank(photo: PhotoPrints, printings: Printing[]): Promise<{
 
 /* ---------- one scan ---------- */
 
-// The value of a promise that has already settled, else null (don't hold a scan up for a list still loading).
-function ifReady<T>(p: Promise<T>): Promise<T | null> {
-  return Promise.race([p.catch(() => null), Promise.resolve(null)]);
+// The promise's value, or null after `ms` (don't hold a scan up for long for a list still loading). Round 6 raced it
+// against an already-resolved null, which always won, so the name list was never used (round 7 results: names 0 of 5,
+// two wrong cards).
+function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
 }
 
 interface NameResult {
@@ -565,11 +617,13 @@ export async function scanCard(
   // works: frames differ, and the card's edges are found a few pixels off now and then.
   const shifted = (r: Rect, dy: number, dh = 0): Rect => ({ ...r, y: r.y + dy, h: r.h + dh });
   const nameCrops = given?.name ?? [
+    ...stripCrops(regionGray(card, TALL.name, STRIP.name), "name").slice(0, 2),
     ocrCrop(card, REGIONS.name, 900, false),
     ocrCrop(card, shifted(REGIONS.name, 0.008, 0.012), 900, false),
     ocrCrop(card, REGIONS.name, 900, true),
   ];
   const lineCrops = given?.line ?? [
+    ...stripCrops(regionGray(card, TALL.corner, STRIP.corner), "corner").slice(0, 2),
     ocrCrop(card, REGIONS.collector, 1100, false),
     ocrCrop(card, shifted(REGIONS.collector, 0.02, -0.01), 1100, false),
     ocrCrop(card, shifted(REGIONS.collector, -0.03), 1100, false),
@@ -577,7 +631,7 @@ export async function scanCard(
   ];
   const prints = photoPrints(card);
   const validSets = await setCodes().catch(() => null);
-  const index = await ifReady(nameIndex());
+  const index = await within(nameIndex(), 4000);
   timing.prepare = since(started);
 
   onStep?.("Reading the name and the corner (the first scan loads the reader, about 10 MB)…");

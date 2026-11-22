@@ -4,7 +4,7 @@ import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBound
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
 import { buildNameIndex, cleanNameRead, closestName, editDistance, nameFits, printedNames, setCodeVariants } from "./names";
 import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4 } from "./track";
-import { alignShift, medianImage, shiftImage, StripStack, warpGray } from "./stack";
+import { alignShift, cropRows, medianImage, shiftImage, StripStack, textBand, warpGray } from "./stack";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -341,5 +341,56 @@ describe("frame stacking (round 7)", () => {
     const out = warpGray({ data, width: 4, height: 4 }, H, 4, 4, { x: 0, y: 0, w: 1, h: 1 }, 4, 4);
     expect(out[0]).toBeLessThan(60);
     expect(out[3]).toBeGreaterThan(200);
+  });
+});
+
+describe("round 8: text rows and tokens", () => {
+  // A tall strip: a frame line near the top, "letters" low down (as when the outline sits above the card).
+  const tall = (w: number, h: number, top: number, bottom: number) => {
+    const g = new Uint8Array(w * h).fill(200);
+    for (let x = 0; x < w; x++) g[10 * w + x] = 40; // a frame line: one long dark run, few changes
+    for (let y = top; y < bottom; y++) for (let x = 0; x < w; x++) if (Math.floor(x / 4) % 3 === 0) g[y * w + x] = 30;
+    return g;
+  };
+  it("finds the rows with text, not the frame line", () => {
+    const band = textBand(tall(300, 120, 80, 100), 300, 120);
+    expect(band).not.toBeNull();
+    const [y0, y1] = band!;
+    expect(y0).toBeLessThanOrEqual(80);
+    expect(y0).toBeGreaterThan(60);
+    expect(y1).toBeGreaterThanOrEqual(100);
+    expect(y1).toBeLessThanOrEqual(110);
+    expect([...cropRows(tall(300, 120, 80, 100), 300, y0, y1)].length).toBe(300 * (y1 - y0));
+  });
+  it("joins two close lines (the corner) when asked", () => {
+    const g = tall(300, 200, 100, 120);
+    for (let y = 130; y < 150; y++) for (let x = 0; x < 300; x++) if (Math.floor(x / 4) % 3 === 0) g[y * 300 + x] = 30;
+    const [y0, y1] = textBand(g, 300, 200, { mergeGap: 16 })!;
+    expect(y0).toBeLessThanOrEqual(100);
+    expect(y1).toBeGreaterThanOrEqual(150);
+  });
+  it("takes the lowest text for the corner and skips runs too tall to be text", () => {
+    const g = tall(300, 300, 60, 90); // flavor text, busier
+    for (let y = 95; y < 120; y++) for (let x = 0; x < 300; x++) if (Math.floor(x / 4) % 3 === 0) g[y * 300 + x] = 30;
+    for (let y = 200; y < 215; y++) for (let x = 0; x < 300; x++) if (Math.floor(x / 6) % 3 === 0) g[y * 300 + x] = 30; // the collector line
+    for (let y = 270; y < 300; y++) for (let x = 0; x < 300; x++) if (Math.floor(x / 5) % 2 === 0) g[y * 300 + x] = 60; // striped table past the edge
+    const [y0, y1] = textBand(g, 300, 300, { mergeGap: 8, maxRows: 40, pick: "lowest" })!;
+    expect(y0).toBeGreaterThan(185);
+    expect(y1).toBeLessThan(235);
+  });
+  it("finds nothing in a plain strip", () => {
+    expect(textBand(new Uint8Array(300 * 50).fill(128), 300, 50)).toBeNull();
+  });
+  it("tries the token set code (FIN prints on tokens filed as TFIN)", () => {
+    expect(setCodeVariants("FIN", new Set(["fin", "tfin"]))).toEqual(["fin", "tfin"]);
+  });
+});
+
+describe("round 8: short names", () => {
+  it("needs an exact spelling under 6 letters", () => {
+    const index = buildNameIndex(["Hex", "Hero", "Forest"]);
+    expect(closestName("Hen a", index)).toBeNull();
+    expect(closestName("Hero", index)?.target).toBe("Hero");
+    expect(closestName("Forrest", index)?.target).toBe("Forest");
   });
 });

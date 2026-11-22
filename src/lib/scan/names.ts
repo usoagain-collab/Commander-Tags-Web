@@ -78,7 +78,8 @@ export function closestName(text: string, index: NameIndex, maxShare = 0.34): Na
   const key = simplify(cleanNameRead(text));
   if (key.length < 3) return null;
   let best: NameGuess | null = null;
-  let bestDistance = Math.floor(key.length * maxShare);
+  // Short names need an exact spelling: one wrong letter in "Hen" already makes "Hex" (round 8, a Hero token).
+  let bestDistance = key.length < 6 ? 0 : Math.floor(key.length * maxShare);
   for (let i = 0; i < index.keys.length; i++) {
     const k = index.keys[i];
     const d = editDistance(key, k, bestDistance);
@@ -108,6 +109,7 @@ export function setCodeVariants(code: string, valid: Set<string>, limit = 6): st
     if (c.length >= 2 && valid.has(lc) && !out.includes(lc)) out.push(lc);
   };
   add(up);
+  add(`T${up}`); // tokens: the card prints FIN, Scryfall files it as TFIN
   for (let i = 0; i < up.length; i++) for (const r of LOOKALIKE[up[i]] ?? "") add(up.slice(0, i) + r + up.slice(i + 1));
   for (let i = 0; i < up.length; i++) add(up.slice(0, i) + up.slice(i + 1));
   return out.slice(0, limit);
