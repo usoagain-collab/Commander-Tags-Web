@@ -4,7 +4,7 @@
 // printing he really scanned so every method gets scored. See src/lib/scan/ for the logic.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CARD_RATIO } from "@/lib/scan/image";
+import { CARD_RATIO, houghCorners } from "@/lib/scan/image";
 import { LAB_KEY, pct, readLabResults, resultsText, summarize, type LabResult } from "@/lib/scan/lab-results";
 import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, searchCards, straighten, type Printing, type Ranked, type ScanOutput } from "@/lib/scan/pipeline";
 
@@ -24,10 +24,38 @@ function guideRect(vw: number, vh: number) {
   return { x: (vw - w) / 2, y: (vh - h) / 2, w, h };
 }
 
-// The crop handed on: the guide plus a little room, so the card's own edges can be found inside it.
-function withMargin(r: { x: number; y: number; w: number; h: number }, vw: number, vh: number) {
-  const mx = r.w * 0.06;
-  const my = r.h * 0.05;
+type Quad4 = [number, number][]; // four corners as fractions of the video's width and height
+
+// Find the card in the current video frame, on a copy at most 240 px on its long side (about 3 times a second on a
+// phone), so the gold outline can follow the card at whatever angle David holds the phone (Nov 22, 2026: he tilts it
+// so his shadow doesn't fall on the card).
+function trackCard(video: HTMLVideoElement, scratch: HTMLCanvasElement): Quad4 | null {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  const s = Math.min(1, 240 / Math.max(vw, vh));
+  scratch.width = Math.round(vw * s);
+  scratch.height = Math.round(vh * s);
+  const ctx = scratch.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, scratch.width, scratch.height);
+  const corners = houghCorners(ctx.getImageData(0, 0, scratch.width, scratch.height), 1.5);
+  return corners ? corners.map(([x, y]) => [x / scratch.width, y / scratch.height]) : null;
+}
+
+// The area to search at capture: around the live outline when there is one (plus 15%), else the guide (plus 20%).
+function searchBox(quad: Quad4 | null, vw: number, vh: number) {
+  if (!quad) return withMargin(guideRect(vw, vh), vw, vh, 0.2);
+  const xs = quad.map((p) => p[0] * vw);
+  const ys = quad.map((p) => p[1] * vh);
+  const r = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  return withMargin(r, vw, vh, 0.15);
+}
+
+// The crop handed on: the guide plus some room, so the card's own edges can be found inside it.
+function withMargin(r: { x: number; y: number; w: number; h: number }, vw: number, vh: number, share = 0.06) {
+  const mx = r.w * share;
+  const my = r.h * share;
   const x = Math.max(0, r.x - mx);
   const y = Math.max(0, r.y - my);
   return { x, y, w: Math.min(vw, r.x + r.w + mx) - x, h: Math.min(vh, r.y + r.h + my) - y };
@@ -115,6 +143,37 @@ export function ScanLab() {
   }, []);
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
 
+  // Live outline: find the card in the video about 3 times a second while the camera is on and nothing is scanning.
+  const [live, setLive] = useState<Quad4 | null>(null);
+  const liveRef = useRef<Quad4 | null>(null);
+  const busyRef = useRef(false);
+  busyRef.current = step !== null;
+  useEffect(() => {
+    if (camera !== "on") {
+      setLive(null);
+      liveRef.current = null;
+      return;
+    }
+    const scratch = document.createElement("canvas");
+    let timer = 0;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      const video = videoRef.current;
+      if (video && !busyRef.current) {
+        const quad = trackCard(video, scratch);
+        liveRef.current = quad;
+        setLive(quad);
+      }
+      timer = window.setTimeout(tick, 300);
+    };
+    tick();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [camera]);
+
   const save = (next: LabResult[]) => {
     setRows(next);
     localStorage.setItem(LAB_KEY, JSON.stringify(next));
@@ -183,7 +242,8 @@ export function ScanLab() {
     if (!video || !size || step !== null) return;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    const guideBox = withMargin(guideRect(vw, vh), vw, vh);
+    // Search around the live outline (wherever and however tilted the card is), else around the guide.
+    const guideBox = searchBox(liveRef.current, vw, vh);
     const track = streamRef.current?.getVideoTracks()[0];
     const Capture = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { takePhoto(): Promise<Blob> } }).ImageCapture;
     if (Capture && track) {
@@ -243,7 +303,7 @@ export function ScanLab() {
         <h2 className="display text-xl">1. Scan a card</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm opacity-80">
           <li>Lay the card on a plain surface that contrasts with its border (white paper for black-bordered cards).</li>
-          <li>Fill the gold outline with the card, upright, held steady. Good light, no glare across the bottom corner.</li>
+          <li>Hold the phone at whatever angle keeps your shadow off the card. When the gold outline sits on the card, tap. Good light, no glare across the bottom corner.</li>
           <li>Mix it up: foils, showcase and borderless, sleeved, old cards (before 2014), other languages.</li>
         </ul>
 
@@ -259,18 +319,30 @@ export function ScanLab() {
           <video ref={videoRef} playsInline muted className="block h-full w-full" />
           {camera === "on" ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-sm font-semibold text-white" style={{ textShadow: "0 1px 3px #000" }}>
-              {busy ? step : "Tap the card to take the photo"}
+              {busy ? step : live ? "Gold outline found the card: tap to take the photo" : "Point at the card; any angle is fine"}
             </div>
           ) : null}
-          {guide && size ? (
+          {live ? (
+            // The card as found: a gold outline at the card's own angle, so a tilted phone is fine.
+            <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
+              <polygon
+                points={live.map(([x, y]) => `${x},${y}`).join(" ")}
+                fill="rgba(212,168,75,0.12)"
+                stroke="var(--color-gold,#d4a84b)"
+                strokeWidth={3}
+                vectorEffect="non-scaling-stroke"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : guide && size ? (
+            // No card found yet: a faint card shape to aim at.
             <div
-              className="pointer-events-none absolute rounded-[4%] border-2 border-[var(--color-gold,#d4a84b)]"
+              className="pointer-events-none absolute rounded-[4%] border-2 border-dashed border-white/60"
               style={{
                 left: `${(guide.x / size.w) * 100}%`,
                 top: `${(guide.y / size.h) * 100}%`,
                 width: `${(guide.w / size.w) * 100}%`,
                 height: `${(guide.h / size.h) * 100}%`,
-                boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)",
               }}
             />
           ) : null}
@@ -469,7 +541,7 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
               {out.lineFixedFrom && out.linePrinting ? (
                 <span className="opacity-75">
                   {" "}
-                  (set read as {out.lineFixedFrom.toUpperCase()}; {out.linePrinting.set.toUpperCase()} fits the picture)
+                  (corner read as {out.lineFixedFrom.toUpperCase()}, corrected using the name and the picture)
                 </span>
               ) : null}
             </div>

@@ -228,3 +228,13 @@ describe("misread set codes and flavor names", () => {
     expect(closestName("11S S Vovacer | one Wander", index)?.target).toBe("U.S.S. Voyager, Lone Wanderer");
   });
 });
+
+describe("round 5 corner reads", () => {
+  it("prefers a four-digit padded number in a jumbled read", () => {
+    expect(parseCollectorLine("3 RR 0185 5 LS 44 1 20 A BE IRC * EN AB LA")).toMatchObject({ number: "185" });
+    expect(parseCollectorLine("C002 TRK * EN  CN SEARL")).toMatchObject({ number: "2", set: "trk" });
+  });
+  it("treats T and I as lookalikes", () => {
+    expect(setCodeVariants("irc", new Set(["trc", "trk"]))).toEqual(["trc"]);
+  });
+});

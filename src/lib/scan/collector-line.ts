@@ -21,6 +21,9 @@ const LANGS: Record<string, string> = {
   RU: "ru", KO: "ko", KR: "ko", CS: "zhs", CT: "zht", ZH: "zhs", PH: "ph",
 };
 
+// A 3-5 character set code, maybe a separator (the dot or star, often misread), then a printed language code.
+const LANG_AFTER_CODE = new RegExp(`([A-Za-z0-9]{3,5})\\s*(\\S)??\\s*(${Object.keys(LANGS).join("|")})(?![A-Za-z])`, "gi");
+
 const RARITIES = new Set(["C", "U", "R", "M", "S", "L", "T", "P"]);
 const DOTS = new Set(["•", "·", ".", "-", "–", "+", "°", "o", "e", "«", "»"]); // OCR reads the dot as « often
 // Only a real star counts: the reader also turns the dot into "*", so "*" means "can't tell" (seen Nov 22, 2026).
@@ -41,21 +44,26 @@ export function parseCollectorLine(text: string): CollectorLine {
   const out: CollectorLine = { number: null, set: null, lang: null, rarity: null, foilMark: null };
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-  for (const line of lines) {
+  for (let line of lines) {
     // Set line: a 3-5 letter/number code, a separator, then a language code.
     if (!out.set) {
-      const m = /([A-Za-z0-9]{3,5})\s*(\S)?\s*([A-Za-z]{2})\b/.exec(line);
-      if (m && LANGS[m[3].toUpperCase()]) {
+      // Anchored on a known language code, so it also works when the reader runs both lines together ("C002 TRK * EN").
+      let at = -1;
+      for (const m of line.matchAll(LANG_AFTER_CODE)) {
         const code = m[1].toUpperCase();
         // A set code always has a letter; a bare number here is the collector number.
-        if (/[A-Z]/.test(code)) {
-          out.set = code.toLowerCase();
-          out.lang = LANGS[m[3].toUpperCase()];
-          const sep = m[2] ?? "";
-          out.foilMark = STARS.has(sep) ? "star" : DOTS.has(sep) ? "dot" : null;
-          continue;
-        }
+        if (!/[A-Z]/.test(code)) continue;
+        out.set = code.toLowerCase();
+        out.lang = LANGS[m[3].toUpperCase()];
+        const sep = m[2] ?? "";
+        out.foilMark = STARS.has(sep) ? "star" : DOTS.has(sep) ? "dot" : null;
+        at = m.index ?? 0;
+        break;
       }
+      if (at === 0) continue;
+      // The number came first on the same line: read it from the part before the set code only, so the code itself
+      // ("C21") is never taken for a number.
+      if (at > 0) line = line.slice(0, at);
     }
     // Number line: digits (maybe "/ total"), then a rarity letter.
     if (!out.number) {
@@ -73,6 +81,16 @@ export function parseCollectorLine(text: string): CollectorLine {
           out.rarity = r && RARITIES.has(r) ? r : null;
         }
       }
+    }
+  }
+  // Cards since about 2023 print the number as four digits with leading zeros ("0185"). When the reader runs the two
+  // lines together with junk (David's Sulu: "3 RR 0185 5 LS 44 …"), such a number anywhere beats whatever came first.
+  const padded = /(?:^|[^0-9])([CURMLTP])?\s?(0\d{3})(?![0-9])/.exec(text);
+  if (padded) {
+    const n = cleanNumber(padded[2]);
+    if (n && n !== out.number) {
+      out.number = n;
+      out.rarity = padded[1] ?? out.rarity;
     }
   }
   return out;

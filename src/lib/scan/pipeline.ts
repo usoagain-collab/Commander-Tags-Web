@@ -48,7 +48,7 @@ export interface ScanOutput {
   lineRead: string;
   line: CollectorLine;
   linePrinting: Printing | null;
-  lineFixedFrom: string | null; // the set code as read, when a lookalike real code was used instead
+  lineFixedFrom: string | null; // what the corner said, when it was corrected (a lookalike set code, or the named card's printings)
   disagree: boolean; // the name and the corner point at different cards
   prints: PhotoPrints;
   candidates: Ranked[]; // sorted by whole-card score, best first
@@ -495,6 +495,28 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     onStep?.("Comparing the picture with every printing…");
     ({ candidates, artOrder } = await rank(prints, await printingsOf(oracleId)));
   }
+
+  // When the name found the card but the corner didn't land on one of its printings (a misread digit: "C002" for
+  // 0012; an unreadable set code: "TEV" for TRK), the corner only has to pick among that card's own printings:
+  // set and number both, else the only printing with that number, else the only one (or the nearest number) in that set.
+  let finalLine = linePrinting;
+  let fixedFrom = lookup.fixedFrom;
+  if (nameMatch && candidates.length && (!linePrinting || linePrinting.oracleId !== nameMatch.oracleId) && (line.set || line.number)) {
+    const sets = line.set ? (validSets ? setCodeVariants(line.set, validSets) : [line.set]) : [];
+    const num = (p: { number: string }) => parseInt(p.number, 10);
+    const bySetNum = candidates.find((c) => sets.includes(c.set) && c.number === line.number);
+    const byNum = candidates.filter((c) => c.number === line.number);
+    const bySet = candidates.filter((c) => sets.includes(c.set));
+    const nearest =
+      bySet.length > 1 && line.number
+        ? [...bySet].sort((a, b) => Math.abs(num(a) - Number(line.number)) - Math.abs(num(b) - Number(line.number)))[0]
+        : undefined;
+    const pick = bySetNum ?? (byNum.length === 1 ? byNum[0] : undefined) ?? (bySet.length === 1 ? bySet[0] : nearest);
+    if (pick) {
+      finalLine = pick;
+      fixedFrom = `${(line.set ?? "?").toUpperCase()} #${line.number ?? "?"}`;
+    }
+  }
   const shown = document.createElement("canvas");
   shown.width = 630;
   shown.height = 880;
@@ -508,9 +530,10 @@ export async function scanCard(card: HTMLCanvasElement, onStep?: (step: string) 
     nameVia,
     lineRead,
     line,
-    linePrinting,
-    lineFixedFrom: lookup.fixedFrom,
-    disagree: !!nameMatch && !!linePrinting && !agree,
+    linePrinting: finalLine,
+    lineFixedFrom: fixedFrom,
+    // The corner pointed at another card and the card's own printings couldn't fix it.
+    disagree: !!nameMatch && !!linePrinting && !agree && finalLine === linePrinting,
     prints,
     candidates,
     artOrder,

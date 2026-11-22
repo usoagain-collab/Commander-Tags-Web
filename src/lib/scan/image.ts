@@ -261,7 +261,8 @@ export function locateCardQuad(p: Pixels): Quad | null {
 // summed along its length. The card's border is a long strong line; fabric weave is weak after a blur. The card's own
 // frame has strong lines too, so each side takes the OUTERMOST line that is at least half as strong as the best one
 // on that side of the centre. Each side gets its own angle, so a photo taken at an angle (a trapezoid) works.
-export function houghCorners(p: Pixels): [Pt, Pt, Pt, Pt] | null {
+// `step`: degrees between the angles tried (the live outline uses a coarser 1.5 to stay quick on a phone).
+export function houghCorners(p: Pixels, step = 0.75): [Pt, Pt, Pt, Pt] | null {
   const { width: w, height: h } = p;
   let g = toGray(p);
   g = boxBlur(boxBlur(g, w, h, 2), w, h, 2);
@@ -276,7 +277,7 @@ export function houghCorners(p: Pixels): [Pt, Pt, Pt, Pt] | null {
     }
   }
   const angles: number[] = [];
-  for (let d = -12; d <= 12; d += 0.75) angles.push(Math.tan((d * Math.PI) / 180));
+  for (let d = -15; d <= 15; d += step) angles.push(Math.tan((d * Math.PI) / 180)); // tilted phones lean the sides more
 
   type Side = "left" | "right" | "top" | "bottom";
   // `signed`: count only "lighter outside, darker inside" (a black border on a lighter surface); fabric stripes
