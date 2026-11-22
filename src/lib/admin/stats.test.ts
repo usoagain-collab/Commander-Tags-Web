@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStats, dayKey, lastDays } from "./stats";
+import { buildStats, dayKey, lastDays, newDecksByAccount } from "./stats";
 
 // Nov 13, 2026 at 2 PM in Hawaii (UTC-10).
 const NOW = new Date("2026-11-14T00:00:00Z");
@@ -67,6 +67,40 @@ describe("buildStats", () => {
     expect(s.recent).toEqual([
       { id: "a", joined: "2026-11-13T20:00:00Z", lastSignIn: "2026-11-13T21:00:00Z", decks: 2 },
       { id: "b", joined: "2026-11-01T20:00:00Z", lastSignIn: "2026-11-10T20:00:00Z", decks: 1 },
+    ]);
+  });
+});
+
+describe("newDecksByAccount", () => {
+  const users = [
+    { id: "a", email: "a@x.test", created_at: "2026-11-01T20:00:00Z" },
+    { id: "b", email: "b@x.test", created_at: "2026-11-02T20:00:00Z" },
+    { id: "p", email: "precons@commander-tags.test", created_at: "2026-11-01T20:00:00Z" },
+  ];
+  const d = (id: string, owner_id: string, created_at: string) => ({ id, name: `Deck ${id}`, owner_id, created_at, updated_at: created_at, visibility: "public" });
+  const decks = [
+    d("1", "a", "2026-11-13T22:00:00Z"),
+    d("2", "b", "2026-11-13T23:00:00Z"),
+    d("3", "b", "2026-11-13T21:00:00Z"),
+    d("4", "a", "2026-11-12T22:00:00Z"),
+    d("5", "a", "2026-10-01T22:00:00Z"),
+    d("6", "p", "2026-11-13T22:00:00Z"),
+  ];
+
+  it("lists one day's makers, most decks first, newest deck first", () => {
+    const rows = newDecksByAccount(users, decks, NOW, "2026-11-13");
+    expect(rows.map((r) => [r.id, r.decks.map((x) => x.id)])).toEqual([
+      ["b", ["2", "3"]],
+      ["a", ["1"]],
+    ]);
+    expect(rows[0].email).toBe("b@x.test");
+  });
+
+  it("covers the last 7 days for week and skips the Precons account", () => {
+    const rows = newDecksByAccount(users, decks, NOW, "week");
+    expect(rows.map((r) => [r.id, r.decks.length])).toEqual([
+      ["b", 2],
+      ["a", 2],
     ]);
   });
 });
