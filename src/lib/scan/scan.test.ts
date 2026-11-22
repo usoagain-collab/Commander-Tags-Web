@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cleanNumber, parseCollectorLine } from "./collector-line";
-import { CARD_RATIO, colorDistance, colorGrid, dHash, findCardBounds, hamming, otsu, type Pixels } from "./image";
+import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBounds, hamming, homography, houghCorners, otsu, warp, type Pixels } from "./image";
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
-import { buildNameIndex, closestName, editDistance } from "./names";
+import { buildNameIndex, cleanNameRead, closestName, editDistance } from "./names";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -131,5 +131,84 @@ describe("closest card name", () => {
   it("counts letter edits", () => {
     expect(editDistance("kitten", "sitting")).toBe(3);
     expect(editDistance("abc", "abcdefgh", 2)).toBe(3);
+  });
+});
+
+describe("cleanNameRead", () => {
+  it("drops the mana cost and dashes OCR adds after a name", () => {
+    expect(cleanNameRead("Worf, Regent of Terok Nox —¢5")).toBe("Worf, Regent of Terok Nox");
+    expect(cleanNameRead("Cotacean Ons —")).toBe("Cotacean Ons");
+    expect(cleanNameRead("(sol Ring 1")).toBe("sol Ring");
+  });
+});
+
+// A card-shaped dark quadrilateral (a photo taken at an angle) on a striped light surface.
+function slantedCard(w: number, h: number, c: [number, number][]): Pixels {
+  const data = new Uint8ClampedArray(w * h * 4);
+  const inside = (x: number, y: number) => {
+    let s = 0;
+    for (let i = 0; i < 4; i++) {
+      const [ax, ay] = c[i];
+      const [bx, by] = c[(i + 1) % 4];
+      const cross = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+      if (cross < 0) return false;
+      s++;
+    }
+    return s === 4;
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const j = (y * w + x) * 4;
+      const v = inside(x, y) ? 25 + (x % 9) : 140 + ((y >> 2) % 2) * 25; // dark card vs striped fabric
+      data[j] = data[j + 1] = data[j + 2] = v;
+      data[j + 3] = 255;
+    }
+  }
+  return { data, width: w, height: h };
+}
+
+describe("finding a slanted card", () => {
+  const corners: [number, number][] = [[70, 60], [250, 75], [262, 330], [55, 320]];
+  const pic = slantedCard(320, 400, corners);
+  it("finds its four corners", () => {
+    const found = cardCorners(pic);
+    expect(found).not.toBeNull();
+    found!.forEach(([x, y], i) => {
+      // within the 2.5% push outward that makes up for rounded corners
+      expect(Math.hypot(x - corners[i][0], y - corners[i][1])).toBeLessThan(9);
+    });
+  });
+  it("maps the upright rectangle onto those corners", () => {
+    const H = homography(100, 140, corners as [[number, number], [number, number], [number, number], [number, number]]);
+    const at = (x: number, y: number) => {
+      const z = H[6] * x + H[7] * y + H[8];
+      return [(H[0] * x + H[1] * y + H[2]) / z, (H[3] * x + H[4] * y + H[5]) / z];
+    };
+    expect(at(0, 0)[0]).toBeCloseTo(70);
+    expect(at(100, 140)[1]).toBeCloseTo(330);
+    expect(at(0, 140)[0]).toBeCloseTo(55);
+  });
+  it("flattens it into an upright card", () => {
+    const H = homography(100, 140, cardCorners(pic)!);
+    const out = warp(pic, H, 100, 140);
+    // Every pixel comes from inside the card (dark), hardly any from the fabric around it.
+    let fabric = 0;
+    for (let i = 0; i < out.length; i += 4) if (out[i] > 90) fabric++;
+    expect(fabric / (out.length / 4)).toBeLessThan(0.12);
+  });
+});
+
+describe("corner from David's Worf photo", () => {
+  it("reads a rarity touching the number, and * stays unknown", () => {
+    expect(parseCollectorLine("their choice. ri\nM0026 &\nsDS *EN dw OLIVER BARRETT")).toMatchObject({ number: "26", rarity: "M", set: "sds", lang: "en", foilMark: null });
+  });
+});
+
+describe("finding a card's edges as lines", () => {
+  it("finds a slanted card on striped fabric", () => {
+    const corners: [number, number][] = [[70, 60], [250, 75], [262, 330], [55, 320]];
+    const found = houghCorners(slantedCard(320, 400, corners));
+    expect(found).not.toBeNull();
+    found!.forEach(([x, y], i) => expect(Math.hypot(x - corners[i][0], y - corners[i][1])).toBeLessThan(6));
   });
 });

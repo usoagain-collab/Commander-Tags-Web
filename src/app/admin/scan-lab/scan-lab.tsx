@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CARD_RATIO } from "@/lib/scan/image";
 import { LAB_KEY, pct, readLabResults, resultsText, summarize, type LabResult } from "@/lib/scan/lab-results";
-import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, straighten, type Ranked, type ScanOutput } from "@/lib/scan/pipeline";
+import { cardByName, loadImage, nameIndex, ocrWorker, printingKey, printingsOf, rank, scanCard, searchCards, straighten, type Printing, type Ranked, type ScanOutput } from "@/lib/scan/pipeline";
 
 const LANGS: [string, string][] = [
   ["en", "English"], ["ja", "Japanese"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"],
@@ -193,7 +193,7 @@ export function ScanLab() {
         // Only when the photo has the preview's shape (portrait or landscape); otherwise the outline can't be placed on it.
         if (bitmap.width > bitmap.height === vw > vh) {
           const rect = onPhoto(guideBox, vw, vh, bitmap.width, bitmap.height);
-          await run(straighten(bitmap, bitmap.width, bitmap.height, rect, true), "still");
+          await run(await straighten(bitmap, bitmap.width, bitmap.height, rect, true), "still");
           bitmap.close();
           return;
         }
@@ -202,7 +202,13 @@ export function ScanLab() {
         // fall back to the video frame
       }
     }
-    await run(straighten(video, vw, vh, guideBox, true), "camera");
+    // Freeze the frame first: finding the card takes a moment and the video moves on.
+    const frame = document.createElement("canvas");
+    frame.width = vw;
+    frame.height = vh;
+    frame.getContext("2d")?.drawImage(video, 0, 0);
+    setStep("Finding the card…");
+    await run(await straighten(frame, vw, vh, guideBox, true), "camera");
   };
 
   const fromFile = async (file: File | undefined) => {
@@ -210,7 +216,7 @@ export function ScanLab() {
     const src = URL.createObjectURL(file);
     try {
       const img = await loadImage(src);
-      await run(straighten(img, img.naturalWidth, img.naturalHeight, null, true), "photo");
+      await run(await straighten(img, img.naturalWidth, img.naturalHeight, null, true), "photo");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read that photo.");
     } finally {
@@ -222,7 +228,7 @@ export function ScanLab() {
     if (!url.trim()) return;
     try {
       const img = await loadImage(url.trim());
-      await run(straighten(img, img.naturalWidth, img.naturalHeight, null, true), "url");
+      await run(await straighten(img, img.naturalWidth, img.naturalHeight, null, true), "url");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load that image.");
     }
@@ -368,21 +374,29 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
   const [name, setName] = useState("");
   const [looking, setLooking] = useState(false);
   const [lookError, setLookError] = useState<string | null>(null);
+  const [choices, setChoices] = useState<Printing[]>([]);
   const [showAll, setShowAll] = useState(false);
 
+  const pickCard = async (oracleId: string) => {
+    const ranked = await rank(out.prints, await printingsOf(oracleId));
+    setCandidates(ranked.candidates);
+    setArtOrder(ranked.artOrder);
+    setPick(ranked.candidates[0] ? printingKey(ranked.candidates[0]) : null);
+    setChoices([]);
+  };
+
+  // One clear match goes straight to its printings; a name that fits many cards ("Worf") lists them to tap.
   const wrongCard = async () => {
     setLooking(true);
     setLookError(null);
+    setChoices([]);
     try {
       const card = await cardByName(name);
-      if (!card) {
-        setLookError("Scryfall didn't find that name.");
-        return;
-      }
-      const ranked = await rank(out.prints, await printingsOf(card.oracleId));
-      setCandidates(ranked.candidates);
-      setArtOrder(ranked.artOrder);
-      setPick(ranked.candidates[0] ? printingKey(ranked.candidates[0]) : null);
+      if (card) return await pickCard(card.oracleId);
+      const found = await searchCards(name);
+      if (!found.length) setLookError("Scryfall didn't find that name.");
+      else if (found.length === 1) await pickCard(found[0].oracleId);
+      else setChoices(found);
     } catch (e) {
       setLookError(e instanceof Error ? e.message : "The lookup failed.");
     } finally {
@@ -511,6 +525,19 @@ function ScanReview({ out, onSave, onSkip }: { out: ScanOutput & { source: Sourc
         </button>
       </div>
       {lookError ? <p className="mt-1 text-sm text-red-400">{lookError}</p> : null}
+      {choices.length ? (
+        <div className="mt-3">
+          <p className="text-sm opacity-75">Which card is it?</p>
+          <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {choices.map((c) => (
+              <button key={c.id} type="button" className="rounded-md p-1 text-left text-xs" onClick={() => void pickCard(c.oracleId)}>
+                <img src={c.image} alt={c.name} className="w-full rounded" loading="lazy" />
+                <div className="mt-1 truncate">{c.flavorName ?? c.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
         <label className="flex min-h-11 items-center gap-2">
