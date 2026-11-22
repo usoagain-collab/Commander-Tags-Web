@@ -56,12 +56,15 @@ function half(img: Uint8Array, w: number, h: number): [Uint8Array, number, numbe
   return [out, hw, hh];
 }
 
-// Average difference when `img` is moved by (dx, dy) onto `ref`, sampled every `step` pixels inside a margin.
-function diffAt(ref: Uint8Array, img: Uint8Array, w: number, h: number, dx: number, dy: number, margin: number, step: number): number {
+// Average difference when `img` is moved by (dx, dy) onto `ref`, sampled every `step` pixels inside a margin and
+// between columns x0 and x1.
+function diffAt(ref: Uint8Array, img: Uint8Array, w: number, h: number, dx: number, dy: number, margin: number, step: number, x0 = 0, x1 = w): number {
   let sum = 0;
   let n = 0;
+  const xa = Math.max(margin, Math.ceil(x0));
+  const xb = Math.min(w - margin, Math.floor(x1));
   for (let y = margin; y < h - margin; y += step) {
-    for (let x = margin; x < w - margin; x += step) {
+    for (let x = xa; x < xb; x += step) {
       sum += Math.abs(ref[y * w + x] - img[(y - dy) * w + (x - dx)]);
       n++;
     }
@@ -69,44 +72,81 @@ function diffAt(ref: Uint8Array, img: Uint8Array, w: number, h: number, dx: numb
   return n ? sum / n : Infinity;
 }
 
-// The whole-pixel move (dx, dy) that best lines `img` up with `ref`, up to `max` pixels each way: searched on half-size
-// copies first, then checked to one pixel at full size, so it stays quick on a phone.
-export function alignShift(ref: Uint8Array, img: Uint8Array, w: number, h: number, max = 12): [number, number] {
-  const [r2, w2, h2] = half(ref, w, h);
-  const [i2] = half(img, w, h);
-  const m2 = Math.ceil(max / 2);
-  let best = Infinity;
-  let bx = 0;
-  let by = 0;
-  for (let dy = -m2; dy <= m2; dy++) {
-    for (let dx = -m2; dx <= m2; dx++) {
-      const s = diffAt(r2, i2, w2, h2, dx, dy, m2, 2);
-      if (s < best) [best, bx, by] = [s, dx, dy];
-    }
+// A picture at full, half and quarter size, built once per frame and shared by both halves' searches.
+export type Pyramid = [[Uint8Array, number, number], [Uint8Array, number, number], [Uint8Array, number, number]];
+export function pyramid(img: Uint8Array, w: number, h: number): Pyramid {
+  const l1 = half(img, w, h);
+  return [[img, w, h], l1, half(l1[0], l1[1], l1[2])];
+}
+
+// The whole-pixel move (dx, dy) that best lines `img` up with `ref` between columns x0 and x1, up to `max` pixels each
+// way. Round 9: searched on quarter-size copies, then checked to one pixel at half and at full size, so a larger
+// reach (David's ghosted corners needed it) stays quick on a phone.
+export function alignShift(ref: Uint8Array, img: Uint8Array, w: number, h: number, max = 12, x0 = 0, x1 = w): [number, number] {
+  return alignPyramids(pyramid(ref, w, h), pyramid(img, w, h), max, x0, x1);
+}
+
+export function alignPyramids(ref: Pyramid, img: Pyramid, max = 12, x0 = 0, x1 = ref[0][1]): [number, number] {
+  const [[r1, w, h], [r2, w2, h2], [r4, w4, h4]] = ref;
+  const [[i1], [i2], [i4]] = img;
+  const m4 = Math.ceil(max / 4);
+  // The best rough moves on the quarter-size copies, each then refined: text repeats (letters, a pattern), so the
+  // single best rough move can be the wrong one.
+  const rough: [number, number, number][] = [];
+  for (let dy = -m4; dy <= m4; dy++) {
+    for (let dx = -m4; dx <= m4; dx++) rough.push([diffAt(r4, i4, w4, h4, dx, dy, m4 + 1, 1, x0 / 4, x1 / 4), dx, dy]);
   }
-  const margin = max + 1;
-  let fx = bx * 2;
-  let fy = by * 2;
-  best = Infinity;
-  const cx = fx;
-  const cy = fy;
-  for (let dy = cy - 1; dy <= cy + 1; dy++) {
-    for (let dx = cx - 1; dx <= cx + 1; dx++) {
-      if (Math.abs(dx) > max || Math.abs(dy) > max) continue;
-      const s = diffAt(ref, img, w, h, dx, dy, margin, 2);
-      if (s < best) [best, fx, fy] = [s, dx, dy];
+  rough.sort((a, b) => a[0] - b[0]);
+  // One pixel either way at a finer size, around (cx, cy); returns the move and its difference.
+  const refine = (r: Uint8Array, im: Uint8Array, ww: number, hh: number, cx: number, cy: number, reach: number, scale: number, step: number): [number, number, number] => {
+    let b = Infinity;
+    let fx = cx;
+    let fy = cy;
+    for (let dy = cy - 1; dy <= cy + 1; dy++) {
+      for (let dx = cx - 1; dx <= cx + 1; dx++) {
+        if (Math.abs(dx) > reach || Math.abs(dy) > reach) continue;
+        const s = diffAt(r, im, ww, hh, dx, dy, reach + 1, step, x0 / scale, x1 / scale);
+        if (s < b) [b, fx, fy] = [s, dx, dy];
+      }
     }
+    return [fx, fy, b];
+  };
+  // Narrow down at half size first, then check only the two best at full size.
+  const halves = rough
+    .slice(0, 4)
+    .map(([, rx, ry]) => refine(r2, i2, w2, h2, rx * 2, ry * 2, Math.ceil(max / 2), 2, 2))
+    .sort((a, b) => a[2] - b[2]);
+  let best: [number, number, number] = [0, 0, Infinity];
+  for (const [hx, hy] of halves.slice(0, 2)) {
+    const full = refine(r1, i1, w, h, hx * 2, hy * 2, max, 1, 3);
+    if (full[2] < best[2]) best = full;
   }
-  return [fx, fy];
+  return [best[0], best[1]];
 }
 
 // `img` moved by (dx, dy); pixels moved in from outside copy the nearest edge.
 export function shiftImage(img: Uint8Array, w: number, h: number, dx: number, dy: number): Uint8Array {
   if (!dx && !dy) return img;
+  return shiftTilted(img, w, h, [dx, dy], [dx, dy]);
+}
+
+// `img` moved by `left` at a quarter of the way across and by `right` at three quarters, in between (and beyond) in
+// proportion: a small turn as well as a shift, which a plain shift can't line up across a long strip.
+export function shiftTilted(img: Uint8Array, w: number, h: number, left: [number, number], right: [number, number]): Uint8Array {
   const out = new Uint8Array(w * h);
+  const dxs = new Int32Array(w);
+  const dys = new Int32Array(w);
+  for (let x = 0; x < w; x++) {
+    const t = (x - w / 4) / (w / 2);
+    dxs[x] = Math.round(left[0] + (right[0] - left[0]) * t);
+    dys[x] = Math.round(left[1] + (right[1] - left[1]) * t);
+  }
   for (let y = 0; y < h; y++) {
-    const sy = Math.min(h - 1, Math.max(0, y - dy));
-    for (let x = 0; x < w; x++) out[y * w + x] = img[sy * w + Math.min(w - 1, Math.max(0, x - dx))];
+    for (let x = 0; x < w; x++) {
+      const sy = Math.min(h - 1, Math.max(0, y - dys[x]));
+      const sx = Math.min(w - 1, Math.max(0, x - dxs[x]));
+      out[y * w + x] = img[sy * w + sx];
+    }
   }
   return out;
 }
@@ -133,11 +173,32 @@ export function medianImage(frames: Uint8Array[], len: number): Uint8Array {
   return out;
 }
 
-// One strip's frames, each already lined up with the first one kept. At most `limit` (newest kept; the first stays
-// as the reference everything is lined up with).
+// How sharp a picture is: the average brightness change between neighbors (a blurred frame has less).
+function sharpness(img: Uint8Array, w: number, h: number): number {
+  let sum = 0;
+  let n = 0;
+  for (let y = 2; y < h - 2; y += 2) {
+    for (let x = 1; x < w; x += 2) {
+      sum += Math.abs(img[y * w + x] - img[y * w + x - 1]);
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
+interface Frame {
+  img: Uint8Array; // lined up with the reference
+  misfit: number; // how unlike the reference it still is after lining up
+  sharp: number;
+}
+
+// One strip's frames, each lined up with the first one kept (its left and right halves separately, so a slight turn
+// between frames lines up too). At most `limit` (newest kept; the first stays as the reference). The median only
+// uses frames that lined up well (round 9: frames that didn't made the ghosted corners in David's picture sheet).
 export class StripStack {
   private ref: Uint8Array | null = null;
-  private frames: Uint8Array[] = [];
+  private refPyr: Pyramid | null = null;
+  private frames: Frame[] = [];
   latest: Uint8Array | null = null;
   constructor(
     readonly w: number,
@@ -152,24 +213,48 @@ export class StripStack {
 
   reset() {
     this.ref = null;
+    this.refPyr = null;
     this.frames = [];
     this.latest = null;
   }
 
   add(img: Uint8Array) {
     this.latest = img;
-    if (!this.ref) {
+    const { w, h, maxShift } = this;
+    if (!this.ref || !this.refPyr) {
       this.ref = img;
-      this.frames.push(img);
+      this.refPyr = pyramid(img, w, h);
+      this.frames.push({ img, misfit: 0, sharp: sharpness(img, w, h) });
       return;
     }
-    const [dx, dy] = alignShift(this.ref, img, this.w, this.h, this.maxShift);
-    this.frames.push(shiftImage(img, this.w, this.h, dx, dy));
+    const mid = Math.floor(w / 2);
+    const pyr = pyramid(img, w, h);
+    const left = alignPyramids(this.refPyr, pyr, maxShift, 0, mid);
+    const right = alignPyramids(this.refPyr, pyr, maxShift, mid, w);
+    const lined = shiftTilted(img, w, h, left, right);
+    const misfit = diffAt(this.ref, lined, w, h, 0, 0, maxShift + 1, 3);
+    this.frames.push({ img: lined, misfit, sharp: sharpness(lined, w, h) });
     if (this.frames.length > this.limit) this.frames.splice(1, 1); // keep the reference frame, drop the oldest after it
   }
 
+  // The frames that lined up well: within 1.6 times the typical misfit (at least the best 3).
+  private good(): Frame[] {
+    if (this.frames.length <= 3) return this.frames;
+    const others = this.frames.slice(1).map((f) => f.misfit).sort((a, b) => a - b);
+    const typical = others[Math.floor(others.length / 2)];
+    const keep = this.frames.filter((f) => f.misfit <= typical * 1.6 + 2);
+    return keep.length >= 3 ? keep : [...this.frames].sort((a, b) => a.misfit - b.misfit).slice(0, 3);
+  }
+
   median(): Uint8Array {
-    return medianImage(this.frames, this.w * this.h);
+    return medianImage(this.good().map((f) => f.img), this.w * this.h);
+  }
+
+  // The sharpest single frame among those that lined up well.
+  sharpest(): Uint8Array | null {
+    let best: Frame | null = null;
+    for (const f of this.good()) if (!best || f.sharp > best.sharp) best = f;
+    return best?.img ?? null;
   }
 }
 
@@ -214,9 +299,9 @@ export function textBand(gray: ArrayLike<number>, w: number, h: number, opts: Ba
   for (const r of text) if (r[2] > best[2]) best = r;
   if (pick === "lowest") {
     const strongest = best[2];
-    for (const r of text) if (r[2] >= strongest * 0.25 && r[0] > best[0]) best = r;
+    for (const r of text) if (r[2] >= strongest * 0.2 && r[0] > best[0]) best = r;
   }
-  const pad = Math.max(4, Math.round((best[1] - best[0] + 1) * 0.35));
+  const pad = Math.max(4, Math.round((best[1] - best[0] + 1) * 0.5));
   return [Math.max(0, best[0] - pad), Math.min(h, best[1] + 1 + pad)];
 }
 

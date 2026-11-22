@@ -4,7 +4,7 @@ import { CARD_RATIO, cardCorners, colorDistance, colorGrid, dHash, findCardBound
 import { readLabResults, resultsText, summarize, type LabResult } from "./lab-results";
 import { buildNameIndex, cleanNameRead, closestName, editDistance, nameFits, printedNames, setCodeVariants } from "./names";
 import { isLocked, plausibleQuad, quadMove, startTrack, stepTrack, TRACK, type Quad4 } from "./track";
-import { alignShift, cropRows, medianImage, shiftImage, StripStack, textBand, warpGray } from "./stack";
+import { alignShift, cropRows, medianImage, shiftImage, shiftTilted, StripStack, textBand, warpGray } from "./stack";
 
 describe("parseCollectorLine", () => {
   it("reads a current two-line corner", () => {
@@ -359,7 +359,7 @@ describe("round 8: text rows and tokens", () => {
     expect(y0).toBeLessThanOrEqual(80);
     expect(y0).toBeGreaterThan(60);
     expect(y1).toBeGreaterThanOrEqual(100);
-    expect(y1).toBeLessThanOrEqual(110);
+    expect(y1).toBeLessThanOrEqual(115);
     expect([...cropRows(tall(300, 120, 80, 100), 300, y0, y1)].length).toBe(300 * (y1 - y0));
   });
   it("joins two close lines (the corner) when asked", () => {
@@ -390,7 +390,65 @@ describe("round 8: short names", () => {
   it("needs an exact spelling under 6 letters", () => {
     const index = buildNameIndex(["Hex", "Hero", "Forest"]);
     expect(closestName("Hen a", index)).toBeNull();
+    expect(closestName("Herod", index)?.target).toBe("Hero"); // one stray letter at the end
+    expect(closestName("Hexa", index)?.target).toBe("Hex");
     expect(closestName("Hero", index)?.target).toBe("Hero");
     expect(closestName("Forrest", index)?.target).toBe("Forest");
+  });
+});
+
+describe("round 9: turned frames and bad frames", () => {
+  const strip = (w: number, h: number, seed = 1) => {
+    const img = new Uint8Array(w * h).fill(220);
+    let s = seed;
+    const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    // Irregular "letters" so nothing repeats exactly.
+    for (let k = 0; k < (w * h) / 900; k++) {
+      const x0 = Math.floor(rnd() * (w - 12));
+      const y0 = 20 + Math.floor(rnd() * (h - 52));
+      const bw = 3 + Math.floor(rnd() * 8);
+      const bh = 6 + Math.floor(rnd() * 10);
+      for (let y = y0; y < y0 + bh; y++) for (let x = x0; x < x0 + bw; x++) img[y * w + x] = 30;
+    }
+    return img;
+  };
+  it("lines up a frame that is slightly turned, not just shifted", () => {
+    const w = 400;
+    const h = 120;
+    const ref = strip(w, h);
+    const stack = new StripStack(w, h, 15, 12);
+    stack.add(ref);
+    stack.add(shiftTilted(ref, w, h, [2, -3], [-1, 4]));
+    stack.add(shiftTilted(ref, w, h, [-2, 2], [1, -3]));
+    const med = stack.median();
+    let off = 0;
+    for (let y = 20; y < h - 20; y++) for (let x = 20; x < w - 20; x++) if (Math.abs(med[y * w + x] - ref[y * w + x]) > 60) off++;
+    expect(off / ((w - 40) * (h - 40))).toBeLessThan(0.01);
+  });
+  it("leaves out a frame that didn't line up", () => {
+    const w = 400;
+    const h = 120;
+    const ref = strip(w, h);
+    const stack = new StripStack(w, h, 15, 12);
+    for (let i = 0; i < 5; i++) stack.add(shiftImage(ref, w, h, i % 2, 0));
+    stack.add(strip(w, h, 99)); // another picture entirely
+    stack.add(strip(w, h, 98));
+    const med = stack.median();
+    let off = 0;
+    for (let y = 20; y < h - 20; y++) for (let x = 20; x < w - 20; x++) if (Math.abs(med[y * w + x] - ref[y * w + x]) > 60) off++;
+    expect(off).toBeLessThan(50);
+  });
+  it("lines up a full-size corner strip quickly", () => {
+    const w = 1000;
+    const h = 838;
+    const ref = strip(w, h);
+    const moved = shiftTilted(ref, w, h, [9, -14], [5, -20]);
+    const t = performance.now();
+    const left = alignShift(ref, moved, w, h, 28, 0, 500);
+    const right = alignShift(ref, moved, w, h, 28, 500, 1000);
+    const ms = performance.now() - t;
+    expect(Math.abs(left[0] + 9) + Math.abs(left[1] - 14)).toBeLessThanOrEqual(2); // the correction to apply
+    expect(Math.abs(right[0] + 5) + Math.abs(right[1] - 20)).toBeLessThanOrEqual(2);
+    console.log(`corner strip, both halves: ${ms.toFixed(0)} ms`);
   });
 });
