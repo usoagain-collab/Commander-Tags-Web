@@ -34,10 +34,23 @@ Run each from the `ml` folder. `-I` tells Python not to load code from the curre
 | `uv run python -I scripts/build_manifest.py` | Downloads Scryfall's `default_cards` list (every printing, about 81 MB) and writes `data/manifest.csv`: paper printings with pictures, one row per picture (double-faced cards have two). `--refresh` gets a newer list | 2 min |
 | `uv run python -I scripts/download_images.py` | Downloads every picture in the manifest, shrunk to 320 px tall, into `data/images/`. At most 10 a second. **Safe to stop and start again**: it skips pictures it already has and retries the ones that failed (listed in `data/images_failed.csv`). Progress in `data/download_images.log` | about 3.2 hours |
 
+### Phase 1: real frames and labels
+
+Put the phone videos in `data/videos/surfaces` (no cards) and `data/videos/cards` (one card per video), then:
+
+| Command | What it does | Time |
+| --- | --- | --- |
+| `uv run python -I scripts/probe_videos.py` | Lists each video's format, size and length | seconds |
+| `uv run python -I scripts/extract_frames.py` | Saves the 4 sharpest frames of each card video (one per quarter) to `data/frames/cards/`, and a frame every half second of each surface video to `data/backgrounds/` (640 px). Skips videos it has already done | about 15 s per video |
+| `uv run python -I scripts/label_server.py` | Opens the labeling page at http://localhost:8765 (this laptop only). Tap the 4 corners, pick the printing, Save. Labels save to `data/labels/labels.json` at every Save, with a backup of the previous version. Ctrl+C in its window stops it | |
+
+Labeling tips (also on the page): start at the card's own top-left corner (left of the name, even when the card is upside down) and go clockwise; the gold edge is the card's top. A corner under a finger still gets a dot where the corner really is, then **H** marks it covered. On sleeved cards mark the card, not the sleeve. The printing, foil and sleeve carry over to the other frames of the same video. **No usable card** skips a frame (too blurry, card cut off).
+
 ## Numbers so far (Nov 22, 2026)
 
 - **Graphics card check:** GTX 1660 Ti Max-Q, PyTorch 2.11 with CUDA 12.8: **836 images a second** training MobileNetV3-Small (the planned corner finder's size) on 256 × 256 pictures, using 1.5 GB of the 6 GB. So 200,000 fake photos is about 4 minutes a pass; making the fake photos, not training, will set the pace.
   - Lesson: a memory layout called "channels last", which speeds up newer cards, made this card **8 times slower** (107 a second), and half precision was a bit slower than full precision (the 16-series has no tensor cores). Train in full precision with the normal layout.
+- **Videos (Nov 22, 2026):** 10 surface videos (5.2 min) and 74 card videos (9.3 min), all HEVC 1920 × 1216 at 30 fps, stored sideways with a rotation note (the scripts turn them upright).
 - **Printings:** 120,275 printings in `default_cards`; **110,941 paper printings with pictures**, 115,080 pictures counting back faces. Languages: English 108,291, then Spanish 1,207, Japanese 652, French 430 and a few hundred more.
 
 ## Tips for long runs
