@@ -53,9 +53,11 @@ Nothing else is trustworthy without this.
 
 - **Surfaces:** about 10 short videos (30 s each) of places you'd scan on, with no cards: table, desk, towel, playmat, sofa, binder page, a stack of other cards. Frames from these become training backgrounds.
 - **Cards:** short videos of about 150 of your own cards, one card each, held still then tilted, some with a finger on a corner, some sleeved, some in bad light. Mix: Star Trek foils, reprint-heavy staples (Sol Ring, Command Tower, basics), showcase and borderless, pre-2015 frames, a few non-English.
-- **Labels:** a new tab in the scan lab: pick a frame, tap the 4 corners (the current edge finder suggests them, you fix them), and pick the printing from its pictures (the lab already does this part). About 300 labeled frames in total. Some go into a fine-tune set, the rest are the test set the models never see.
+- **Labels:** (built Nov 22, 2026 as a page served from the laptop, `ml/scripts/label_server.py`, instead of a scan lab tab: frames and labels live in `ml/data/`, and browsers play HEVC phone video unreliably.) Originally planned as a new tab in the scan lab: pick a frame, tap the 4 corners (the current edge finder suggests them, you fix them), and pick the printing from its pictures (the lab already does this part). About 300 labeled frames in total. Some go into a fine-tune set, the rest are the test set the models never see.
 
 ## Phase 2: corner finder (1-2 weeks)
+
+**Status (Nov 22, 2026):** fake photo generator (`ml/scanner/synth.py`), model (`ml/scanner/corner_model.py`) and training (`ml/scripts/train_corners.py`) built; first run `corners-v1` (40,000 steps, about 2.6 million fake photos, 384 x 256 portrait input instead of 256 x 256 because phone frames are portrait) started overnight. Two of the 10 surface videos are kept out of training as the "no card" test.
 
 **Fake photos, made on the fly** (never the same twice):
 

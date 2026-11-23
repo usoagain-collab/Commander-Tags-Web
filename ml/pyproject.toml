@@ -12,6 +12,7 @@ dependencies = [
     "pillow>=11",
     "numpy>=2",
     "requests>=2.32",
+    "av>=19.0.2",
 ]
 
 # PyTorch with CUDA comes from PyTorch's own package index, not PyPI

@@ -418,6 +418,7 @@ Legal notices (Nov 11, 2026): the footer in src/app/layout.tsx and the Terms pag
 ## Scanner models (started Nov 22, 2026)
 - David chose to train our own two models (corner finder, card recognizer) on his laptop instead of more Tesseract rounds; plan and go / no-go tests in `docs/scanner-model-spec.md`. Nothing AGPL (no Ultralytics YOLO, no CollectorVision code or weights).
 - Python lives in `ml/` (uv, Python 3.12, PyTorch 2.11 + CUDA 12.8 from PyTorch's own index; setup and scripts in `ml/README.md`). `ml/data/` and `ml/runs/` are git-ignored: never commit Scryfall pictures or David's videos. uv is installed with `py -m pip install --user uv` and isn't on the PATH (`py -m uv`).
+- Phase 1 (Nov 22, 2026): David's videos in `ml/data/videos/` (HEVC, stored sideways with a rotation note), `extract_frames.py` -> 296 card frames + 618 backgrounds, labels from `label_server.py` (localhost:8765) in `ml/data/labels/labels.json` (corners 0..1 of the upright frame, card's own top-left first, clockwise). Phase 2: `scanner/synth.py` (fake photos on the GPU, about 310 a second), `scanner/corner_model.py`, `train_corners.py` (scores real labeled frames each eval). Scripts import `scanner` by putting `ml/` on `sys.path`, since they run with `python -I`.
 - **GTX 1660 Ti gotcha:** train in full precision with the default memory layout; `channels_last` made it 8 times slower (107 vs 836 images a second) and fp16 was slightly slower.
 
 ## Smart Cutter (v2, design agreed Nov 7, 2026)
