@@ -44,6 +44,8 @@ Put the phone videos in `data/videos/surfaces` (no cards) and `data/videos/cards
 | `uv run python -I scripts/extract_frames.py` | Saves the 4 sharpest frames of each card video (one per quarter) to `data/frames/cards/`, and a frame every half second of each surface video to `data/backgrounds/` (640 px). Skips videos it has already done | about 15 s per video |
 | `uv run python -I scripts/label_server.py` | Opens the labeling page at http://localhost:8765 (this laptop only). Tap the 4 corners, pick the printing, Save. Labels save to `data/labels/labels.json` at every Save, with a backup of the previous version. Ctrl+C in its window stops it | |
 
+**On a phone:** start it with `--phone`. It prints an address like `http://192.168.1.142:8765/?k=abc123` to open on a phone on the same Wi-Fi (allow Python on Private networks if Windows asks). The `k=` code changes each start; requests without it are refused. On a phone the frame list sits behind **Frames**, and a zoom bubble shows the spot under your finger while you drag a dot.
+
 Labeling tips (also on the page): start at the card's own top-left corner (left of the name, even when the card is upside down) and go clockwise; the gold edge is the card's top. A corner under a finger still gets a dot where the corner really is, then **H** marks it covered. On sleeved cards mark the card, not the sleeve. The printing, foil and sleeve carry over to the other frames of the same video. **No usable card** skips a frame (too blurry, card cut off).
 
 ### Phase 2: corner finder
