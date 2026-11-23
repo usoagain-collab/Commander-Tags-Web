@@ -11,3 +11,9 @@ node_modules/
 *.tsbuildinfo
 next-env.d.ts
 /data/
+
+# Scanner model training: downloaded images, videos and training output stay local
+/ml/data/
+/ml/runs/
+/ml/.venv/
+__pycache__/
