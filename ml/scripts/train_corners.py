@@ -121,7 +121,17 @@ def evaluate(model, synth_val, empty_imgs):
     return res
 
 
+def stay_awake() -> None:
+    """Ask Windows not to sleep while this process runs (like a video player does).
+    Ends by itself when training stops; no power settings are changed."""
+    if sys.platform == "win32":
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+
+
 def main() -> None:
+    stay_awake()
     p = argparse.ArgumentParser()
     p.add_argument("--name", default="corners-v1")
     p.add_argument("--steps", type=int, default=40000)

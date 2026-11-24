@@ -5,14 +5,20 @@ Open http://localhost:8765 after starting it. For each frame you tap the card's
 save goes straight to data/labels/labels.json (with a backup of the previous
 version), so closing the page or the server loses nothing.
 
-Run:  uv run python -I scripts/label_server.py [--port 8765]
+Run:  uv run python -I scripts/label_server.py [--port 8765] [--phone]
+
+--phone also serves the page on the home Wi-Fi so a phone can open it. The
+address it prints carries a short code; requests without it are refused, so
+nobody else on the network can read or change the labels.
 """
 
 import argparse
 import csv
 import json
 import re
+import secrets
 import shutil
+import socket
 import threading
 import time
 import webbrowser
@@ -32,6 +38,7 @@ FRAME_NAME = re.compile(r"^[\w.-]+\.jpg$")
 IMAGE_NAME = re.compile(r"^([0-9a-f-]{36})(?:_(\d))?\.jpg$")
 
 lock = threading.Lock()
+TOKEN: str | None = None  # set with --phone
 
 
 def load_manifest():
@@ -116,11 +123,29 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def allowed(self, q: dict) -> bool:
+        if TOKEN is None:
+            return True
+        cookie = self.headers.get("Cookie", "")
+        return (q.get("k") or [""])[0] == TOKEN or f"lk={TOKEN}" in cookie.replace(" ", "").split(";")
+
     def do_GET(self):
         url = urlparse(self.path)
         q = parse_qs(url.query)
         path = unquote(url.path)
+        if not self.allowed(q):
+            return self.send_error(HTTPStatus.FORBIDDEN, "Open the address with the code the server printed")
         if path == "/":
+            if TOKEN and (q.get("k") or [""])[0] == TOKEN:
+                data = PAGE.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Set-Cookie", f"lk={TOKEN}; Path=/; SameSite=Strict; Max-Age=2592000")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
             return self.send_file(PAGE, "text/html; charset=utf-8")
         if path == "/api/frames":
             labels = read_labels()
@@ -153,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         url = urlparse(self.path)
+        if not self.allowed(parse_qs(url.query)):
+            return self.send_error(HTTPStatus.FORBIDDEN)
         if url.path != "/api/label":
             return self.send_error(HTTPStatus.NOT_FOUND)
         length = int(self.headers.get("Content-Length", "0"))
@@ -175,15 +202,39 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": False, "error": str(e)}, HTTPStatus.BAD_REQUEST)
 
 
+def lan_ip() -> str:
+    """This laptop's address on the home network (no data is sent)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except OSError:
+        return "this-laptop's-IP"
+    finally:
+        s.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--phone", action="store_true", help="also serve on the home Wi-Fi, with a code")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    url = f"http://localhost:{args.port}"
+    global TOKEN
+    host = "127.0.0.1"
+    if args.phone:
+        alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+        TOKEN = "".join(secrets.choice(alphabet) for _ in range(6))
+        host = "0.0.0.0"
+    server = ThreadingHTTPServer((host, args.port), Handler)
+    url = f"http://localhost:{args.port}" + (f"/?k={TOKEN}" if TOKEN else "")
     frames = len(list(FRAMES.glob("*.jpg")))
     print(f"Labeling {frames} frames at {url} (Ctrl+C to stop). Labels: {LABELS}")
+    if args.phone:
+        print()
+        print(f"  On your phone (same Wi-Fi), open:  http://{lan_ip()}:{args.port}/?k={TOKEN}")
+        print("  If Windows asks whether Python may use the network, allow Private networks.")
+        print()
     if not args.no_browser:
         webbrowser.open(url)
     try:
