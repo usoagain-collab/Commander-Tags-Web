@@ -974,7 +974,7 @@ export function DeckEditor({
   const locked = new Set(cutter.state.locks);
   const toggleLock = (card: CardSummary, on: boolean) => {
     cutter.setState((st) => ({ ...st, locks: on ? [...new Set([...st.locks, card.oracle_id])] : st.locks.filter((x) => x !== card.oracle_id) }));
-    say(on ? `${card.name} is locked: the Smart Cutter will never suggest cutting it.` : `${card.name} is unlocked.`);
+    say(on ? `${card.name} is locked: the Deck Sequencer will never suggest cutting it.` : `${card.name} is unlocked.`);
   };
   const cutterCards = (): CutterCard[] =>
     [...commanders, ...mainLines].map((l) => ({
@@ -1063,7 +1063,7 @@ export function DeckEditor({
     type Item = { cut: true; c: CutItem } | { cut: false; a: AddItem };
     const items: Item[] = [...cuts.map((c) => ({ cut: true as const, c })), ...adds.map((a) => ({ cut: false as const, a }))];
     const n = cuts.reduce((x, c) => x + c.quantity, 0);
-    const label = `Smart Cutter: cut ${n === 1 ? "1 card" : `${n} cards`}${adds.length ? `, added ${adds.length}` : ""}${toMaybe ? " (to the maybeboard)" : ""}`;
+    const label = `Deck Sequencer: cut ${n === 1 ? "1 card" : `${n} cards`}${adds.length ? `, added ${adds.length}` : ""}${toMaybe ? " (to the maybeboard)" : ""}`;
     const { plan, skipped } = planBulk(
       entries,
       items,
@@ -1079,7 +1079,7 @@ export function DeckEditor({
       return false;
     }
     const notes = Object.fromEntries([...cuts.map((c) => [c.card.oracle_id, c.reason]), ...adds.map((a) => [a.card.oracle_id, a.reason])]);
-    const change = keepPrintings(keepCategories({ ...plan.change, notes: { label: "Smart Cutter", cards: notes } }, state.categories), state.printings);
+    const change = keepPrintings(keepCategories({ ...plan.change, notes: { label: "Deck Sequencer", cards: notes } }, state.categories), state.printings);
     dispatch({ type: "apply", change, cards: adds.map((a) => a.card) });
     save(toSavePayload(change));
     say(`${label}.${skipped.length ? ` Skipped ${skipped.length}: ${skipped[0]}` : ""} Ctrl+Z undoes it.`, true);
@@ -1685,7 +1685,7 @@ export function DeckEditor({
             </Link>
             )}
             {!ownerOnly && size > 100 && (
-              <button type="button" className="btn btn-gold" aria-pressed={panel === "cutter"} onClick={() => setPanel("cutter")} title="Smart Cutter: what to cut, and why">
+              <button type="button" className="btn btn-gold" aria-pressed={panel === "cutter"} onClick={() => setPanel("cutter")} title="Deck Sequencer: what to cut, and why">
                 ✂ Cut {size - 100}
               </button>
             )}
@@ -1703,7 +1703,7 @@ export function DeckEditor({
                   items: [
                     ...(readOnly ? [] : [{ key: "import", label: "Import a list", active: panel === "import", onPick: () => setPanel("import") }]),
                     ...(readOnly ? [] : [{ key: "lands", label: "Auto build land base", active: panel === "lands", onPick: () => setPanel("lands") }]),
-                    ...(ownerOnly ? [] : [{ key: "cutter", label: "Smart Cutter", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
+                    ...(ownerOnly ? [] : [{ key: "cutter", label: "Deck Sequencer", active: panel === "cutter", onPick: () => setPanel("cutter") }]),
                     ...(userId ? [{ key: "packages", label: "Packages", active: panel === "packages", onPick: () => setPanel("packages") }] : []),
                   ],
                 },
@@ -1942,6 +1942,7 @@ export function DeckEditor({
             setPanel(null);
             suggestForRole(key);
           }}
+          onSetLandTarget={(n) => roleSettings.setTargets((t) => ({ ...t, lands: n }))}
           onClose={closePanel}
         />
       )}
@@ -2386,9 +2387,9 @@ export function DeckEditor({
                     type="button"
                     onClick={() => toggleLock(sheetLine.card, !locked.has(sheetLine.card.oracle_id))}
                     className="min-h-11 rounded-lg border border-foreground/20 px-3 text-sm"
-                    title="The Smart Cutter never suggests cutting a locked card"
+                    title="The Deck Sequencer never suggests cutting a locked card"
                   >
-                    {locked.has(sheetLine.card.oracle_id) ? "🔓 Unlock (the Smart Cutter may suggest it)" : "🔒 Lock: never suggest cutting"}
+                    {locked.has(sheetLine.card.oracle_id) ? "🔓 Unlock (the Deck Sequencer may suggest it)" : "🔒 Lock: never suggest cutting"}
                   </button>
                 )}
                 {userId && (

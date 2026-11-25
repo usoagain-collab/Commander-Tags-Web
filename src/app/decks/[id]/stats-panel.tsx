@@ -28,7 +28,7 @@ import { tokenImage, useDeckTokens, type DeckToken } from "@/lib/deck/tokens";
 import { handStats, sampleHand } from "@/lib/deck/hand-stats";
 import { roleColor } from "@/lib/tags/pretty";
 import { GlassOverlay } from "./glass-overlay";
-import { isArtifactRamp, landAdvice, rampRisk, tappedLands } from "@/lib/deck/mana-checkup";
+import { isArtifactRamp, landAdvice, landGap, landsText, rampRisk, tappedLands } from "@/lib/deck/mana-checkup";
 import { deckHealth } from "@/lib/deck/health";
 import { useLandText } from "@/lib/deck/use-land-text";
 
@@ -122,12 +122,12 @@ export function StatsPanel({
   const isRamp = useCallback((l: DeckLine) => roleKeysOf(l).includes("ramp"), [roleKeysOf]);
   const isHelper = useCallback((l: DeckLine) => roleKeysOf(l).some((k) => k === "ramp" || k === "draw"), [roleKeysOf]);
   const checks = useMemo(() => {
-    const advice = landAdvice(lines, isHelper);
+    const advice = landAdvice(lines, isHelper, landText ? (id) => landText.get(id) : undefined);
     const tapped = landText ? tappedLands(lines, (id) => landText.get(id)) : null;
     const risk = rampRisk(lines, isRamp);
     const health = deckHealth({
       roles: roles.filter((r) => r.key !== "lands").map((r) => ({ name: r.name, target: r.target, count: roleCounts[r.key] ?? 0 })),
-      lands: advice.lands,
+      lands: Math.round(advice.effective),
       recommendedLands: advice.recommended,
       average: advice.average,
       colors: colorBalance(lines, identity).rows,
@@ -505,7 +505,7 @@ function ManaCheckup({
   onSetLandTarget,
 }: Shared & { checks: Checks; isRamp: (l: DeckLine) => boolean; isHelper: (l: DeckLine) => boolean; landTarget?: number; onSetLandTarget?: (n: number) => void }) {
   const { advice, tapped, risk } = checks;
-  const gap = advice.lands - advice.recommended;
+  const gap = landGap(advice);
   const copies = (ls: DeckLine[]) => ls.reduce((n, l) => n + l.quantity, 0);
   const isCheap = (l: DeckLine) => isSpell(l) && l.card.mana_value <= 2;
   return (
@@ -515,13 +515,18 @@ function ManaCheckup({
           <span className="display text-3xl tabular-nums">{advice.recommended}</span> <span className="opacity-75">lands suggested</span>
         </span>
         <span className={gap === 0 ? "opacity-75" : "text-amber-700 dark:text-amber-400"}>
-          You have {advice.lands}
+          You have {landsText(advice.effective)}
           {gap !== 0 && ` (${Math.abs(gap)} ${gap < 0 ? "short" : "over"})`}
         </span>
       </div>
       <p className="mb-2 text-xs opacity-70">
         Average mana value {advice.average.toFixed(2)}, and {advice.cheap} cheap ramp or draw {advice.cheap === 1 ? "card" : "cards"} (mana value 2 or less), each worth about a quarter of a land.
       </p>
+      {advice.mdfcs.length > 0 && (
+        <p className="mb-2 text-xs opacity-70">
+          {advice.mdfcs.length === 1 ? "1 spell-and-land card counts" : `${advice.mdfcs.length} spell-and-land cards count`} as part of a land: 0.38 if the land side enters tapped, 0.74 if it can enter untapped.
+        </p>
+      )}
       {onSetLandTarget && landTarget !== undefined && landTarget !== advice.recommended && (
         <button type="button" onClick={() => onSetLandTarget(advice.recommended)} className="btn mb-3">
           Set Lands target to {advice.recommended} (now {landTarget})

@@ -1,8 +1,8 @@
 "use client";
 
-// Smart Cutter screen (v2, docs/spec.md → Smart Cutter): full-screen frosted glass like Bracket and Stats.
+// Deck Sequencer screen (the Smart Cutter until Nov 21, 2026; v2, docs/spec.md → Smart Cutter): full-screen frosted glass like Bracket and Stats.
 // The cutting-room floor lives only here (session storage for this tab, so a refresh keeps it); Apply saves every
-// cut and swap as one edit: one Ctrl+Z, one Timeline entry labeled "Smart Cutter" with each card's reason.
+// cut and swap as one edit: one Ctrl+Z, one Timeline entry labeled "Deck Sequencer" with each card's reason.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { candidateIssues, type ComboRow, type EvaluateInput, type Finding } from "@/lib/brackets/evaluate";
 import type { BracketNumber } from "@/lib/brackets/rules";
@@ -29,6 +29,7 @@ import { isLand, type ResolvedRole } from "@/lib/tags/roles";
 import type { TagKey, ThemeTag } from "@/lib/tags/themes";
 import type { TagTree } from "@/lib/tags/tree";
 import { GlassOverlay } from "./glass-overlay";
+import { SequencerCheckup } from "./sequencer-checkup";
 
 export type CutItem = { card: CardSummary; quantity: number; reason: string };
 export type AddItem = { card: CardSummary; reason: string };
@@ -86,6 +87,8 @@ export function CutterPanel(props: {
   onApply: (cuts: CutItem[], adds: AddItem[], toMaybe: boolean) => boolean;
   onOpenCard: (line: DeckLine) => void;
   onSuggestRole: (key: string) => void;
+  /** Sets the deck's Lands target (the checkup's button). */
+  onSetLandTarget?: (n: number) => void;
   onClose: () => void;
 }) {
   const { deckId, state, setState, prefs, setPrefs } = props;
@@ -293,11 +296,11 @@ export function CutterPanel(props: {
         : `${plan.size} cards: ${plural(plan.need, "card")} to add`;
 
   return (
-    <GlassOverlay label="Smart Cutter" paused={props.paused} onClose={close} onEscape={() => (why ? setWhy(null) : closing ? setClosing(false) : close())}>
+    <GlassOverlay label="Deck Sequencer" paused={props.paused} onClose={close} onEscape={() => (why ? setWhy(null) : closing ? setClosing(false) : close())}>
       <div className="mx-auto max-w-5xl space-y-6 pb-40 text-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="display text-3xl">Smart Cutter</h2>
+            <h2 className="display text-3xl">Deck Sequencer</h2>
             <p className="mt-1 text-base">{headline}</p>
             {message && <p className="mt-1 text-green-700 dark:text-green-400">{message}</p>}
             {props.saveError && <p className="mt-1 text-red-400">{props.saveError}</p>}
@@ -390,6 +393,21 @@ export function CutterPanel(props: {
             )}
           </section>
         )}
+
+        <SequencerCheckup
+          scores={scores}
+          roles={props.roles}
+          planned={floor.cuts.length > 0 || floor.adds.length > 0}
+          lineOf={lineOf}
+          onOpenCard={props.onOpenCard}
+          onSuggestRole={props.onSuggestRole}
+          onSetLandTarget={props.onSetLandTarget}
+          onCut={(id, reason) => {
+            const s = scoreOf.get(id);
+            if (s) cut(s, reason);
+          }}
+          onFloor={onFloor}
+        />
 
         {prefs.power && (
           <PowerTools

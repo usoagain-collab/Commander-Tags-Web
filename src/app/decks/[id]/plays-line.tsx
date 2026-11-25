@@ -103,7 +103,7 @@ export function PlaysEditor({
           <div>
             <h2 className="display text-3xl">What this deck plays</h2>
             <p className="mt-2 max-w-prose text-base opacity-90">
-              The line under the deck name. Everyone who can open the deck sees it. Tags you pick also steer suggestions and the Smart Cutter: they count {PLAYS_WEIGHT === 2 ? "double" : `${PLAYS_WEIGHT}×`}.
+              The line under the deck name. Everyone who can open the deck sees it. Tags you pick also steer suggestions and the Deck Sequencer: they count {PLAYS_WEIGHT === 2 ? "double" : `${PLAYS_WEIGHT}×`}.
             </p>
           </div>
           <button type="button" onClick={onClose} className="btn shrink-0">
@@ -113,7 +113,7 @@ export function PlaysEditor({
 
         <section>
           <h3 className="eyebrow">Archetype</h3>
-          <p className="mt-1 opacity-75">Also what the Smart Cutter plans around (its curve and what it protects).</p>
+          <p className="mt-1 opacity-75">Also what the Deck Sequencer plans around (its curve and what it protects).</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Choice on={archetype === null} onClick={() => setArchetype(null)}>
               Automatic{guess ? ` (${archetypeLabel(guess)})` : " (none yet)"}

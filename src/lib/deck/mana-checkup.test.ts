@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CardSummary, DeckLine } from "./model";
 import { deckHealth } from "./health";
-import { enteredTapped, landAdvice, rampRisk, tappedLands } from "./mana-checkup";
+import { cheapForLands, enteredTapped, landAdvice, landGap, landOdds, landsText, rampRisk, tappedLands } from "./mana-checkup";
 
 const line = (name: string, extra: Partial<CardSummary>, quantity = 1): DeckLine => ({
   board: "main",
@@ -128,5 +128,52 @@ describe("deckHealth", () => {
     const h = deckHealth({ roles: [], lands: 37, recommendedLands: 37, average: 3, colors: even, tapped: null });
     expect(h.parts.some((p) => p.key === "tapped")).toBe(false);
     expect(h.score).toBe(100);
+  });
+});
+
+describe("MDFCs as part-lands (David, Nov 21, 2026)", () => {
+  const mdfc = (name: string) => line(name, { type_line: "Sorcery // Land", counts_as_land: true, layout: "modal_dfc", mana_value: 3 });
+  const texts: Record<string, string> = {
+    "Tapped Thing // Tapped Bog": ["Do a thing.", "//", "Tapped Bog enters tapped.", "{T}: Add {B}."].join("\n"),
+    "Godly Thing // Godly Temple": ["Do a big thing.", "//", "As Godly Temple enters, you may pay 3 life. If you don't, it enters tapped.", "{T}: Add {G}."].join("\n"),
+  };
+  const lines = [mdfc("Tapped Thing // Tapped Bog"), mdfc("Godly Thing // Godly Temple"), land("Forest", 34), spell("Filler", 3, 63)];
+
+  it("counts a tapped one as 0.38 and one that can enter untapped as 0.74", () => {
+    const a = landAdvice(lines, () => false, (id) => texts[id]);
+    expect(a.lands).toBe(36);
+    expect(a.effective).toBeCloseTo(34 + 0.38 + 0.74, 5);
+    expect(a.mdfcs.map((m) => m.weight)).toEqual([0.38, 0.74]);
+  });
+
+  it("counts them as tapped until their text arrives", () => {
+    const a = landAdvice(lines, () => false);
+    expect(a.effective).toBeCloseTo(34.76, 5);
+    expect(a.mdfcs.every((m) => m.untapped === null)).toBe(true);
+  });
+
+  it("keeps MDFCs among the spells for the average", () => {
+    expect(landAdvice(lines, () => false).spells).toBe(65);
+  });
+
+  it("rounds the gap to whole lands, halves away from zero", () => {
+    const a = landAdvice(lines, () => false, (id) => texts[id]);
+    expect(landGap({ ...a, effective: 35.5, recommended: 37 })).toBe(-2);
+    expect(landGap({ ...a, effective: 37.4, recommended: 37 })).toBe(0);
+    expect(landsText(35.12)).toBe("35.1");
+    expect(landsText(36)).toBe("36");
+  });
+});
+
+describe("landOdds and cheapForLands", () => {
+  it("matches the fourth-land-by-turn-four numbers: about 56% at 34, 62% at 36, 68% at 38", () => {
+    expect(Math.round(landOdds(34) * 100)).toBe(56);
+    expect(Math.round(landOdds(36) * 100)).toBe(62);
+    expect(Math.round(landOdds(38) * 100)).toBe(68);
+  });
+
+  it("needs about 11 cheap ramp or draw spells to earn 3 lands", () => {
+    expect(cheapForLands(3)).toBe(11);
+    expect(cheapForLands(0)).toBe(0);
   });
 });

@@ -13,6 +13,15 @@ const sumQ = (lines: DeckLine[]) => lines.reduce((n, l) => n + l.quantity, 0);
  */
 export const KARSTEN = { base: 31.42, perManaValue: 3.13, perCheap: 0.28, cheapMaxValue: 2 } as const;
 
+/**
+ * A modal double-faced card with a spell front and a land back counts as part of a land (Karsten). David's rule
+ * (Nov 21, 2026): weigh it by how the land side enters, not by rarity. One that always enters tapped is 0.38 of a
+ * land; one that can enter untapped (usually by paying 3 life, like the Zendikar Rising mythics) is 0.74.
+ */
+export const MDFC_WEIGHT = { tapped: 0.38, untapped: 0.74 } as const;
+
+export type MdfcPart = { line: DeckLine; weight: number; /** null while its text is still loading (counted as tapped). */ untapped: boolean | null };
+
 export type LandAdvice = {
   /** Rounded suggestion, kept between 30 and 45 so an odd deck can't produce a silly number. */
   recommended: number;
@@ -20,26 +29,82 @@ export type LandAdvice = {
   exact: number;
   /** Average mana value of the nonland cards (commander included; MDFCs with a land face count as spells). */
   average: number;
+  /** Nonland cards the average is over, copies included. */
+  spells: number;
   /** Cheap ramp and card draw: nonland, mana value 2 or less, fills Ramp or Card advantage. */
   cheap: number;
-  /** Cards that count as lands now (MDFCs with a land face included), copies included. */
+  /** Every card you can play as a land drop (MDFCs with a land face included), copies included. */
   lands: number;
+  /** Lands with MDFCs counted as part-lands: what the suggestion is compared with. */
+  effective: number;
+  /** The spell-front MDFCs and the share of a land each counts as. */
+  mdfcs: MdfcPart[];
 };
 
-/** The 100-card deck's suggested land count. `isCheapHelper` says whether a card fills Ramp or Card advantage. */
-export function landAdvice(lines: DeckLine[], isCheapHelper: (l: DeckLine) => boolean): LandAdvice {
+/** A spell on the front, a land on the back. */
+export const isSpellLand = (l: DeckLine) => !!l.card.counts_as_land && !frontIsLand(l);
+
+/**
+ * The 100-card deck's suggested land count. `isCheapHelper` says whether a card fills Ramp or Card advantage;
+ * `textOf` gives a card's oracle text, to tell tapped MDFCs from untapped ones (unknown counts as tapped).
+ */
+export function landAdvice(
+  lines: DeckLine[],
+  isCheapHelper: (l: DeckLine) => boolean,
+  textOf?: (oracleId: string) => string | null | undefined,
+): LandAdvice {
   const spells = lines.filter((l) => !frontIsLand(l));
   const count = sumQ(spells);
   const average = count ? spells.reduce((n, l) => n + l.card.mana_value * l.quantity, 0) / count : 0;
   const cheap = sumQ(spells.filter((l) => l.card.mana_value <= KARSTEN.cheapMaxValue && isCheapHelper(l)));
   const exact = KARSTEN.base + KARSTEN.perManaValue * average - KARSTEN.perCheap * cheap;
+  const mdfcs: MdfcPart[] = lines.filter(isSpellLand).map((line) => {
+    const text = textOf?.(line.card.oracle_id);
+    const untapped = text == null ? null : enteredTapped({ name: line.card.name, type_line: line.card.type_line, oracle_text: text }) !== "always";
+    return { line, untapped, weight: untapped ? MDFC_WEIGHT.untapped : MDFC_WEIGHT.tapped };
+  });
+  const full = sumQ(lines.filter((l) => l.card.counts_as_land && !isSpellLand(l)));
+  const effective = full + mdfcs.reduce((n, m) => n + m.weight * m.line.quantity, 0);
   return {
     recommended: Math.max(30, Math.min(45, Math.round(exact))),
     exact,
     average,
+    spells: count,
     cheap,
     lands: sumQ(lines.filter((l) => l.card.counts_as_land)),
+    effective,
+    mdfcs,
   };
+}
+
+/** Effective lands minus the suggestion, rounded to the nearest land (halves away from zero). */
+export const landGap = (a: LandAdvice) => {
+  const d = a.effective - a.recommended;
+  return Math.sign(d) * Math.round(Math.abs(d));
+};
+
+/** "35" or "35.4": lands with part-land MDFCs. */
+export const landsText = (n: number) => (Math.abs(n - Math.round(n)) < 0.05 ? String(Math.round(n)) : n.toFixed(1));
+
+/** Cheap ramp or draw spells that would make up `lands` lands in the formula (0.28 each). */
+export const cheapForLands = (lands: number) => Math.max(0, Math.ceil(lands / KARSTEN.perCheap - 1e-9));
+
+const choose = (n: number, k: number) => {
+  let r = 1;
+  for (let i = 0; i < k; i++) r = (r * (n - i)) / (i + 1);
+  return r;
+};
+
+/**
+ * Chance to have drawn at least `need` lands by turn `turn` in a 99-card library: 7 cards plus one a turn, since
+ * nobody skips the first draw in multiplayer (Comprehensive Rules 103.8c). Lands only, before any mulligan.
+ */
+export function landOdds(lands: number, need = 4, turn = 4, library = 99) {
+  const seen = 7 + turn;
+  const k = Math.max(0, Math.min(library, Math.round(lands)));
+  let p = 0;
+  for (let x = need; x <= Math.min(seen, k); x++) p += (choose(k, x) * choose(library - k, seen - x)) / choose(library, seen);
+  return p;
 }
 
 export type Tapped = "always" | "sometimes" | "never";
