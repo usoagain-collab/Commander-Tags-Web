@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_PLAYS, cleanText, isAutomatic, playsTags, playsToSave, readPlays, steerThemes } from "./plays";
+import { NO_PLAYS, cleanText, isAutomatic, playsTags, playsToSave, readPlays, steerThemes, introPicks } from "./plays";
 import type { ThemeTag } from "./themes";
 
 const theme = (slug: string, score: number, label = slug): ThemeTag => ({
@@ -71,5 +71,24 @@ describe("steerThemes", () => {
   it("leaves the input untouched", () => {
     steerThemes(all.slice(0, 2), all, ["o:a"]);
     expect(all[0].score).toBe(9);
+  });
+});
+
+describe("introPicks", () => {
+  it("ticks the commander's best gameplay themes and the archetype guess", () => {
+    const themes = [
+      { ...theme("a", 1), pinned: true },
+      { ...theme("b", 5), pinned: true },
+      theme("c", 9),
+      { ...theme("d", 3), pinned: true },
+      { ...theme("e", 4), pinned: true },
+      { ...theme("art", 8), pinned: true, kind: "a" as const, key: "a:art" as const },
+    ];
+    expect(introPicks(NO_PLAYS, themes, "tokens")).toEqual({ tags: ["o:b", "o:e", "o:d"], text: null, archetype: "tokens" });
+  });
+
+  it("keeps picks already made", () => {
+    const p = { tags: ["o:x" as const], text: null, archetype: null };
+    expect(introPicks(p, [], "tokens")).toBe(p);
   });
 });

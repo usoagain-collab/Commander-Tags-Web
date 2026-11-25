@@ -408,6 +408,12 @@ Legal notices (Nov 11, 2026): the footer in src/app/layout.tsx and the Terms pag
 - **Feedback inbox:** `/admin/feedback` (admin only, like `/admin/stats`; not linked). The check-in email footer says Unsubscribe plus a link to Settings → Email (`/settings#email`).
 - Home page: the bottom "Browse public decks" shows only when the Fresh decks row (which links to Browse) is empty.
 
+## Backlog batch (David, Nov 25, 2026)
+- **Add to one of my decks:** `CardSheet` prop `addToMyDecks` (signed-in viewer of a read-only deck) shows the button; `OtherDecks` has a Mainboard / Maybeboard choice for everyone.
+- **What's this deck about?:** `PlaysEditor` prop `intro`. The editor opens it once per deck (local storage `plays-asked:<deck id>`) for the owner when the deck has a commander, Plays is automatic and fewer than `PLAYS_ASK_MAX_CARDS` (10) other cards; it waits for the commander's tags. `introPicks` (`plays.ts`, tested) ticks the commander's top 3 oracle themes and the archetype guess. The welcome tour waits for it.
+- **Commander on curve:** `src/lib/deck/commander-turn.ts` (tested): `commanderTurn` (1,000 seeded games, one land a turn, ramp cheapest first; rocks usable the turn they're cast, dorks and land ramp the next; amounts from `FAST_MANA`), `rampStep` (ramp at MV − 1 / − 2, ramp at the commander's MV or more). Stats section `CommanderOnCurve`; ♛ marks the commander's MV under the curve.
+- **Settings sections:** `src/app/settings/settings-groups.tsx` (`SettingsGroup`, `SettingsNav`). Put a new setting in a group.
+
 ## Admin stats (David, Nov 13, 2026)
 
 - `/admin/stats` (`src/app/admin/stats/page.tsx`): accounts, signed in last 7 / 30 days, accounts with a deck, decks (new and edited this week), sign-ups and new decks per day for 30 days (Hawaii time), newest 15 accounts with name, join date, last sign-in and deck count. The Precons and test accounts (`SYSTEM_EMAILS` in `src/lib/admin/stats.ts`) aren't counted.

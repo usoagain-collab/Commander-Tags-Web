@@ -22,7 +22,7 @@ export function AccountSetting({ hasPassword }: { hasPassword: boolean }) {
   }
 
   return (
-    <section className="mt-10 border-t border-foreground/10 pt-8">
+    <section className="mt-8">
       <h2 className="display text-xl">Your account</h2>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

@@ -19,6 +19,7 @@ import { OwnedPrintingSetting } from "./owned-printing-setting";
 import { readOwnedPrintings } from "@/lib/deck/owned-printing";
 import { readPriceSource } from "@/lib/deck/store-prices";
 import { ThemeSetting } from "./theme-setting";
+import { SettingsGroup, SettingsNav } from "./settings-groups";
 
 export const metadata = { title: "Settings · Deck Genome" };
 
@@ -35,24 +36,41 @@ export default async function SettingsPage() {
   ]);
   const hasPassword = (auth.user?.identities ?? []).some((i) => i.provider === "email");
 
+  const tagView = (data?.tag_view ?? {}) as Record<string, unknown>;
+
   return (
-    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <h1 className="display text-3xl">Settings</h1>
-      <NameSetting userId={user.id} initial={look.name} />
-      <AvatarSetting userId={user.id} name={look.name} initial={look.avatarUrl} />
-      <ThemeSetting userId={user.id} initial={look.theme} />
-      <PreviewSetting userId={user.id} initial={readPreviewMode((data?.tag_view ?? {}) as Record<string, unknown>)} />
-      <CardLanguageSetting userId={user.id} initial={readCardLang((data?.tag_view ?? {}) as Record<string, unknown>)} />
-      <PriceSetting userId={user.id} initial={readPriceSource((data?.tag_view ?? {}) as Record<string, unknown>)} />
-      <OwnedPrintingSetting userId={user.id} initial={readOwnedPrintings((data?.tag_view ?? {}) as Record<string, unknown>)} />
-      <RolesSetting
-        userId={user.id}
-        initialTargets={withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...readTargets(data?.default_role_targets) })}
-        initialCustom={readCustomRoles(data?.custom_roles)}
-      />
-      <CutterSetting userId={user.id} initial={data?.cutter_prefs} />
-      <CheckinSetting userId={user.id} initial={checkin.error ? null : checkin.data?.checkin_emails === true} />
-      <AccountSetting hasPassword={hasPassword} />
+      <div className="mt-4 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10">
+        <SettingsNav />
+        <div className="min-w-0 max-w-2xl">
+          <SettingsGroup id="profile" title="Profile">
+            <NameSetting userId={user.id} initial={look.name} />
+            <AvatarSetting userId={user.id} name={look.name} initial={look.avatarUrl} />
+          </SettingsGroup>
+          <SettingsGroup id="look" title="Look">
+            <ThemeSetting userId={user.id} initial={look.theme} />
+            <PreviewSetting userId={user.id} initial={readPreviewMode(tagView)} />
+            <CardLanguageSetting userId={user.id} initial={readCardLang(tagView)} />
+          </SettingsGroup>
+          <SettingsGroup id="deck-building" title="Deck building">
+            <RolesSetting
+              userId={user.id}
+              initialTargets={withoutBracketTargets({ ...DEFAULT_ROLE_TARGETS, ...readTargets(data?.default_role_targets) })}
+              initialCustom={readCustomRoles(data?.custom_roles)}
+            />
+            <CutterSetting userId={user.id} initial={data?.cutter_prefs} />
+            <OwnedPrintingSetting userId={user.id} initial={readOwnedPrintings(tagView)} />
+          </SettingsGroup>
+          <SettingsGroup id="prices" title="Prices">
+            <PriceSetting userId={user.id} initial={readPriceSource(tagView)} />
+          </SettingsGroup>
+          <SettingsGroup id="account" title="Email and account">
+            <CheckinSetting userId={user.id} initial={checkin.error ? null : checkin.data?.checkin_emails === true} />
+            <AccountSetting hasPassword={hasPassword} />
+          </SettingsGroup>
+        </div>
+      </div>
     </main>
   );
 }

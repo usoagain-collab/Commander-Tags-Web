@@ -67,6 +67,8 @@ type Props = {
    * Prev / Next step through, `status` says whether the deck already has it, `actions` are its add buttons.
    */
   candidate?: { context: string; status: string; actions: React.ReactNode };
+  /** A signed-in viewer of someone else's deck: offers "Add to one of my decks…" on a read-only sheet. */
+  addToMyDecks?: boolean;
 };
 
 /**
@@ -306,7 +308,13 @@ export function CardSheet(props: Props) {
                 </ActionButton>
               </div>
             )}
-            {!readOnly && panel === "decks" && (
+            {readOnly && props.addToMyDecks && panel === "main" && (
+              <div className="grid grid-cols-2 gap-2">
+                <ActionButton gold onClick={() => setPanel("decks")}>Add to one of my decks…</ActionButton>
+                <ActionButton onClick={copyName}>{copied ? "Copied" : "Copy card name"}</ActionButton>
+              </div>
+            )}
+            {(!readOnly || props.addToMyDecks) && panel === "decks" && (
               <OtherDecks deckId={props.deckId} line={line} onDone={() => setPanel("main")} />
             )}
 
@@ -388,10 +396,12 @@ function OtherDecks({ deckId, line, onDone }: { deckId: string; line: DeckLine; 
     })();
   }, [supabase, deckId]);
 
+  const [board, setBoard] = useState<"main" | "maybe">("main");
+
   async function add(target: { id: string; name: string }) {
     setStatus(`Adding to ${target.name}…`);
-    const r = await addCardToDeck(supabase, target.id, line.card, "main");
-    setStatus(r.ok ? `Added ${line.card.name} to ${target.name}.` : r.reason);
+    const r = await addCardToDeck(supabase, target.id, line.card, board);
+    setStatus(r.ok ? `Added ${line.card.name} to ${target.name}${board === "maybe" ? "'s maybeboard" : ""}.` : r.reason);
   }
 
   return (
@@ -401,6 +411,20 @@ function OtherDecks({ deckId, line, onDone }: { deckId: string; line: DeckLine; 
         <button onClick={onDone} className="min-h-9 px-2 text-sm opacity-70">
           Back
         </button>
+      </div>
+      <div role="radiogroup" aria-label="Which board" className="mb-2 flex gap-2">
+        {(["main", "maybe"] as const).map((b) => (
+          <button
+            key={b}
+            type="button"
+            role="radio"
+            aria-checked={board === b}
+            onClick={() => setBoard(b)}
+            className={`min-h-10 flex-1 rounded-md border px-3 text-sm ${board === b ? "border-gold text-gold" : "border-foreground/20"}`}
+          >
+            {b === "main" ? "Mainboard" : "Maybeboard"}
+          </button>
+        ))}
       </div>
       {decks === null ? (
         <p className="text-sm opacity-60">Loading your decks…</p>
