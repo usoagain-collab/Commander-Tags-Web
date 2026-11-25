@@ -226,6 +226,12 @@ class Synth:
         frac = self.u(b, lo=0.18, hi=0.92)
         quad = self.place(self.card_quads(b, 0.18, 0.92, 52), frac, margin=0.02, inside=True)
 
+        # a deck held in the hand under the card (35%): palm, then layered card edges stepping off
+        # in one direction. corners-v1 stretched its outline over these edges on David's photos.
+        held = self.chance(b, 0.35) & present
+        if held.any():
+            img[held] = self.held_deck(quad[held], img[held])
+
         # cards under the main one: a messy stack with nearly the same pose (25%), or loose ones
         top = torch.zeros(b, 1, OUT_H, OUT_W, device=dev)   # alpha of things drawn over the main card
         n_under = 2
@@ -283,7 +289,7 @@ class Synth:
             top[over] = torch.maximum(top[over], a2)
 
         # finger over a corner or an edge (30%)
-        finger = self.chance(b, 0.3)
+        finger = self.chance(b, 0.3) | (held & self.chance(b, 0.6))
         if finger.any():
             fa, fc = self.finger(b, quad, present)
             fa = fa * finger[:, None, None, None]
@@ -299,6 +305,39 @@ class Synth:
         bi = torch.arange(b, device=dev)[:, None].expand(b, 4)
         hidden = (top[bi, 0, cy, cx] > 0.5).float() * present[:, None].float()
         return Batch(image=img, present=present.float(), corners=quad, hidden=hidden)
+
+    def held_deck(self, quad: torch.Tensor, img: torch.Tensor) -> torch.Tensor:
+        """Draw a palm and a deck's stacked edges under the card quads (h of them)."""
+        h = quad.shape[0]
+        card_w = (quad[:, 1] - quad[:, 0]).norm(dim=1)
+        centre = quad.mean(1)
+        # palm: a soft skin disc off to one side, partly under the card
+        ang = self.u(h, lo=0, hi=2 * math.pi)
+        out = torch.stack([torch.cos(ang), torch.sin(ang)], 1)
+        pc = centre + out * (card_w * self.u(h, lo=0.5, hi=0.95))[:, None]
+        pr = card_w * self.u(h, lo=0.45, hi=0.75)
+        d = torch.sqrt((self.xx - pc[:, 0, None, None]) ** 2 + (self.yy - pc[:, 1, None, None]) ** 2)
+        pa = torch.clamp((pr[:, None, None] - d) / 3 + 0.5, 0, 1)[:, None] * self.chance(h, 0.75)[:, None, None, None]
+        skin = torch.stack([self.u(h, lo=0.45, hi=0.95), self.u(h, lo=0.3, hi=0.75), self.u(h, lo=0.2, hi=0.65)], 1)
+        skin = torch.minimum(skin, skin[:, :1])[:, :, None, None]
+        shade = (1 - 0.4 * (d / pr[:, None, None]).clamp(0, 1) ** 2)[:, None]
+        img = img * (1 - pa) + skin * shade * pa
+        # deck edges: up to 16 layers, each a card outline shifted a little further
+        layers = torch.randint(3, 17, (h,), generator=self.gen, device=self.device)
+        da = self.u(h, lo=0, hi=2 * math.pi)
+        step = (self.u(h, lo=0.002, hi=0.008) * OUT_H)[:, None]
+        shift = torch.stack([torch.cos(da), torch.sin(da)], 1) * step
+        base = torch.where(self.chance(h, 0.8), self.u(h, lo=0.02, hi=0.2), self.u(h, lo=0.6, hi=0.9))
+        tint = self.u(h, 3, lo=0.85, hi=1.15)
+        for k in range(16, 0, -1):
+            use = layers >= k
+            if not use.any():
+                continue
+            q = quad[use] + (shift[use] * k)[:, None, :] + self.u(int(use.sum()), 4, 2, lo=-1, hi=1) * 0.003 * OUT_H
+            a = self.quad_alpha(q)
+            c = (base[use] * (1 + self.u(int(use.sum()), lo=-0.25, hi=0.25)))[:, None] * tint[use]
+            img[use] = img[use] * (1 - a) + c[:, :, None, None].clamp(0, 1) * a
+        return img
 
     def finger(self, b: int, quad: torch.Tensor, present: torch.Tensor):
         """A skin-coloured capsule coming in from outside, its tip near a corner or edge."""
