@@ -64,3 +64,20 @@ export function steerThemes(top: ThemeTag[], all: ThemeTag[], picked: TagKey[], 
   const extra = all.filter((t) => want.has(t.key) && !inTop.has(t.key));
   return [...top, ...extra].map((t) => (want.has(t.key) ? { ...t, score: t.score * weight } : t));
 }
+
+/** "What's this deck about?" is offered only while the deck has fewer cards than this besides its commander. */
+export const PLAYS_ASK_MAX_CARDS = 10;
+
+/**
+ * The starting picks for "What's this deck about?" (v2, Nov 25, 2026): the commander's own gameplay themes, highest
+ * score first, up to PLAYS_MAX_TAGS, plus the archetype guess when there is one. Picks already made are kept.
+ */
+export function introPicks(plays: Plays, themes: ThemeTag[], guess: string | null): Plays {
+  if (!isAutomatic(plays)) return plays;
+  const tags = themes
+    .filter((t) => t.pinned && t.kind === "o")
+    .sort((a, b) => b.score - a.score)
+    .slice(0, PLAYS_MAX_TAGS)
+    .map((t) => t.key);
+  return { tags, text: null, archetype: guess };
+}

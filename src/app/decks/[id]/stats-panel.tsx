@@ -26,6 +26,7 @@ import {
 } from "@/lib/deck/stats";
 import { tokenImage, useDeckTokens, type DeckToken } from "@/lib/deck/tokens";
 import { handStats, sampleHand } from "@/lib/deck/hand-stats";
+import { COMMANDER_TURN, commanderTurn, curveCard, rampStep } from "@/lib/deck/commander-turn";
 import { roleColor } from "@/lib/tags/pretty";
 import { GlassOverlay } from "./glass-overlay";
 import { isArtifactRamp, landAdvice, rampRisk, tappedLands } from "@/lib/deck/mana-checkup";
@@ -161,6 +162,7 @@ export function StatsPanel({
                 <ManaCheckup {...shared} checks={checks} isRamp={isRamp} isHelper={isHelper} landTarget={landTarget} onSetLandTarget={onSetLandTarget} />
                 <Curve {...shared} />
                 <OpeningHands {...shared} isRamp={isRamp} />
+                <CommanderOnCurve {...shared} isRamp={isRamp} />
                 <Roles {...shared} roles={roles} counts={roleCounts} roleKeysOf={roleKeysOf} />
                 <Colors {...shared} identity={identity} />
                 <Types {...shared} />
@@ -284,9 +286,11 @@ function Overview({ lines, selected, onSelect }: Shared) {
 
 function Curve({ lines, selected, onSelect }: Shared) {
   const { buckets, average, spells } = manaCurve(lines);
+  // The commander's mana value, marked under the curve (DefCat lesson 2: build the curve around it).
+  const commanderMvs = lines.filter((l) => l.board === "commander").map((l) => Math.min(7, Math.floor(l.card.mana_value)));
   const max = Math.max(1, ...buckets.map((b) => b.creatures + b.other));
   return (
-    <Section title="Mana curve" note={`${spells} spells · average mana value ${average.toFixed(2)}`}>
+    <Section title="Mana curve" note={`${spells} spells · average mana value ${average.toFixed(2)}${commanderMvs.length ? " · ♛ = your commander" : ""}`}>
       <div className="flex h-48 items-stretch gap-1">
         {buckets.map((b) => {
           const total = b.creatures + b.other;
@@ -318,11 +322,15 @@ function Curve({ lines, selected, onSelect }: Shared) {
         })}
       </div>
       <div className="mt-1 flex gap-1 border-t border-foreground/15 pt-1">
-        {buckets.map((b) => (
-          <span key={b.mv} className="flex-1 text-center text-xs opacity-70">
-            {b.label}
-          </span>
-        ))}
+        {buckets.map((b) => {
+          const here = commanderMvs.includes(b.mv);
+          return (
+            <span key={b.mv} className={`flex-1 text-center text-xs ${here ? "font-semibold text-gold" : "opacity-70"}`} title={here ? "Your commander's mana value" : undefined}>
+              {here && <span aria-label="Commander">♛ </span>}
+              {b.label}
+            </span>
+          );
+        })}
       </div>
       <p className="mt-2 flex gap-4 text-xs opacity-70">
         <span>
@@ -679,6 +687,99 @@ function Tokens({ selected, onSelect, tokens, nameOf }: Shared & { tokens: DeckT
           })}
         </ul>
       )}
+    </Section>
+  );
+}
+
+/**
+ * Commander on curve (v2, DefCat lesson 2): how often the commander can come down on the turn its mana value says,
+ * from 1,000 sample games (mana only), and how the ramp lines up with its cost.
+ */
+function CommanderOnCurve({ lines, selected, onSelect, isRamp }: Shared & { isRamp: (l: DeckLine) => boolean }) {
+  const commanders = lines.filter((l) => l.board === "commander");
+  const main = lines.filter((l) => l.board === "main");
+  const library = main.map((l) => curveCard(l, isRamp(l)));
+  const key = library.map((c) => `${c.land ? 1 : 0}${c.mv}.${c.tap}.${c.once}${c.now ? 1 : 0}x${c.quantity}`).join(",") + commanders.map((c) => c.card.mana_value).join("|");
+  const results = useMemo(
+    () => commanders.map((c) => ({ line: c, turn: commanderTurn(library, c.card.mana_value) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key],
+  );
+  if (!commanders.length) return null;
+
+  return (
+    <Section title="Commander on curve" note={`${COMMANDER_TURN.games.toLocaleString()} sample games: one land a turn, ramp cast when it fits. Colors, tax and mulligans aren't counted.`}>
+      {results.map(({ line, turn }) => {
+        const mv = turn.mv;
+        const step = rampStep(lines, isRamp, mv);
+        const onTime = Math.max(1, mv);
+        const turns = [onTime, onTime + 1, onTime + 2].filter((t) => t <= COMMANDER_TURN.maxTurn);
+        const stepKey = `step:${line.card.oracle_id}`;
+        const lateKey = `late:${line.card.oracle_id}`;
+        return (
+          <div key={line.card.oracle_id} className="mb-3 last:mb-0">
+            {commanders.length > 1 && <p className="mb-1 font-medium">{line.card.name}</p>}
+            {turn.games === 0 ? (
+              <p className="opacity-70">Add more cards to simulate games.</p>
+            ) : (
+              <>
+                <table className="w-full text-left tabular-nums">
+                  <thead>
+                    <tr className="text-xs opacity-70">
+                      <th className="py-1 font-normal">Cast by</th>
+                      <th className="py-1 font-normal">On the play</th>
+                      <th className="py-1 font-normal">On the draw</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {turns.map((t) => (
+                      <tr key={t} className="border-t border-foreground/10">
+                        <td className="py-1.5">
+                          Turn {t}
+                          {t === onTime && <span className="opacity-60"> (on curve)</span>}
+                        </td>
+                        <td className={`py-1.5 ${t === onTime ? "font-semibold" : ""}`}>{pct(turn.play[t])}</td>
+                        <td className={`py-1.5 ${t === onTime ? "font-semibold" : ""}`}>{pct(turn.draw[t])}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {mv >= 3 && (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs opacity-70">
+                      Ramp steps toward a {mv}-drop: {step.pattern.join(" → ")}. Ramp that costs {mv - 2} or {mv - 1} lands it a turn early.
+                    </p>
+                    <button
+                      type="button"
+                      aria-pressed={selected === stepKey}
+                      onClick={() => onSelect({ ...matching(stepKey, `Ramp on the step (mana value ${mv - 2} or ${mv - 1})`, (l) => step.onStep.some((x) => x.card.oracle_id === l.card.oracle_id)) })}
+                      className={`block min-h-9 w-full px-2 text-left ${pressable(selected === stepKey)}`}
+                    >
+                      On the step: <strong>{step.onStep.reduce((n, l) => n + l.quantity, 0)}</strong> ramp cards
+                    </button>
+                    {step.tooLate.length > 0 && (
+                      <button
+                        type="button"
+                        aria-pressed={selected === lateKey}
+                        onClick={() =>
+                          onSelect(
+                            matching(lateKey, `Ramp costing ${mv} or more`, (l) => step.tooLate.some((x) => x.card.oracle_id === l.card.oracle_id), {
+                              note: `On that turn you could cast ${line.card.name} instead. Fine if it does more than ramp.`,
+                            }),
+                          )
+                        }
+                        className={`block min-h-9 w-full px-2 text-left text-amber-700 dark:text-amber-400 ${pressable(selected === lateKey)}`}
+                      >
+                        ⚠ {step.tooLate.reduce((n, l) => n + l.quantity, 0)} ramp cards cost {mv} or more, as much as your commander
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
     </Section>
   );
 }

@@ -68,6 +68,7 @@ export function PlaysLine({
 /** Full-screen editor: archetype, up to 3 tags, and a short description. */
 export function PlaysEditor({
   plays,
+  intro = false,
   themes,
   ranked,
   labelOf,
@@ -75,6 +76,11 @@ export function PlaysEditor({
   onClose,
 }: {
   plays: Plays;
+  /**
+   * "What's this deck about?" (v2, Nov 25, 2026): shown once right after a new deck gets its commander, with the
+   * commander's likely tags already ticked. Skipping keeps everything automatic.
+   */
+  intro?: boolean;
   /** The deck's themes as Top tags lists them (current Gameplay / Flavor mode). */
   themes: ThemeTag[];
   /** Archetypes, most likely first (detectArchetypes). */
@@ -101,13 +107,20 @@ export function PlaysEditor({
       <div className="mx-auto max-w-3xl space-y-7 text-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="display text-3xl">What this deck plays</h2>
-            <p className="mt-2 max-w-prose text-base opacity-90">
-              The line under the deck name. Everyone who can open the deck sees it. Tags you pick also steer suggestions and the Smart Cutter: they count {PLAYS_WEIGHT === 2 ? "double" : `${PLAYS_WEIGHT}×`}.
-            </p>
+            <h2 className="display text-3xl">{intro ? "What's this deck about?" : "What this deck plays"}</h2>
+            {intro ? (
+              <p className="mt-2 max-w-prose text-base opacity-90">
+                Pick up to {PLAYS_MAX_TAGS} of your commander&apos;s tags. Suggestions and the Smart Cutter lean on them ({PLAYS_WEIGHT === 2 ? "they count double" : `${PLAYS_WEIGHT}×`}), so picks
+                make suggestions better from the first card. We ticked the likely ones. Skip it and the site guesses from your commander and cards. Change it any time from the line under the deck name.
+              </p>
+            ) : (
+              <p className="mt-2 max-w-prose text-base opacity-90">
+                The line under the deck name. Everyone who can open the deck sees it. Tags you pick also steer suggestions and the Smart Cutter: they count {PLAYS_WEIGHT === 2 ? "double" : `${PLAYS_WEIGHT}×`}.
+              </p>
+            )}
           </div>
           <button type="button" onClick={onClose} className="btn shrink-0">
-            Cancel
+            {intro ? "Skip" : "Cancel"}
           </button>
         </div>
 
@@ -169,10 +182,10 @@ export function PlaysEditor({
 
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-gold min-h-11" onClick={() => onSave({ tags, text: cleanText(text), archetype })}>
-            Save
+            {intro ? "Use these" : "Save"}
           </button>
-          <button type="button" className="btn min-h-11" onClick={() => onSave({ tags: [], text: null, archetype: null })}>
-            Back to automatic
+          <button type="button" className="btn min-h-11" onClick={() => (intro ? onClose() : onSave({ tags: [], text: null, archetype: null }))}>
+            {intro ? "Use automatic" : "Back to automatic"}
           </button>
         </div>
       </div>

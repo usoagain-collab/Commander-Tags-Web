@@ -148,7 +148,8 @@ import type { CutterPrefs, CutterState } from "@/lib/cutter/state";
 import { useCutterPrefs, useCutterState } from "@/lib/cutter/use-cutter";
 import { archetypeLabel, detectArchetypes } from "@/lib/cutter/archetype";
 import { ARCHETYPES, GENERAL_KEY } from "@/lib/cutter/archetypes";
-import { NO_PLAYS, playsTags, playsToSave, steerThemes, type Plays } from "@/lib/tags/plays";
+import { NO_PLAYS, PLAYS_ASK_MAX_CARDS, introPicks, isAutomatic, playsTags, playsToSave, steerThemes, type Plays } from "@/lib/tags/plays";
+import { CUTTER } from "@/lib/cutter/config";
 import { PlaysEditor, PlaysLine, type PlaysHeadline } from "./plays-line";
 import { DeckSocialSection } from "./deck-social";
 import { SuggestionsPanel } from "./suggestions-panel";
@@ -777,12 +778,6 @@ export function DeckEditor({
   const localize = useLocalized(cardLang, rawLines.flat().map((l) => printingIdFromImage(l.card.image_normal)));
   const [commanders, companions, mainLines, maybeLines] = rawLines.map((ls) => (cardLang === "en" ? ls : ls.map((l) => ({ ...l, card: localize(l.card) }))));
   const hasCommander = commanders.length > 0;
-  const tourOffered = useRef(false);
-  useEffect(() => {
-    if (tourOffered.current || !userId || !hasCommander || !shouldShowTour(prefs, readOnly)) return;
-    tourOffered.current = true;
-    setTouring(true);
-  }, [userId, hasCommander, prefs, readOnly]);
 
   // Bracket estimate and the cards that go above the target (they get a ⚠ badge like other warnings).
   // The deck as the bracket check sees it (also used to screen suggestions, 5c).
@@ -943,6 +938,45 @@ export function DeckEditor({
   const trees = tags.tree ? { oracle: tags.tree, art: artTree } : null;
   const roleTagSet = new Set(roles.flatMap((r) => (r.tagSet ? [...r.tagSet] : [])));
   const themes: ThemeTag[] = trees ? themeTags(themeCards, { settings: themeSettings, trees, roleTags: roleTagSet, hidden }) : [];
+  // "What's this deck about?" (v2, Nov 25, 2026): right after a new deck gets its commander, offer the Plays editor
+  // with the commander's likely tags ticked, so Suggest and the Cutter are steered from the start. Asked once per deck
+  // on this device; a deck that already has cards or picked Plays isn't asked.
+  const playsAskKey = `plays-asked:${deck.id}`;
+  const [playsAsked, setPlaysAsked] = useState<boolean | null>(null);
+  const [playsIntro, setPlaysIntro] = useState(false);
+  useEffect(() => {
+    let asked = false;
+    try {
+      asked = localStorage.getItem(playsAskKey) === "1";
+    } catch {}
+    setPlaysAsked(asked);
+  }, [playsAskKey]);
+  const markPlaysAsked = () => {
+    setPlaysAsked(true);
+    try {
+      localStorage.setItem(playsAskKey, "1");
+    } catch {}
+  };
+  const commanderTagsLoaded = commanders.length > 0 && commanders.every((c) => tags.loaded.has(c.card.oracle_id));
+  const wantsPlays =
+    playsAsked === false && !ownerOnly && !guest && !!userId && hasCommander && isAutomatic(plays) && size - commanders.length < PLAYS_ASK_MAX_CARDS;
+  useEffect(() => {
+    if (!wantsPlays || editingPlays || !trees || !commanderTagsLoaded) return;
+    markPlaysAsked();
+    // A commander with no gameplay tags has nothing to pick from.
+    if (!themes.length) return;
+    setPlaysIntro(true);
+    setEditingPlays(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsPlays, editingPlays, !!trees, commanderTagsLoaded, themes.length]);
+
+  // The welcome tour waits until the "What's this deck about?" step is done.
+  const tourOffered = useRef(false);
+  useEffect(() => {
+    if (tourOffered.current || !userId || !hasCommander || wantsPlays || editingPlays || !shouldShowTour(prefs, readOnly)) return;
+    tourOffered.current = true;
+    setTouring(true);
+  }, [userId, hasCommander, prefs, readOnly, wantsPlays, editingPlays]);
 
   // ---------- suggestions (Phase 4) ----------
   // Scored against the deck's top 15 GAMEPLAY themes (pool cards have oracle tags only), Specific or Broad as set.
@@ -1910,7 +1944,25 @@ export function DeckEditor({
         />
       )}
       {editingPlays && !ownerOnly && (
-        <PlaysEditor plays={plays} themes={themes} ranked={ranked} labelOf={tagLabel} onSave={savePlaysFromEditor} onClose={() => setEditingPlays(false)} />
+        <PlaysEditor
+          plays={
+            playsIntro
+              ? introPicks(plays, themes, ranked[0] && ranked[0].archetype.key !== GENERAL_KEY && ranked[0].score >= CUTTER.archetypeFloor ? ranked[0].archetype.key : null)
+              : plays
+          }
+          intro={playsIntro}
+          themes={themes}
+          ranked={ranked}
+          labelOf={tagLabel}
+          onSave={(next) => {
+            setPlaysIntro(false);
+            savePlaysFromEditor(next);
+          }}
+          onClose={() => {
+            setPlaysIntro(false);
+            setEditingPlays(false);
+          }}
+        />
       )}
       {panel === "cutter" && !ownerOnly && tags.tree && (
         <CutterPanel
@@ -2366,6 +2418,7 @@ export function DeckEditor({
             onChange: (parts) => saveSplit(sheetLine.board, sheetLine.card.oracle_id, parts),
           }}
           onClearFlags={ownerOnly ? undefined : () => clearFlags(sheetLine.card.oracle_id)}
+          addToMyDecks={readOnly && !guest && !!userId}
           extra={
             readOnly ? null : (
               <>
