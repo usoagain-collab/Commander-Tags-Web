@@ -184,3 +184,31 @@ export function deltaChanges(rows: OwnedRow[], target: Omit<OwnedRow, "quantity"
   }
   return out;
 }
+
+const placeKey = (r: Pick<OwnedRow, "oracle_id" | "printing_id" | "finish">, at: string | null) => `${r.oracle_id}|${r.printing_id ?? ""}|${r.finish}|${at ?? ""}`;
+
+/**
+ * Moving every copy in `sources` to one location (or Unsorted, null) in one save: rows already there are left alone,
+ * each source row empties, and copies landing on the same printing add up (several binders into one, or a row
+ * already at the destination). One change per row, so the save never touches a row twice.
+ */
+export function planMoveAll(rows: OwnedRow[], sources: OwnedRow[], to: string | null) {
+  const out = new Map<string, { target: OwnedRow; quantity: number }>();
+  const seen = new Set<string>();
+  for (const from of sources) {
+    const fromKey = placeKey(from, from.location_id ?? null);
+    if ((from.location_id ?? null) === to || from.quantity <= 0 || seen.has(fromKey)) continue;
+    seen.add(fromKey);
+    out.set(fromKey, { target: from, quantity: 0 });
+    const destKey = placeKey(from, to);
+    const there = out.get(destKey) ?? {
+      target: { ...from, location_id: to },
+      quantity: rows.find((r) => placeKey(r, r.location_id ?? null) === destKey)?.quantity ?? 0,
+    };
+    out.set(destKey, { ...there, quantity: Math.min(9999, there.quantity + from.quantity) });
+  }
+  return [...out.values()];
+}
+
+/** "Blue binder", or "Unsorted" for null. */
+export const locationName = (list: CollectionLocation[], id: string | null) => (id ? (list.find((l) => l.id === id)?.name ?? "that binder") : "Unsorted");

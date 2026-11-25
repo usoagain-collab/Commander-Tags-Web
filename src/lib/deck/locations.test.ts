@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OwnedRow } from "./collection";
 import { ownedMatch, groupRows } from "./collection";
 import { collectionItems } from "./collection-view";
-import { binderPages, copiesByLocation, defaultStyle, deltaChanges, locationNameProblem, planMove, readLocations, readLocationStyle, rowsIn } from "./locations";
+import { binderPages, copiesByLocation, defaultStyle, deltaChanges, locationNameProblem, planMove, planMoveAll, readLocations, readLocationStyle, rowsIn } from "./locations";
 import type { CardSummary } from "./model";
 
 const A = "11111111-1111-1111-1111-111111111111";
@@ -102,5 +102,32 @@ describe("binderPages", () => {
   it("splits into pockets per page and always has one page", () => {
     expect(binderPages([1, 2, 3, 4, 5], "2x2")).toEqual([[1, 2, 3, 4], [5]]);
     expect(binderPages([], "3x3")).toEqual([[]]);
+  });
+});
+
+describe("planMoveAll", () => {
+  const base = { oracle_id: A, printing_id: P, finish: "nonfoil" as const, printing_info: null };
+  it("empties each source and adds up copies at the destination", () => {
+    const a = { ...base, quantity: 2, location_id: "A" };
+    const b = { ...base, quantity: 3, location_id: "B" };
+    const c = { ...base, quantity: 1, location_id: "C" };
+    const plan = planMoveAll([a, b, c], [a, b, c], "C");
+    expect(plan).toHaveLength(3);
+    expect(plan.find((p) => p.target.location_id === "A")?.quantity).toBe(0);
+    expect(plan.find((p) => p.target.location_id === "B")?.quantity).toBe(0);
+    expect(plan.find((p) => p.target.location_id === "C")?.quantity).toBe(6);
+  });
+  it("moves to Unsorted and skips rows already there", () => {
+    const a = { ...base, quantity: 2, location_id: "A" };
+    const u = { ...base, quantity: 1, location_id: null };
+    const plan = planMoveAll([a, u], [a, u], null);
+    expect(plan).toEqual([
+      { target: a, quantity: 0 },
+      { target: { ...a, location_id: null }, quantity: 3 },
+    ]);
+  });
+  it("does nothing when everything is already there", () => {
+    const a = { ...base, quantity: 2, location_id: "A" };
+    expect(planMoveAll([a], [a], "A")).toEqual([]);
   });
 });
