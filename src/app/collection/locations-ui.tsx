@@ -3,7 +3,8 @@
 // Binders and boxes on the Collection page (v2, migration 0067): the location chips, a new-binder form, each
 // binder's own header (color, texture, cover art, note), its Customize panel and the Binder pages layout.
 // The look of a binder is the owner's: everything here reads LocationStyle (src/lib/deck/locations.ts).
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { MOVE_TYPE } from "./move-ui";
 import { ArtCredit } from "@/components/art-credit";
 import { GlassOverlay } from "@/app/decks/[id]/glass-overlay";
 import { COLLECTION_GROUP_LABELS, COLLECTION_SORT_LABELS, type CollectionItem } from "@/lib/deck/collection-view";
@@ -54,7 +55,7 @@ export const SIZE_STACK: Record<CardSize, string> = {
   large: "[column-width:200px] sm:[column-width:250px]",
 };
 
-const Dot = ({ color }: { color: string }) => <span aria-hidden className="inline-block h-3 w-3 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />;
+export const Dot = ({ color }: { color: string }) => <span aria-hidden className="inline-block h-3 w-3 shrink-0 rounded-full border border-white/30" style={{ backgroundColor: color }} />;
 
 export function LocationBar({
   locations,
@@ -63,6 +64,7 @@ export function LocationBar({
   view,
   onView,
   onNew,
+  onDropCards,
 }: {
   locations: CollectionLocation[];
   counts: Map<string, number>;
@@ -70,23 +72,46 @@ export function LocationBar({
   view: LocationView;
   onView: (v: LocationView) => void;
   onNew: () => void;
+  /** Cards from the page dropped on a chip: null = Unsorted. */
+  onDropCards?: (to: string | null) => void;
 }) {
-  const chip = (on: boolean) => `flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-sm ${on ? "border-gold bg-gold/15 font-medium text-gold" : "border-foreground/20 hover:bg-foreground/10"}`;
+  const [over, setOver] = useState<string | null>(null);
+  const chip = (on: boolean, id?: string) =>
+    `flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-sm ${over === id && id !== undefined ? "border-sky-400 bg-sky-400/20 text-foreground" : on ? "border-gold bg-gold/15 font-medium text-gold" : "border-foreground/20 hover:bg-foreground/10"}`;
   const unsorted = counts.get("") ?? 0;
+  // Drop targets for cards dragged from the page (Visual grid, Stacks, Text, Binder pages).
+  const target = (id: string, to: string | null) =>
+    onDropCards
+      ? {
+          onDragOver: (e: DragEvent) => {
+            if (!e.dataTransfer.types.includes(MOVE_TYPE)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            setOver(id);
+          },
+          onDragLeave: () => setOver((o) => (o === id ? null : o)),
+          onDrop: (e: DragEvent) => {
+            if (!e.dataTransfer.types.includes(MOVE_TYPE)) return;
+            e.preventDefault();
+            setOver(null);
+            onDropCards(to);
+          },
+        }
+      : {};
   return (
     <nav aria-label="Binders and boxes" className="mt-5 flex gap-2 overflow-x-auto pb-1">
       <button type="button" aria-pressed={view === "all"} onClick={() => onView("all")} className={chip(view === "all")}>
         All cards <span className="opacity-60">{total}</span>
       </button>
       {locations.map((l) => (
-        <button key={l.id} type="button" aria-pressed={view === l.id} onClick={() => onView(l.id)} className={chip(view === l.id)}>
+        <button key={l.id} type="button" aria-pressed={view === l.id} onClick={() => onView(l.id)} className={chip(view === l.id, l.id)} {...target(l.id, l.id)}>
           <Dot color={l.style.color} />
           <span className="max-w-[12rem] truncate">{l.name}</span>
           <span className="opacity-60">{counts.get(l.id) ?? 0}</span>
         </button>
       ))}
       {locations.length > 0 && (
-        <button type="button" aria-pressed={view === "unsorted"} onClick={() => onView("unsorted")} className={chip(view === "unsorted")}>
+        <button type="button" aria-pressed={view === "unsorted"} onClick={() => onView("unsorted")} className={chip(view === "unsorted", "")} {...target("", null)}>
           Unsorted <span className="opacity-60">{unsorted}</span>
         </button>
       )}

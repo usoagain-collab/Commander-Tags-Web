@@ -12,7 +12,8 @@ import type { CardSummary } from "@/lib/deck/model";
 import { hasFoil, printingImage, type ChosenPrinting } from "@/lib/deck/printing";
 import type { OwnedTarget } from "@/lib/deck/use-collection";
 import { fetchPrintings } from "@/lib/scryfall/printings";
-import { planMove, type CollectionLocation } from "@/lib/deck/locations";
+import { locationName, planMove, type CollectionLocation } from "@/lib/deck/locations";
+import { HowMany } from "./move-ui";
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 const FINISH_LABELS: Record<Finish, string> = { nonfoil: "Plain", foil: "Foil", etched: "Etched" };
@@ -36,6 +37,8 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
   const cheapest = priceCard(card, priceSource).price_usd;
   const [picking, setPicking] = useState<null | { assign?: OwnedRow }>(rows.length === 0 ? {} : null);
   const [shown, setShown] = useState<string | null>(null);
+  // Moving a pile of 2+ copies asks how many first (all by default).
+  const [askMove, setAskMove] = useState<{ row: OwnedRow; to: string | null } | null>(null);
   // Rows in the binder that's open come first, then the rest; within each, known printings and bigger piles first.
   const here = (r: OwnedRow) => (r.location_id ?? null) === addTo;
   const sorted = [...rows].sort((a, b) => Number(!here(a)) - Number(!here(b)) || Number(!a.printing_id) - Number(!b.printing_id) || b.quantity - a.quantity);
@@ -56,7 +59,7 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
   };
 
   return (
-    <GlassOverlay label={`${card.name} in your collection`} paused={false} onClose={onClose}>
+    <GlassOverlay label={`${card.name} in your collection`} paused={!!askMove} onClose={onClose}>
       <div className="panel mx-auto max-w-4xl p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -101,7 +104,7 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
                     onQuantity={(q) => setQty(r, q)}
                     onFinish={(f) => move(r, { ...r, finish: f })}
                     onWhich={() => setPicking({ assign: r })}
-                    place={locations.length ? { name: placeOf(r), options: locations, onMove: (to) => onSet(planMove(rows, r, to)) } : undefined}
+                    place={locations.length ? { name: placeOf(r), options: locations, onMove: (to) => (r.quantity > 1 ? setAskMove({ row: r, to }) : onSet(planMove(rows, r, to))) } : undefined}
                   />
                 ))}
               </ul>
@@ -134,6 +137,17 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
           />
         )}
       </div>
+      {askMove && (
+        <HowMany
+          toName={locationName(locations, askMove.to)}
+          lines={[{ key: "row", name: `${card.name}${askMove.row.printing_info ? ` · ${askMove.row.printing_info.set.toUpperCase()} #${askMove.row.printing_info.number}` : ""}`, image: null, max: askMove.row.quantity }]}
+          onCancel={() => setAskMove(null)}
+          onConfirm={(counts) => {
+            onSet(planMove(rows, askMove.row, askMove.to, counts.row));
+            setAskMove(null);
+          }}
+        />
+      )}
     </GlassOverlay>
   );
 }
@@ -149,7 +163,7 @@ function OwnedLine({
   place,
 }: {
   row: OwnedRow;
-  /** Which binder or box the copies are in, and a way to move all of them. */
+  /** Which binder or box the copies are in, and a way to move them (asks how many when there are 2+). */
   place?: { name: string; options: CollectionLocation[]; onMove: (to: string | null) => void };
   /** The card's cheapest price at the chosen store, and that store. */
   cheapest: number | null;

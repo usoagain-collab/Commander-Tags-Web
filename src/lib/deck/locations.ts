@@ -184,3 +184,62 @@ export function deltaChanges(rows: OwnedRow[], target: Omit<OwnedRow, "quantity"
   }
   return out;
 }
+
+const placeKey = (r: Pick<OwnedRow, "oracle_id" | "printing_id" | "finish">, at: string | null) => `${r.oracle_id}|${r.printing_id ?? ""}|${r.finish}|${at ?? ""}`;
+
+/**
+ * Moving copies to one location (or Unsorted, null) in one save: each move takes `n` copies from its row, and copies
+ * landing on the same printing add up (several binders into one, or a row already at the destination). One change
+ * per row, so the save never touches a row twice. Moves from the destination itself are skipped.
+ */
+export function planMoveCounts(rows: OwnedRow[], moves: { from: OwnedRow; n: number }[], to: string | null) {
+  const out = new Map<string, { target: OwnedRow; quantity: number }>();
+  const current = (key: string, row: OwnedRow) => out.get(key)?.quantity ?? rows.find((r) => placeKey(r, r.location_id ?? null) === key)?.quantity ?? row.quantity;
+  for (const { from, n: asked } of moves) {
+    if ((from.location_id ?? null) === to) continue;
+    const fromKey = placeKey(from, from.location_id ?? null);
+    const have = current(fromKey, from);
+    const n = Math.max(0, Math.min(have, Math.round(asked)));
+    if (n === 0) continue;
+    out.set(fromKey, { target: out.get(fromKey)?.target ?? from, quantity: have - n });
+    const destKey = placeKey(from, to);
+    const there = out.get(destKey) ?? { target: { ...from, location_id: to }, quantity: rows.find((r) => placeKey(r, r.location_id ?? null) === destKey)?.quantity ?? 0 };
+    out.set(destKey, { ...there, quantity: Math.min(9999, there.quantity + n) });
+  }
+  return [...out.values()];
+}
+
+/** Every copy in `sources` moves (duplicates of one row count once). */
+export function planMoveAll(rows: OwnedRow[], sources: OwnedRow[], to: string | null) {
+  const seen = new Set<string>();
+  const moves = sources.filter((r) => {
+    const k = placeKey(r, r.location_id ?? null);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return planMoveCounts(rows, moves.map((from) => ({ from, n: from.quantity })), to);
+}
+
+/** Copies of one card (its rows) that can move to `to`: every row not already there. */
+export const movableCopies = (rows: OwnedRow[], to: string | null) => rows.filter((r) => (r.location_id ?? null) !== to).reduce((n, r) => n + r.quantity, 0);
+
+/**
+ * Taking `count` copies of one card for a move to `to`: from rows not already there, Unsorted first, then the
+ * biggest piles, so a partial move empties as few binders as it can.
+ */
+export function takeCopies(rows: OwnedRow[], to: string | null, count: number) {
+  let left = Math.max(0, Math.round(count));
+  const out: { from: OwnedRow; n: number }[] = [];
+  const order = rows.filter((r) => (r.location_id ?? null) !== to).sort((a, b) => Number(!!a.location_id) - Number(!!b.location_id) || b.quantity - a.quantity);
+  for (const r of order) {
+    if (left <= 0) break;
+    const n = Math.min(left, r.quantity);
+    out.push({ from: r, n });
+    left -= n;
+  }
+  return out;
+}
+
+/** "Blue binder", or "Unsorted" for null. */
+export const locationName = (list: CollectionLocation[], id: string | null) => (id ? (list.find((l) => l.id === id)?.name ?? "that binder") : "Unsorted");

@@ -5,7 +5,7 @@
 // Archidekt, ManaBox or a plain list, keeping each line's printing; export it again as CSV. Decks then mark the
 // cards you own (green = that printing, orange = another one) and price only what you don't.
 import { priceCard, priceCards, readPriceSource } from "@/lib/deck/store-prices";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import { useTagViewPrefs } from "@/app/decks/[id]/deck-toolbar";
 import { exportCollectionCsv, parseCollection, rowUnitPrice } from "@/lib/deck/collection";
 import {
@@ -32,14 +32,31 @@ import { createClient } from "@/lib/supabase/client";
 import { AddCardBox } from "@/components/add-card-box";
 import { CardDropTarget } from "@/components/card-drop-target";
 import { finishFor, infoOf } from "@/lib/deck/collection-targets";
-import { LAYOUT_LABELS, copiesByLocation, locationForAdds, rowsIn, type LocationLayout, type LocationView } from "@/lib/deck/locations";
+import { LAYOUT_LABELS, copiesByLocation, locationForAdds, locationName, movableCopies, planMoveCounts, rowsIn, takeCopies, type LocationLayout, type LocationView } from "@/lib/deck/locations";
 import { useLocations } from "@/lib/deck/use-locations";
 import { CollectionSheet } from "./collection-sheet";
 import { BinderPages, CustomizeLocation, LocationBar, LocationHeader, NewLocation, SIZE_COLUMNS, SIZE_STACK } from "./locations-ui";
 import { resolveImport } from "./import-collection";
+import { DropTray, HowMany, MOVE_TYPE, MoveMenu, SelectBar } from "./move-ui";
 
 const PAGE = 200;
 const money = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
+
+/** What every card button on the page carries: tap/click, right-click menu, drag, selected state. */
+type CardBind = {
+  onClick: (e: MouseEvent) => void;
+  onContextMenu: (e: MouseEvent) => void;
+  draggable: boolean;
+  onDragStart: (e: DragEvent) => void;
+  onDragEnd: () => void;
+  "aria-pressed"?: boolean;
+};
+
+/** The one location every row is in (null = Unsorted), or undefined when they're spread out. */
+const placeOf = (items: CollectionItem[]) => {
+  const at = new Set(items.flatMap((it) => it.rows.map((r) => r.location_id ?? null)));
+  return at.size === 1 ? [...at][0] : undefined;
+};
 
 export function CollectionView({ userId, savedTagView, initialQuery }: { userId: string; savedTagView: Record<string, unknown>; initialQuery: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -75,6 +92,19 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const [open, setOpen] = useState<CardSummary | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // Moving cards between binders: select mode, the right-click menu and drags.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number; keys: string[] } | null>(null);
+  const [dragging, setDragging] = useState(0);
+  const dragKeys = useRef<string[]>([]);
+  const [moveAfterNew, setMoveAfterNew] = useState<string[] | null>(null);
+  const [asking, setAsking] = useState<{ keys: string[]; to: string | null } | null>(null);
+  const endSelect = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Set());
+  }, []);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   // Card details for every card you own (names, types, default images), fetched once per new card.
   const ids = useMemo(() => [...new Set(collection.rows.map((r) => r.oracle_id))], [collection.rows]);
@@ -102,6 +132,69 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const localize = useLocalized(cardLang, listed.slice(0, limit).map((it) => printingIdFromImage(it.image)));
   const items = cardLang === "en" ? listed : listed.map((it) => ({ ...it, image: localize({ ...it.card, image_normal: it.image }).image_normal }));
   const sections = collectionSections(items, shownPrefs.group, shownPrefs.sort);
+  const ordered = sections.flatMap((s) => s.items);
+  const byKey = new Map(ordered.map((it) => [it.key, it]));
+  const itemsOf = (keys: string[]) => keys.flatMap((k) => byKey.get(k) ?? []);
+  const selectedItems = itemsOf([...selected]);
+
+  /** Moves the cards; any card with more than one copy to move asks how many first (all by default). */
+  const moveKeys = async (keys: string[], to: string | null) => {
+    const list = itemsOf(keys);
+    setMenu(null);
+    if (!list.some((it) => movableCopies(it.rows, to) > 0)) return setMessage(`${list.length === 1 ? "It's" : "They're"} already in ${locationName(locations.list, to)}.`);
+    if (list.some((it) => movableCopies(it.rows, to) > 1)) return setAsking({ keys, to });
+    await commitMove(keys, to, {});
+  };
+  const commitMove = async (keys: string[], to: string | null, counts: Record<string, number>) => {
+    const list = itemsOf(keys);
+    const moves = list.flatMap((it) => takeCopies(it.rows, to, counts[it.key] ?? movableCopies(it.rows, to)));
+    const moved = moves.reduce((n, m) => n + m.n, 0);
+    const cardsMoved = new Set(moves.map((m) => m.from.oracle_id + m.from.printing_id + m.from.finish)).size;
+    const plan = planMoveCounts(collection.rows, moves, to);
+    if (!plan.length) return;
+    const failed = await collection.setMany(plan);
+    if (failed) return setMessage(failed);
+    setSelected(new Set());
+    setMessage(`Moved ${list.length === 1 ? list[0].card.name : `${cardsMoved} ${cardsMoved === 1 ? "card" : "cards"}`} (${moved} ${moved === 1 ? "copy" : "copies"}) to ${locationName(locations.list, to)}.`);
+  };
+  const keysFor = (it: CollectionItem) => (selected.has(it.key) ? [...selected] : [it.key]);
+  const toggle = (key: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const bind = (it: CollectionItem): CardBind => ({
+    onClick: (e) => {
+      if (selecting || e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        setSelecting(true);
+        toggle(it.key);
+        return;
+      }
+      setOpen(it.card);
+    },
+    onContextMenu: (e) => {
+      if (!locations.ready) return;
+      e.preventDefault();
+      setMenu({ x: e.clientX, y: e.clientY, keys: keysFor(it) });
+    },
+    draggable: locations.ready && locations.list.length > 0,
+    onDragStart: (e) => {
+      const keys = keysFor(it);
+      dragKeys.current = keys;
+      e.dataTransfer.setData(MOVE_TYPE, String(keys.length));
+      e.dataTransfer.effectAllowed = "move";
+      setDragging(keys.length);
+    },
+    onDragEnd: () => setDragging(0),
+    ...(selecting ? { "aria-pressed": selected.has(it.key) } : {}),
+  });
+  const dropOn = (to: string | null) => {
+    setDragging(0);
+    void moveKeys(dragKeys.current, to);
+  };
   const known = collection.rows.filter((r) => cards[r.oracle_id]);
   const copies = known.reduce((s, r) => s + r.quantity, 0);
   const value = known.reduce((s, r) => s + r.quantity * rowUnitPrice(r, priceCard(cards[r.oracle_id], priceSource).price_usd, priceSource), 0);
@@ -133,7 +226,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
     .filter((s) => s.items.length);
 
   return (
-    <main className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6">
+    <main className={`mx-auto max-w-[1800px] px-4 py-8 sm:px-6 ${selecting || dragging ? "pb-40" : ""}`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="display text-3xl">Collection</h1>
@@ -223,7 +316,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
       )}
 
       {known.length > 0 && locations.ready && (
-        <LocationBar locations={locations.list} counts={counts} total={copies} view={view} onView={setWhere} onNew={() => setNewLocation(true)} />
+        <LocationBar locations={locations.list} counts={counts} total={copies} view={view} onView={setWhere} onNew={() => setNewLocation(true)} onDropCards={dropOn} />
       )}
       {loc && <LocationHeader loc={loc} cards={cards} copies={knownHere.reduce((n, r) => n + r.quantity, 0)} value={money(valueHere)} onCustomize={() => setCustomizing(true)} />}
 
@@ -239,9 +332,14 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
             setFilter={setFilter}
             query={query}
             setQuery={setQuery}
+            selecting={selecting}
+            onSelect={() => (selecting ? endSelect() : setSelecting(true))}
           />
           <p className="mt-2 text-sm opacity-70">
             {shownCount === 0 ? "Nothing matches." : `${shownCount} ${prefs.perCard ? "cards" : "printings"}${shownCount > limit ? `, showing ${limit}` : ""}`}
+            {locations.list.length > 0 && !selecting && (
+              <span className="hidden sm:inline"> · Drag cards onto a binder, right-click one, or use Select to move several.</span>
+            )}
           </p>
           <div className="mt-3 space-y-6">
             {loc && layout === "pages" ? (
@@ -249,14 +347,14 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
                 key={`${loc.id}|${loc.style.pockets}|${shownPrefs.sort}|${query}|${filter}`}
                 items={drawn.flatMap((s) => s.items)}
                 style={loc.style}
-                renderPocket={(it) => <Pocket item={it} onOpen={() => setOpen(it.card)} />}
+                renderPocket={(it) => <Pocket item={it} bind={bind(it)} selected={selected.has(it.key)} />}
               />
             ) : shownPrefs.view === "stacks" ? (
               <div className={`gap-x-4 ${SIZE_STACK[size]}`}>
                 {drawn.map((s) => (
                   <div key={s.key} className="mb-6 break-inside-avoid">
                     <Heading section={s} show={shownPrefs.group !== "none"} />
-                    <Stack items={s.items} onOpen={setOpen} />
+                    <Stack items={s.items} bind={bind} selected={selected} />
                   </div>
                 ))}
               </div>
@@ -268,14 +366,14 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
                     <ul className={`grid gap-2.5 ${SIZE_COLUMNS[size]}`}>
                       {s.items.map((it) => (
                         <li key={it.key}>
-                          <Tile item={it} onOpen={() => setOpen(it.card)} />
+                          <Tile item={it} bind={bind(it)} selected={selected.has(it.key)} />
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <ul className="panel divide-y divide-foreground/10">
                       {s.items.map((it) => (
-                        <TextRow key={it.key} item={it} onOpen={() => setOpen(it.card)} onQuantity={(q) => save([{ target: it.rows[0], quantity: q }])} />
+                        <TextRow key={it.key} item={it} bind={bind(it)} selected={selected.has(it.key)} onQuantity={(q) => save([{ target: it.rows[0], quantity: q }])} />
                       ))}
                     </ul>
                   )}
@@ -310,15 +408,89 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
           }
         />
       )}
+      {dragging > 0 && locations.list.length > 0 && <DropTray count={dragging} locations={locations.list} onDrop={dropOn} />}
+      {selecting && !dragging && (
+        <SelectBar
+          count={selectedItems.length}
+          copies={selectedItems.reduce((n, it) => n + it.quantity, 0)}
+          shown={ordered.length}
+          here={selectedItems.length ? placeOf(selectedItems) : undefined}
+          locations={locations.list}
+          onAll={() => setSelected(new Set(ordered.map((it) => it.key)))}
+          onNone={() => setSelected(new Set())}
+          onMove={(to) => void moveKeys([...selected], to)}
+          onNew={() => {
+            setMoveAfterNew([...selected]);
+            setNewLocation(true);
+          }}
+          onDone={endSelect}
+        />
+      )}
+      {asking && (
+        <HowMany
+          toName={locationName(locations.list, asking.to)}
+          lines={itemsOf(asking.keys)
+            .map((it) => ({ key: it.key, name: `${it.card.name}${prefs.perCard ? "" : ` · ${it.label}`}`, image: it.image, max: movableCopies(it.rows, asking.to) }))
+            .filter((l) => l.max > 0)}
+          onCancel={() => setAsking(null)}
+          onConfirm={(counts) => {
+            const { keys, to } = asking;
+            setAsking(null);
+            void commitMove(keys, to, counts);
+          }}
+        />
+      )}
+      {menu && (
+        <MoveMenu
+          x={menu.x}
+          y={menu.y}
+          title={menu.keys.length === 1 ? (byKey.get(menu.keys[0])?.card.name ?? "Card") : `${menu.keys.length} selected cards`}
+          count={menu.keys.length}
+          here={placeOf(itemsOf(menu.keys))}
+          locations={locations.list}
+          onMove={(to) => void moveKeys(menu.keys, to)}
+          onNew={() => {
+            setMoveAfterNew(menu.keys);
+            setMenu(null);
+            setNewLocation(true);
+          }}
+          onOpen={
+            menu.keys.length === 1
+              ? () => {
+                  const it = byKey.get(menu.keys[0]);
+                  setMenu(null);
+                  if (it) setOpen(it.card);
+                }
+              : undefined
+          }
+          onSelect={
+            selecting
+              ? undefined
+              : () => {
+                  setSelecting(true);
+                  setSelected(new Set(menu.keys));
+                  setMenu(null);
+                }
+          }
+          onClose={closeMenu}
+        />
+      )}
       {newLocation && (
         <NewLocation
           locations={locations.list}
-          onClose={() => setNewLocation(false)}
+          onClose={() => {
+            setNewLocation(false);
+            setMoveAfterNew(null);
+          }}
           onCreate={async (name, kind) => {
             const made = await locations.create(name, kind);
             if (typeof made === "string") return made;
             setNewLocation(false);
-            setWhere(made.id);
+            if (moveAfterNew) {
+              // Made from a Move to menu: put the cards in, stay where you are.
+              await moveKeys(moveAfterNew, made.id);
+              setMoveAfterNew(null);
+            } else setWhere(made.id);
             return null;
           }}
         />
@@ -356,7 +528,11 @@ function Toolbar({
   setFilter,
   query,
   setQuery,
+  selecting,
+  onSelect,
 }: {
+  selecting: boolean;
+  onSelect: () => void;
   prefs: CollectionPrefs;
   setPrefs: (p: Partial<CollectionPrefs>) => void;
   layout: LocationLayout;
@@ -432,6 +608,15 @@ function Toolbar({
       >
         {prefs.perCard ? "One per card" : "Each printing"}
       </button>
+      <button
+        type="button"
+        aria-pressed={selecting}
+        onClick={onSelect}
+        title="Pick several cards, then move them to a binder or box. Ctrl or Cmd-click a card does the same."
+        className={`min-h-11 rounded-md border px-3 text-sm ${selecting ? "border-sky-400 bg-sky-400/15 text-sky-700 dark:text-sky-300" : "border-foreground/20 hover:bg-foreground/10"}`}
+      >
+        {selecting ? "✓ Selecting" : "☑ Select"}
+      </button>
     </div>
   );
 }
@@ -447,9 +632,17 @@ function Heading({ section, show }: { section: CollectionSection; show: boolean 
 }
 
 /** Quantity and printing as labels on the card; the whole card is the tap target. */
-function Badges({ item }: { item: CollectionItem }) {
+function Badges({ item, selected }: { item: CollectionItem; selected?: boolean }) {
   return (
     <>
+      {selected && (
+        <>
+          <span className="pointer-events-none absolute inset-0 rounded-[4.75%/3.5%] ring-4 ring-inset ring-sky-400" />
+          <span aria-hidden className="pointer-events-none absolute bottom-[8%] right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-sky-500 text-sm font-bold text-white shadow">
+            ✓
+          </span>
+        </>
+      )}
       {item.quantity > 1 && <span className="pointer-events-none absolute right-1.5 top-[7%] rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold text-white">×{item.quantity}</span>}
       {!item.rows.some((r) => r.printing_id) && (
         <span title="Printing unknown" className="pointer-events-none absolute left-1.5 top-[7%] rounded bg-orange-600 px-1.5 py-0.5 text-xs font-semibold text-white">
@@ -460,12 +653,12 @@ function Badges({ item }: { item: CollectionItem }) {
   );
 }
 
-function Tile({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) {
+function Tile({ item, bind, selected }: { item: CollectionItem; bind: CardBind; selected: boolean }) {
   return (
-    <button type="button" onClick={onOpen} title={`${item.card.name} · ${item.label}`} className="block w-full rounded-lg text-left hover:brightness-110">
+    <button type="button" {...bind} title={`${item.card.name} · ${item.label}`} className="block w-full rounded-lg text-left hover:brightness-110">
       <span className={`relative block ${item.foil ? "foil-sheen" : ""}`}>
         <img src={item.image ?? undefined} alt={item.card.name} loading="lazy" draggable={false} width={244} height={340} className="block w-full rounded-[4.75%/3.5%]" />
-        <Badges item={item} />
+        <Badges item={item} selected={selected} />
       </span>
       <span className="mt-1 flex items-baseline justify-between gap-1 text-xs">
         <span className="truncate opacity-80">{item.label}</span>
@@ -476,23 +669,23 @@ function Tile({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) {
 }
 
 /** One card in a binder pocket: the whole pocket opens it. */
-function Pocket({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) {
+function Pocket({ item, bind, selected }: { item: CollectionItem; bind: CardBind; selected: boolean }) {
   return (
-    <button type="button" onClick={onOpen} title={`${item.card.name} · ${item.label}`} className={`relative block h-full w-full rounded-[5%/3.6%] hover:brightness-110 ${item.foil ? "foil-sheen" : ""}`}>
+    <button type="button" {...bind} title={`${item.card.name} · ${item.label}`} className={`relative block h-full w-full rounded-[5%/3.6%] hover:brightness-110 ${item.foil ? "foil-sheen" : ""}`}>
       <img src={item.image ?? undefined} alt={item.card.name} loading="lazy" draggable={false} width={244} height={340} className="block h-full w-full rounded-[4.75%/3.5%] object-cover" />
-      <Badges item={item} />
+      <Badges item={item} selected={selected} />
     </button>
   );
 }
 
-function Stack({ items, onOpen }: { items: CollectionItem[]; onOpen: (c: CardSummary) => void }) {
+function Stack({ items, bind, selected }: { items: CollectionItem[]; bind: (it: CollectionItem) => CardBind; selected: Set<string> }) {
   return (
     <ul className="flex flex-col pb-2">
       {items.map((it, i) => (
         <li key={it.key} style={{ marginTop: i === 0 ? 0 : "-124%" }} className="relative">
-          <button type="button" onClick={() => onOpen(it.card)} title={`${it.card.name} · ${it.label}`} className={`relative block w-full rounded-[5%/3.6%] hover:brightness-125 ${it.foil ? "foil-sheen" : ""}`}>
+          <button type="button" {...bind(it)} title={`${it.card.name} · ${it.label}`} className={`relative block w-full rounded-[5%/3.6%] hover:brightness-125 ${it.foil ? "foil-sheen" : ""}`}>
             <img src={it.image ?? undefined} alt={it.card.name} loading="lazy" draggable={false} width={244} height={340} className="block w-full rounded-[4.75%/3.5%]" />
-            <Badges item={it} />
+            <Badges item={it} selected={selected.has(it.key)} />
           </button>
         </li>
       ))}
@@ -500,11 +693,16 @@ function Stack({ items, onOpen }: { items: CollectionItem[]; onOpen: (c: CardSum
   );
 }
 
-function TextRow({ item, onOpen, onQuantity }: { item: CollectionItem; onOpen: () => void; onQuantity: (q: number) => void }) {
+function TextRow({ item, bind, selected, onQuantity }: { item: CollectionItem; bind: CardBind; selected: boolean; onQuantity: (q: number) => void }) {
   const single = item.rows.length === 1;
   return (
-    <li className="flex min-h-12 items-center gap-2 px-3 py-1 text-sm">
-      <button type="button" onClick={onOpen} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left hover:text-gold">
+    <li className={`flex min-h-12 items-center gap-2 px-3 py-1 text-sm ${selected ? "bg-sky-400/15 shadow-[inset_4px_0_0_#38bdf8]" : ""}`}>
+      <button type="button" {...bind} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left hover:text-gold">
+        {selected && (
+          <span aria-hidden className="text-sky-500">
+            ✓
+          </span>
+        )}
         <span className="min-w-0 truncate font-medium">{item.card.name}</span>
         <span className={`shrink-0 text-xs ${item.rows.some((r) => r.printing_id) ? "opacity-70" : "text-orange-700 dark:text-orange-300"}`}>{item.label}</span>
       </button>
