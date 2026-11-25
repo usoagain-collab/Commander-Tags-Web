@@ -29,6 +29,9 @@ import { printingIdFromImage } from "@/lib/deck/printing";
 import { useCollection, type OwnedTarget } from "@/lib/deck/use-collection";
 import { useLocalized } from "@/lib/deck/use-localized";
 import { createClient } from "@/lib/supabase/client";
+import { AddCardBox } from "@/components/add-card-box";
+import { CardDropTarget } from "@/components/card-drop-target";
+import { finishFor, infoOf } from "@/lib/deck/collection-targets";
 import { CollectionSheet } from "./collection-sheet";
 import { resolveImport } from "./import-collection";
 
@@ -50,6 +53,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const [limit, setLimit] = useState(PAGE);
   const [open, setOpen] = useState<CardSummary | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Card details for every card you own (names, types, default images), fetched once per new card.
   const ids = useMemo(() => [...new Set(collection.rows.map((r) => r.oracle_id))], [collection.rows]);
@@ -83,6 +87,15 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const distinct = new Set(known.map((r) => r.oracle_id)).size;
   const shownCount = sections.reduce((n, s) => n + s.items.length, 0);
 
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([exportCollectionCsv(known, (id) => cards[id]?.name)], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "deck-genome-collection.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Draw at most `limit` items, section by section.
   let left = limit;
   const drawn = sections
@@ -113,16 +126,45 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
             </button>
           )}
         </div>
-        <AddCard
-          onPick={(card) => {
-            setCards((c) => ({ ...c, [card.oracle_id]: card }));
-            setOpen(card);
-          }}
-        />
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <AddCardBox
+            label="Add a card to your collection"
+            onPick={(card) => {
+              setCards((c) => ({ ...c, [card.oracle_id]: card }));
+              setOpen(card);
+            }}
+          />
+          <button type="button" aria-expanded={importOpen} onClick={() => setImportOpen((o) => !o)} className={`btn min-h-11 px-4 ${importOpen ? "border-gold" : ""}`}>
+            ⤓ Import
+          </button>
+          {known.length > 0 && (
+            <button type="button" onClick={exportCsv} className="btn min-h-11 px-4">
+              ⤒ Export CSV
+            </button>
+          )}
+        </div>
       </div>
+      <p className="mt-2 hidden text-xs opacity-60 sm:block">Tip: drag a card image from a Scryfall tab onto this page to add that printing.</p>
+
+      <CardDropTarget
+        label="Add to your collection"
+        hint="Drop it anywhere: one copy of that printing"
+        onMessage={setMessage}
+        onCard={async (card, printing) => {
+          setCards((c) => ({ ...c, [card.oracle_id]: card }));
+          const target: OwnedTarget = printing
+            ? { oracle_id: card.oracle_id, printing_id: printing.id, finish: finishFor(printing, printing.foil), printing_info: infoOf(printing) }
+            : { oracle_id: card.oracle_id, printing_id: null, finish: "nonfoil", printing_info: null };
+          const have = collection.rowOf(target)?.quantity ?? 0;
+          const failed = await collection.setMany([{ target, quantity: have + 1 }]);
+          const where = printing ? ` (${printing.set.toUpperCase()} #${printing.number})` : " (printing unknown)";
+          setMessage(failed ?? `Added ${card.name}${where}. You have ${have + 1} of that one.`);
+        }}
+      />
 
       <ImportPanel
-        hasCards={known.length > 0}
+        open={importOpen || (collection.loaded && known.length === 0)}
+        onClose={known.length > 0 ? () => setImportOpen(false) : undefined}
         onImport={async (text, mode) => {
           const { cards: parsed, skipped } = parseCollection(text);
           if (parsed.length === 0) return "Nothing to import: paste a collection export or a list like “4 Lightning Bolt”.";
@@ -146,14 +188,6 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
           } catch (e) {
             return (e as Error).message;
           }
-        }}
-        onExport={() => {
-          const url = URL.createObjectURL(new Blob([exportCollectionCsv(known, (id) => cards[id]?.name)], { type: "text/csv" }));
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "deck-genome-collection.csv";
-          a.click();
-          URL.revokeObjectURL(url);
         }}
       />
       {message && (
@@ -376,78 +410,22 @@ function TextRow({ item, onOpen, onQuantity }: { item: CollectionItem; onOpen: (
   );
 }
 
-/** Find a card by name and open its sheet to pick the printing you own. */
-function AddCard({ onPick }: { onPick: (card: CardSummary) => void }) {
-  const supabase = useMemo(() => createClient(), []);
-  const [text, setText] = useState("");
-  const [results, setResults] = useState<CardSummary[]>([]);
-
-  useEffect(() => {
-    const q = text.trim();
-    if (q.length < 2) return setResults([]);
-    let live = true;
-    const timer = setTimeout(async () => {
-      const { data } = await supabase.rpc("search_cards", { q, lim: 8, p_any_legality: true });
-      if (live) setResults((data ?? []) as CardSummary[]);
-    }, 150);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [text, supabase]);
-
-  return (
-    <div className="relative w-full sm:w-80">
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === "Escape" && setText("")}
-        placeholder="＋ Add a card…"
-        aria-label="Add a card to your collection"
-        className="min-h-11 w-full rounded-md border border-foreground/20 bg-transparent px-3"
-      />
-      {results.length > 0 && (
-        <ul className="panel absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-y-auto py-1 shadow-lg">
-          {results.map((c) => (
-            <li key={c.oracle_id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setText("");
-                  setResults([]);
-                  onPick(c);
-                }}
-                className="flex min-h-11 w-full items-center px-3 text-left text-sm hover:bg-foreground/10"
-              >
-                {c.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function ImportPanel({
-  hasCards,
-  onImport,
-  onExport,
-}: {
-  hasCards: boolean;
-  onImport: (text: string, mode: "add" | "replace") => Promise<string | null>;
-  onExport: () => void;
-}) {
+function ImportPanel({ open, onClose, onImport }: { open: boolean; onClose?: () => void; onImport: (text: string, mode: "add" | "replace") => Promise<string | null> }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"add" | "replace">("add");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  if (!open) return result ? <p className="mt-2 text-sm opacity-85">{result}</p> : null;
   return (
-    <details className="panel mt-5 p-4" open={!hasCards}>
-      <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-medium">
-        <span className="display text-xl">Import / export</span>
-        {result && <span className="text-sm font-normal opacity-80">{result}</span>}
-      </summary>
+    <section aria-label="Import a collection" className="panel mt-5 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="display text-xl">Import cards</h2>
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label="Close import" className="btn min-h-10 min-w-10">
+            ✕
+          </button>
+        )}
+      </div>
       <p className="mt-1 text-sm opacity-80">
         Paste or open a collection export from Moxfield, Archidekt or ManaBox (CSV), or a list like “4 Lightning Bolt” or “1 Sol Ring (CMR) 472 *F*”. Set codes, collector numbers and Scryfall IDs keep each printing.
       </p>
@@ -471,19 +449,17 @@ function ImportPanel({
             const r = await onImport(text, mode);
             setBusy(false);
             if (r) setResult(r);
-            if (r?.startsWith("Imported")) setText("");
+            if (r?.startsWith("Imported")) {
+              setText("");
+              onClose?.();
+            }
           }}
           className="btn btn-gold min-h-10 px-4 disabled:opacity-50"
         >
           {busy ? "Importing…" : "Import"}
         </button>
-        {hasCards && (
-          <button type="button" onClick={onExport} className="btn min-h-10 sm:ml-auto">
-            Export CSV
-          </button>
-        )}
       </div>
-    </details>
+      {result && <p className="mt-2 text-sm opacity-85">{result}</p>}
+    </section>
   );
 }
-

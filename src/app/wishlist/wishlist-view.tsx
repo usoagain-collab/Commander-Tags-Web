@@ -5,11 +5,26 @@
 import { useMemo, useState } from "react";
 import type { CardSummary } from "@/lib/deck/model";
 import { createClient } from "@/lib/supabase/client";
+import { AddCardBox } from "@/components/add-card-box";
+import { CardDropTarget } from "@/components/card-drop-target";
+import { priceCard, type PriceSource } from "@/lib/deck/store-prices";
 
 export type WishRow = { oracle_id: string; quantity: number; foil: boolean; note: string | null; added_at: string; card: CardSummary };
 type Sort = "added" | "price" | "name";
 
-export function WishlistView({ userId, initial, loadError, priceLabel = null }: { userId: string; initial: WishRow[]; loadError: string | null; priceLabel?: string | null }) {
+export function WishlistView({
+  userId,
+  initial,
+  loadError,
+  priceLabel = null,
+  priceSource = "tcgplayer",
+}: {
+  userId: string;
+  initial: WishRow[];
+  loadError: string | null;
+  priceLabel?: string | null;
+  priceSource?: PriceSource;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState(initial);
   const [sort, setSort] = useState<Sort>("added");
@@ -39,6 +54,24 @@ export function WishlistView({ userId, initial, loadError, priceLabel = null }: 
       setMessage(`Couldn't remove that: ${error.message}`);
     }
   }
+  /** One more copy when it's already listed, else a new row with one copy. */
+  async function add(card: CardSummary) {
+    const there = rows.find((r) => r.oracle_id === card.oracle_id);
+    if (there) {
+      if (there.quantity >= 99) return setMessage(`${card.name} is already on your list 99 times.`);
+      await change(card.oracle_id, { quantity: there.quantity + 1 });
+      return setMessage(`${card.name}: now ${there.quantity + 1} on your list.`);
+    }
+    const row: WishRow = { oracle_id: card.oracle_id, quantity: 1, foil: false, note: null, added_at: new Date().toISOString(), card: priceCard(card, priceSource) };
+    setRows((rs) => [row, ...rs]);
+    const { error } = await supabase.from("wishlist").upsert({ owner_id: userId, oracle_id: card.oracle_id, quantity: 1 }, { onConflict: "owner_id,oracle_id" });
+    if (error) {
+      setRows((rs) => rs.filter((r) => r.oracle_id !== card.oracle_id));
+      return setMessage(`Couldn't add that: ${error.message}`);
+    }
+    setMessage(`Added ${card.name} to your wish list.`);
+  }
+
   async function copyList() {
     // "1 Name *F*" lines read in Moxfield, Archidekt and most store mass-entry boxes.
     const text = sorted.map((r) => `${r.quantity} ${r.card.name}${r.foil ? " *F*" : ""}`).join("\n");
@@ -59,6 +92,10 @@ export function WishlistView({ userId, initial, loadError, priceLabel = null }: 
             {rows.length === 0 ? "Cards you want to buy, separate from any deck." : `${copies} card${copies === 1 ? "" : "s"} · about $${total.toFixed(2)}${priceLabel ? ` at ${priceLabel}` : ""}`}
           </p>
         </div>
+        <AddCardBox label="Add a card to your wish list" placeholder="＋ Add a card to your list…" onPick={(c) => void add(c)} />
+      </div>
+      <CardDropTarget label="Add to your wish list" onMessage={setMessage} onCard={(card) => add(card)} />
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-4">
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="opacity-80">Sort</span>
@@ -80,7 +117,7 @@ export function WishlistView({ userId, initial, loadError, priceLabel = null }: 
       {rows.length === 0 ? (
         <div className="panel mt-4 p-6 text-center">
           <p className="text-base">Nothing here yet.</p>
-          <p className="mt-1 text-sm opacity-80">Open any card in a deck, or use Search, and choose ♡ Wish list.</p>
+          <p className="mt-1 text-sm opacity-80">Add a card above, drag one in from a Scryfall tab, or open any card in a deck and choose ♡ Wish list.</p>
         </div>
       ) : (
         <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">

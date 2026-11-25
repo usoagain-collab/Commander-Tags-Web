@@ -568,6 +568,8 @@ export function DeckEditor({
   const wishlist = useWishlist(userId);
   const cardNotes = useCardNotes(deck.id, !ownerOnly && !!userId);
   const collection = useCollection(userId);
+  // Suggest from my collection: every card you own, by oracle id (undefined while there's nothing to track).
+  const ownedIds = useMemo(() => (collection.tracking ? [...collection.owned.keys()] : undefined), [collection.tracking, collection.owned]);
   // Mixed copies (v2): saved straight to the row (deck_cards.printing_split), not through Ctrl+Z.
   const [splits, setSplits] = useState<Splits>(initialSplits ?? {});
   const saveSplit = async (board: Board, oracleId: string, parts: SplitPart[]) => {
@@ -1816,6 +1818,7 @@ export function DeckEditor({
                 onDismiss={(card) => toggleDismissed(card)}
                 onRestore={dismissed.restore}
                 bracket={{ target: bracket.target, deck: bracketDeck, deckIds: deckCardIds }}
+                owned={ownedIds}
                 onAdd={addWithNotice}
                 onPreview={setPreview}
                 onOpen={(list, index) => setFound({ list, index, from: "suggest" })}
