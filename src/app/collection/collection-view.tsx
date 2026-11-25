@@ -22,7 +22,7 @@ import {
   type CollectionSection,
 } from "@/lib/deck/collection-view";
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
-import { VIEW_LABELS, type ViewMode } from "@/lib/deck/grouping";
+import { VIEW_LABELS } from "@/lib/deck/grouping";
 import type { CardSummary } from "@/lib/deck/model";
 import { readCardLang } from "@/lib/deck/card-language";
 import { printingIdFromImage } from "@/lib/deck/printing";
@@ -32,7 +32,10 @@ import { createClient } from "@/lib/supabase/client";
 import { AddCardBox } from "@/components/add-card-box";
 import { CardDropTarget } from "@/components/card-drop-target";
 import { finishFor, infoOf } from "@/lib/deck/collection-targets";
+import { LAYOUT_LABELS, copiesByLocation, locationForAdds, rowsIn, type LocationLayout, type LocationView } from "@/lib/deck/locations";
+import { useLocations } from "@/lib/deck/use-locations";
 import { CollectionSheet } from "./collection-sheet";
+import { BinderPages, CustomizeLocation, LocationBar, LocationHeader, NewLocation, SIZE_COLUMNS, SIZE_STACK } from "./locations-ui";
 import { resolveImport } from "./import-collection";
 
 const PAGE = 200;
@@ -45,7 +48,25 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const prefs = readCollectionPrefs(tagView.collection);
   // Prices from your chosen store (Settings → Prices).
   const priceSource = readPriceSource(tagView);
-  const setPrefs = (patch: Partial<CollectionPrefs>) => updateTagView({ collection: { ...prefs, ...patch } });
+  const savePrefs = (patch: Partial<CollectionPrefs>) => updateTagView({ collection: { ...prefs, ...patch } });
+  // Binders and boxes (migration 0067): one open at a time, each with its own look and layout.
+  const locations = useLocations(userId);
+  const [where, setWhere] = useState<LocationView>("all");
+  const [newLocation, setNewLocation] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
+  const loc = locations.list.find((l) => l.id === where) ?? null;
+  const view: LocationView = loc || where === "unsorted" ? where : "all";
+  const addTo = locationForAdds(view);
+  const layout: LocationLayout = loc ? loc.style.layout : prefs.view;
+  // Inside a binder, view / group / sort belong to that binder; One per card stays one setting for the whole page.
+  const shownPrefs: CollectionPrefs = loc ? { ...prefs, view: layout === "pages" ? "grid" : layout, group: layout === "pages" ? "none" : loc.style.group, sort: loc.style.sort } : prefs;
+  const setPrefs = (patch: Partial<CollectionPrefs>) => {
+    if (!loc) return savePrefs(patch);
+    const { perCard, ...rest } = patch;
+    if (perCard !== undefined) savePrefs({ perCard });
+    if (Object.keys(rest).length) void locations.update(loc.id, { style: { ...(rest.view ? { layout: rest.view } : {}), ...(rest.group ? { group: rest.group } : {}), ...(rest.sort ? { sort: rest.sort } : {}) } }).then((m) => m && setMessage(m));
+  };
+  const setLayout = (l: LocationLayout) => (loc ? void locations.update(loc.id, { style: { layout: l } }).then((m) => m && setMessage(m)) : l !== "pages" && savePrefs({ view: l }));
 
   const [cards, setCards] = useState<Record<string, CardSummary>>({});
   const [filter, setFilter] = useState<CollectionFilter>("all");
@@ -74,17 +95,22 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
     if (failed) setMessage(failed);
   };
 
-  const listed = collectionItems(collection.rows, priceCards(cards, priceSource), prefs.perCard, filter, priceSource).filter((it) => matchesQuery(it, query));
+  const inView = rowsIn(collection.rows, view);
+  const listed = collectionItems(inView, priceCards(cards, priceSource), prefs.perCard, filter, priceSource).filter((it) => matchesQuery(it, query));
   // Card language (v2): pictures in your language where that printing exists in it.
   const cardLang = readCardLang(tagView);
   const localize = useLocalized(cardLang, listed.slice(0, limit).map((it) => printingIdFromImage(it.image)));
   const items = cardLang === "en" ? listed : listed.map((it) => ({ ...it, image: localize({ ...it.card, image_normal: it.image }).image_normal }));
-  const sections = collectionSections(items, prefs.group, prefs.sort);
+  const sections = collectionSections(items, shownPrefs.group, shownPrefs.sort);
   const known = collection.rows.filter((r) => cards[r.oracle_id]);
   const copies = known.reduce((s, r) => s + r.quantity, 0);
   const value = known.reduce((s, r) => s + r.quantity * rowUnitPrice(r, priceCard(cards[r.oracle_id], priceSource).price_usd, priceSource), 0);
   const unknownCopies = known.filter((r) => !r.printing_id).reduce((s, r) => s + r.quantity, 0);
   const distinct = new Set(known.map((r) => r.oracle_id)).size;
+  const counts = copiesByLocation(known);
+  const knownHere = inView.filter((r) => cards[r.oracle_id]);
+  const valueHere = knownHere.reduce((s, r) => s + r.quantity * rowUnitPrice(r, priceCard(cards[r.oracle_id], priceSource).price_usd, priceSource), 0);
+  const size = loc?.style.size ?? "medium";
   const shownCount = sections.reduce((n, s) => n + s.items.length, 0);
 
   const exportCsv = () => {
@@ -147,14 +173,14 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
       <p className="mt-2 hidden text-xs opacity-60 sm:block">Tip: drag a card image from a Scryfall tab onto this page to add that printing.</p>
 
       <CardDropTarget
-        label="Add to your collection"
+        label={loc ? `Add to ${loc.name}` : "Add to your collection"}
         hint="Drop it anywhere: one copy of that printing"
         onMessage={setMessage}
         onCard={async (card, printing) => {
           setCards((c) => ({ ...c, [card.oracle_id]: card }));
           const target: OwnedTarget = printing
-            ? { oracle_id: card.oracle_id, printing_id: printing.id, finish: finishFor(printing, printing.foil), printing_info: infoOf(printing) }
-            : { oracle_id: card.oracle_id, printing_id: null, finish: "nonfoil", printing_info: null };
+            ? { oracle_id: card.oracle_id, printing_id: printing.id, finish: finishFor(printing, printing.foil), printing_info: infoOf(printing), location_id: addTo }
+            : { oracle_id: card.oracle_id, printing_id: null, finish: "nonfoil", printing_info: null, location_id: addTo };
           const have = collection.rowOf(target)?.quantity ?? 0;
           const failed = await collection.setMany([{ target, quantity: have + 1 }]);
           const where = printing ? ` (${printing.set.toUpperCase()} #${printing.number})` : " (printing unknown)";
@@ -176,7 +202,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
               if (failed) return failed;
             }
             setMessage("Saving…");
-            const changes = r.rows.map((row) => ({ target: row, quantity: row.quantity + (mode === "add" ? (collection.rowOf(row)?.quantity ?? 0) : 0) }));
+            const changes = r.rows.map((row) => ({ target: { ...row, location_id: addTo }, quantity: row.quantity + (mode === "add" ? (collection.rowOf({ ...row, location_id: addTo })?.quantity ?? 0) : 0) }));
             const failed = await collection.setMany(changes);
             if (failed) return failed;
             setMessage(null);
@@ -196,18 +222,40 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
         </p>
       )}
 
+      {known.length > 0 && locations.ready && (
+        <LocationBar locations={locations.list} counts={counts} total={copies} view={view} onView={setWhere} onNew={() => setNewLocation(true)} />
+      )}
+      {loc && <LocationHeader loc={loc} cards={cards} copies={knownHere.reduce((n, r) => n + r.quantity, 0)} value={money(valueHere)} onCustomize={() => setCustomizing(true)} />}
+
       {known.length > 0 && (
         <>
-          <Toolbar prefs={prefs} setPrefs={setPrefs} filter={filter} setFilter={setFilter} query={query} setQuery={setQuery} />
+          <Toolbar
+            prefs={shownPrefs}
+            setPrefs={setPrefs}
+            layout={layout}
+            layouts={loc ? LAYOUT_LABELS : VIEW_LABELS}
+            setLayout={setLayout}
+            filter={filter}
+            setFilter={setFilter}
+            query={query}
+            setQuery={setQuery}
+          />
           <p className="mt-2 text-sm opacity-70">
             {shownCount === 0 ? "Nothing matches." : `${shownCount} ${prefs.perCard ? "cards" : "printings"}${shownCount > limit ? `, showing ${limit}` : ""}`}
           </p>
           <div className="mt-3 space-y-6">
-            {prefs.view === "stacks" ? (
-              <div className="gap-x-4 [column-width:150px] sm:[column-width:190px]">
+            {loc && layout === "pages" ? (
+              <BinderPages
+                key={`${loc.id}|${loc.style.pockets}|${shownPrefs.sort}|${query}|${filter}`}
+                items={drawn.flatMap((s) => s.items)}
+                style={loc.style}
+                renderPocket={(it) => <Pocket item={it} onOpen={() => setOpen(it.card)} />}
+              />
+            ) : shownPrefs.view === "stacks" ? (
+              <div className={`gap-x-4 ${SIZE_STACK[size]}`}>
                 {drawn.map((s) => (
                   <div key={s.key} className="mb-6 break-inside-avoid">
-                    <Heading section={s} show={prefs.group !== "none"} />
+                    <Heading section={s} show={shownPrefs.group !== "none"} />
                     <Stack items={s.items} onOpen={setOpen} />
                   </div>
                 ))}
@@ -215,9 +263,9 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
             ) : (
               drawn.map((s) => (
                 <section key={s.key}>
-                  <Heading section={s} show={prefs.group !== "none"} />
-                  {prefs.view === "grid" ? (
-                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 xl:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
+                  <Heading section={s} show={shownPrefs.group !== "none"} />
+                  {shownPrefs.view === "grid" ? (
+                    <ul className={`grid gap-2.5 ${SIZE_COLUMNS[size]}`}>
                       {s.items.map((it) => (
                         <li key={it.key}>
                           <Tile item={it} onOpen={() => setOpen(it.card)} />
@@ -243,7 +291,57 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
         </>
       )}
 
-      {open && <CollectionSheet priceSource={priceSource} card={open} rows={collection.owned.get(open.oracle_id) ?? []} onSet={save} onClose={() => setOpen(null)} />}
+      {open && (
+        <CollectionSheet
+          priceSource={priceSource}
+          card={open}
+          rows={collection.owned.get(open.oracle_id) ?? []}
+          onSet={save}
+          onClose={() => setOpen(null)}
+          locations={locations.ready ? locations.list : []}
+          addTo={addTo}
+          onCover={
+            loc
+              ? (row) =>
+                  void locations
+                    .update(loc.id, { style: { cover: { oracle_id: row.oracle_id, printing_id: row.printing_id, image_v: row.printing_info?.image_v ?? null, artist: row.printing_info?.artist ?? null } } })
+                    .then((m) => setMessage(m ?? `${open.name} is now the cover of ${loc.name}.`))
+              : undefined
+          }
+        />
+      )}
+      {newLocation && (
+        <NewLocation
+          locations={locations.list}
+          onClose={() => setNewLocation(false)}
+          onCreate={async (name, kind) => {
+            const made = await locations.create(name, kind);
+            if (typeof made === "string") return made;
+            setNewLocation(false);
+            setWhere(made.id);
+            return null;
+          }}
+        />
+      )}
+      {loc && customizing && (
+        <CustomizeLocation
+          loc={loc}
+          locations={locations.list}
+          cards={cards}
+          copies={counts.get(loc.id) ?? 0}
+          onSave={(patch) => locations.update(loc.id, patch)}
+          onMove={(step) => void locations.reorder(loc.id, step).then((m) => m && setMessage(m))}
+          onDelete={async () => {
+            const r = await locations.remove(loc.id);
+            if (typeof r === "string") return setMessage(r);
+            setCustomizing(false);
+            setWhere("all");
+            collection.reload();
+            setMessage(`Deleted ${loc.name}.${r ? ` Its ${r} ${r === 1 ? "copy is" : "copies are"} in Unsorted now.` : ""}`);
+          }}
+          onClose={() => setCustomizing(false)}
+        />
+      )}
     </main>
   );
 }
@@ -251,6 +349,9 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
 function Toolbar({
   prefs,
   setPrefs,
+  layout,
+  layouts,
+  setLayout,
   filter,
   setFilter,
   query,
@@ -258,6 +359,10 @@ function Toolbar({
 }: {
   prefs: CollectionPrefs;
   setPrefs: (p: Partial<CollectionPrefs>) => void;
+  layout: LocationLayout;
+  /** The collection's three views, or inside a binder also Binder pages. */
+  layouts: Partial<Record<LocationLayout, string>>;
+  setLayout: (l: LocationLayout) => void;
   filter: CollectionFilter;
   setFilter: (f: CollectionFilter) => void;
   query: string;
@@ -274,28 +379,30 @@ function Toolbar({
         className="min-h-11 w-full rounded-md border border-foreground/20 bg-transparent px-3 sm:w-64"
       />
       <div role="group" aria-label="View" className="flex overflow-hidden rounded-md border border-foreground/20">
-        {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
+        {(Object.keys(layouts) as LocationLayout[]).map((v) => (
           <button
             key={v}
             type="button"
-            aria-pressed={prefs.view === v}
-            onClick={() => setPrefs({ view: v })}
-            className={`min-h-11 px-3 text-sm ${prefs.view === v ? "bg-gold/20 font-medium text-gold" : "hover:bg-foreground/10"}`}
+            aria-pressed={layout === v}
+            onClick={() => setLayout(v)}
+            className={`min-h-11 px-3 text-sm ${layout === v ? "bg-gold/20 font-medium text-gold" : "hover:bg-foreground/10"}`}
           >
-            {VIEW_LABELS[v]}
+            {layouts[v]}
           </button>
         ))}
       </div>
-      <label className="flex items-center gap-1 text-sm">
-        Group
-        <select value={prefs.group} onChange={(e) => setPrefs({ group: e.target.value as CollectionPrefs["group"] })} className={select}>
-          {Object.entries(COLLECTION_GROUP_LABELS).map(([k, l]) => (
-            <option key={k} value={k}>
-              {l}
-            </option>
-          ))}
-        </select>
-      </label>
+      {layout !== "pages" && (
+        <label className="flex items-center gap-1 text-sm">
+          Group
+          <select value={prefs.group} onChange={(e) => setPrefs({ group: e.target.value as CollectionPrefs["group"] })} className={select}>
+            {Object.entries(COLLECTION_GROUP_LABELS).map(([k, l]) => (
+              <option key={k} value={k}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="flex items-center gap-1 text-sm">
         Sort
         <select value={prefs.sort} onChange={(e) => setPrefs({ sort: e.target.value as CollectionPrefs["sort"] })} className={select}>
@@ -364,6 +471,16 @@ function Tile({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) {
         <span className="truncate opacity-80">{item.label}</span>
         <span className="shrink-0 tabular-nums opacity-80">{money(item.unitPrice)}</span>
       </span>
+    </button>
+  );
+}
+
+/** One card in a binder pocket: the whole pocket opens it. */
+function Pocket({ item, onOpen }: { item: CollectionItem; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} title={`${item.card.name} · ${item.label}`} className={`relative block h-full w-full rounded-[5%/3.6%] hover:brightness-110 ${item.foil ? "foil-sheen" : ""}`}>
+      <img src={item.image ?? undefined} alt={item.card.name} loading="lazy" draggable={false} width={244} height={340} className="block h-full w-full rounded-[4.75%/3.5%] object-cover" />
+      <Badges item={item} />
     </button>
   );
 }

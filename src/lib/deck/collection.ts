@@ -17,13 +17,15 @@ export type OwnedRow = {
   quantity: number;
   printing_info: PrintingInfo | null;
   added_at?: string;
+  /** Binder or box (migration 0067); null or missing = Unsorted. */
+  location_id?: string | null;
 };
 /** Rows by oracle id. */
 export type Collection = Map<string, OwnedRow[]>;
 
 export const isFoilFinish = (f: Finish) => f !== "nonfoil";
-/** One row per card, printing and finish: the database's unique key. */
-export const rowKey = (r: Pick<OwnedRow, "oracle_id" | "printing_id" | "finish">) => `${r.oracle_id}|${r.printing_id ?? ""}|${r.finish}`;
+/** One row per card, printing, finish and location: the database's unique key. */
+export const rowKey = (r: Pick<OwnedRow, "oracle_id" | "printing_id" | "finish" | "location_id">) => `${r.oracle_id}|${r.printing_id ?? ""}|${r.finish}|${r.location_id ?? ""}`;
 
 export function groupRows(rows: OwnedRow[]): Collection {
   const out: Collection = new Map();
