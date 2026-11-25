@@ -12,6 +12,7 @@ import type { CardSummary } from "@/lib/deck/model";
 import { hasFoil, printingImage, type ChosenPrinting } from "@/lib/deck/printing";
 import type { OwnedTarget } from "@/lib/deck/use-collection";
 import { fetchPrintings } from "@/lib/scryfall/printings";
+import { planMove, type CollectionLocation } from "@/lib/deck/locations";
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 const FINISH_LABELS: Record<Finish, string> = { nonfoil: "Plain", foil: "Foil", etched: "Etched" };
@@ -23,13 +24,22 @@ type Props = {
   onClose: () => void;
   /** Where prices come from (Settings → Prices). */
   priceSource?: PriceSource;
+  /** Binders and boxes (migration 0067): each row says where it is and can move. Empty before the migration. */
+  locations?: CollectionLocation[];
+  /** Where new copies go: the binder open on the page, else Unsorted (null). */
+  addTo?: string | null;
+  /** Inside a binder: make this row's printing the binder's cover. */
+  onCover?: (row: OwnedRow) => void;
 };
 
-export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcgplayer" }: Props) {
+export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcgplayer", locations = [], addTo = null, onCover }: Props) {
   const cheapest = priceCard(card, priceSource).price_usd;
   const [picking, setPicking] = useState<null | { assign?: OwnedRow }>(rows.length === 0 ? {} : null);
   const [shown, setShown] = useState<string | null>(null);
-  const sorted = [...rows].sort((a, b) => Number(!a.printing_id) - Number(!b.printing_id) || b.quantity - a.quantity);
+  // Rows in the binder that's open come first, then the rest; within each, known printings and bigger piles first.
+  const here = (r: OwnedRow) => (r.location_id ?? null) === addTo;
+  const sorted = [...rows].sort((a, b) => Number(!here(a)) - Number(!here(b)) || Number(!a.printing_id) - Number(!b.printing_id) || b.quantity - a.quantity);
+  const placeOf = (r: OwnedRow) => locations.find((l) => l.id === r.location_id)?.name ?? "Unsorted";
   const top = sorted.find((r) => rowKey(r) === shown) ?? sorted[0];
   const image = top?.printing_id ? printingImage(top.printing_id) : card.image_normal;
   const copies = rows.reduce((n, r) => n + r.quantity, 0);
@@ -64,9 +74,16 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
                 />
             </div>
           </div>
-          <button type="button" onClick={onClose} className="btn min-h-11 px-4">
-            Done
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {onCover && top && (
+              <button type="button" onClick={() => onCover(top)} className="btn min-h-11 px-4">
+                Use as cover
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="btn min-h-11 px-4">
+              Done
+            </button>
+          </div>
         </div>
 
         <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,260px)_1fr]">
@@ -84,6 +101,7 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
                     onQuantity={(q) => setQty(r, q)}
                     onFinish={(f) => move(r, { ...r, finish: f })}
                     onWhich={() => setPicking({ assign: r })}
+                    place={locations.length ? { name: placeOf(r), options: locations, onMove: (to) => onSet(planMove(rows, r, to)) } : undefined}
                   />
                 ))}
               </ul>
@@ -102,10 +120,10 @@ export function CollectionSheet({ card, rows, onSet, onClose, priceSource = "tcg
             assign={picking.assign}
             onCancel={rows.length ? () => setPicking(null) : undefined}
             onPick={(p, foil) => {
-              const target: OwnedTarget = { oracle_id: card.oracle_id, printing_id: p.id, finish: finishFor(p, foil), printing_info: infoOf(p) };
+              const target: OwnedTarget = { oracle_id: card.oracle_id, printing_id: p.id, finish: finishFor(p, foil), printing_info: infoOf(p), location_id: addTo };
               if (picking.assign) {
                 const from = picking.assign;
-                move(from, { ...target, finish: finishFor(p, from.finish !== "nonfoil") });
+                move(from, { ...target, finish: finishFor(p, from.finish !== "nonfoil"), location_id: from.location_id ?? null });
                 setPicking(null);
               } else {
                 const there = rows.find((r) => rowKey(r) === rowKey(target))?.quantity ?? 0;
@@ -128,8 +146,11 @@ function OwnedLine({
   onWhich,
   cheapest,
   priceSource,
+  place,
 }: {
   row: OwnedRow;
+  /** Which binder or box the copies are in, and a way to move all of them. */
+  place?: { name: string; options: CollectionLocation[]; onMove: (to: string | null) => void };
   /** The card's cheapest price at the chosen store, and that store. */
   cheapest: number | null;
   priceSource: PriceSource;
@@ -156,6 +177,7 @@ function OwnedLine({
           <span className="block text-xs opacity-75">
             {p ? `${p.set.toUpperCase()} #${p.number} · ` : ""}
             {money(rowUnitPrice(row, cheapest, priceSource))} each
+            {place ? ` · ${place.name}` : ""}
           </span>
         </span>
       </button>
@@ -179,6 +201,23 @@ function OwnedLine({
         </select>
       )}
       {finishes.length === 1 && row.finish !== "nonfoil" && <span className="text-xs text-gold">✦ {FINISH_LABELS[row.finish]}</span>}
+      {place && (
+        <select
+          value=""
+          onChange={(e) => e.target.value && place.onMove(e.target.value === "-" ? null : e.target.value)}
+          aria-label={`Move these ${row.quantity} to another binder or box`}
+          className="min-h-10 max-w-[9rem] rounded-md border border-foreground/20 bg-background px-1 text-xs"
+        >
+          <option value="">Move to…</option>
+          {(row.location_id ? [{ id: "-", name: "Unsorted" }, ...place.options] : place.options)
+            .filter((o) => o.id !== row.location_id)
+            .map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+        </select>
+      )}
       <span className="flex items-center gap-1">
         <button type="button" aria-label={`One fewer, ${p?.set_name ?? "printing unknown"}`} onClick={() => onQuantity(row.quantity - 1)} className="min-h-10 min-w-10 rounded-md border border-foreground/20">
           −

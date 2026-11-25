@@ -27,11 +27,12 @@ export function FiltersBox(props: {
   const built = appendSyntax(filterSyntax(props.draft), props.own?.value ?? "");
   const pending = props.applied === undefined ? !!built : built !== props.applied;
   return (
-    <div className="mt-3 rounded-lg border border-foreground/15">
+    <div className={`mt-3 rounded-lg border ${props.applied ? "border-gold" : "border-foreground/25"}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm">
         <span>
-          <span className="font-medium">Filters</span>
-          <span className="ml-2 opacity-60">{props.applied ? "on" : props.hint}</span>
+          <span aria-hidden className="mr-1.5">⚲</span>
+          <span className="font-semibold">Filters</span>
+          <span className={`ml-2 ${props.applied ? "text-gold" : "opacity-60"}`}>{props.applied ? "on" : props.hint}</span>
         </span>
         <span aria-hidden>{open ? "▴" : "▾"}</span>
       </button>
