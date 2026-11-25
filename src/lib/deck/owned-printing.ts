@@ -2,7 +2,7 @@
 // collection. A default printing you chose yourself (preferred_printings) still wins, since you picked it on
 // purpose. Applies to anything added as a new row: search, quick add, drag and drop, imports, the land base.
 // Turned off with Settings › Printings you own (profiles.tag_view.ownedPrintings = false). No migration.
-import { isFoilFinish, type Collection } from "./collection";
+import { isFoilFinish, type Collection, type OwnedRow } from "./collection";
 import { entryKey, type Change, type PreferredPrintings, type PrintingChange, type Printings } from "./model";
 import { foilFor, type ChosenPrinting } from "./printing";
 
@@ -14,7 +14,15 @@ export const readOwnedPrintings = (prefs: Record<string, unknown>) => prefs.owne
  * then the one added first). Copies with an unknown printing don't count. Null when you own none.
  */
 export function ownedPrintingFor(c: Collection, oracleId: string): ChosenPrinting | null {
-  const rows = (c.get(oracleId) ?? []).filter((r) => r.printing_id && r.printing_info && r.quantity > 0);
+  // Copies of one printing and finish can sit in several binders (migration 0067): count them together.
+  const merged = new Map<string, OwnedRow>();
+  for (const r of c.get(oracleId) ?? []) {
+    if (!r.printing_id || !r.printing_info || r.quantity <= 0) continue;
+    const k = `${r.printing_id}|${r.finish}`;
+    const had = merged.get(k);
+    merged.set(k, had ? { ...had, quantity: had.quantity + r.quantity, added_at: (had.added_at ?? "") < (r.added_at ?? "") ? had.added_at : r.added_at } : r);
+  }
+  const rows = [...merged.values()];
   if (!rows.length) return null;
   const best = [...rows].sort(
     (a, b) =>

@@ -25,6 +25,7 @@ export default async function WishlistPage() {
       initial={rows.flatMap((r) => (byId.has(r.oracle_id) ? [{ ...r, card: byId.get(r.oracle_id)! }] : []))}
       loadError={error?.message ?? null}
       priceLabel={source === "tcgplayer" ? null : priceSourceLabel(source)}
+      priceSource={source}
     />
   );
 }

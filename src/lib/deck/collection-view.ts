@@ -63,11 +63,19 @@ export function collectionItems(rows: OwnedRow[], cards: Record<string, CardSumm
       value,
       image: rowImage(top, card),
       foil: list.every((r) => r.finish !== "nonfoil"),
-      label: list.length === 1 ? setLabel(top) + (top.finish === "nonfoil" ? "" : ` · ${top.finish}`) : `${printings} printing${printings === 1 ? "" : "s"}`,
+      label: printings === 1 && new Set(list.map((r) => r.finish)).size === 1 ? setLabel(top) + (top.finish === "nonfoil" ? "" : ` · ${top.finish}`) : `${printings} printing${printings === 1 ? "" : "s"}`,
       added: list.reduce((m, r) => ((r.added_at ?? "") > m ? (r.added_at ?? "") : m), ""),
     };
   };
-  if (!perCard) return kept.map((r) => make(cards[r.oracle_id], [r], `${r.oracle_id}|${r.printing_id ?? ""}|${r.finish}`));
+  if (!perCard) {
+    // One item per printing and finish; copies of it in several binders (migration 0067) show together.
+    const byPrinting = new Map<string, OwnedRow[]>();
+    for (const r of kept) {
+      const k = `${r.oracle_id}|${r.printing_id ?? ""}|${r.finish}`;
+      byPrinting.set(k, [...(byPrinting.get(k) ?? []), r]);
+    }
+    return [...byPrinting].map(([k, list]) => make(cards[list[0].oracle_id], list, k));
+  }
   const byCard = new Map<string, OwnedRow[]>();
   for (const r of kept) byCard.set(r.oracle_id, [...(byCard.get(r.oracle_id) ?? []), r]);
   return [...byCard].map(([id, list]) => make(cards[id], list, id));

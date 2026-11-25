@@ -3,7 +3,7 @@
 // Suggestions (Phase 4a). Asks suggestion_pool() (migration 0012) for candidates, scores them in the browser
 // against the deck's theme tags and under-target roles (src/lib/suggest/score.ts), and shows why each card fits.
 import { priceCard, type PriceSource } from "@/lib/deck/store-prices";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchSummaries } from "@/lib/deck/fetch-summaries";
 import { prettyTag } from "@/lib/tags/pretty";
@@ -77,6 +77,8 @@ type Props = {
    * `deck` is the 100-card deck as the bracket check sees it; `deckIds` are its card ids (for combo lookups).
    */
   bracket: { target: BracketNumber; deck: Omit<EvaluateInput, "combos">; deckIds: string[] };
+  /** Oracle ids of every card in your collection, once it has loaded and holds anything (for Only cards I own). */
+  owned?: string[];
 };
 
 export function SuggestPanel(props: Props) {
@@ -103,8 +105,15 @@ export function SuggestPanel(props: Props) {
   const [filter, setFilter] = useState("");
   const [filterInfo, setFilterInfo] = useState<{ total: number; used: number; warnings: string[] } | null>(null);
   const applyFilter = (form = filterDraft, own = ownDraft) => setFilter(appendSyntax(filterSyntax(form), own));
+  // Suggest from my collection (v2, Nov 25, 2026): every pool is narrowed to the cards you own. Kept for the visit.
+  const [onlyOwned, setOnlyOwned] = useState(false);
+  const ownedOn = onlyOwned && !!props.owned;
+  const ownedRef = useRef(props.owned);
+  useEffect(() => {
+    ownedRef.current = props.owned;
+  });
   const wordingPhrases = source.wording?.phrases ?? [];
-  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${wordingPhrases.join(";")}|${identity.join("")}|${filter}`;
+  const requestKey = `${source.label}|${source.lands ? "lands" : source.slugs.join(",")}|${source.staples?.join(",") ?? ""}|${source.landsShort ? "L" : ""}|${wordingPhrases.join(";")}|${identity.join("")}|${filter}|${ownedOn ? `own${props.owned!.length}` : ""}`;
 
   useEffect(() => {
     let live = true;
@@ -130,6 +139,15 @@ export function SuggestPanel(props: Props) {
           only = found.ids;
         } catch (e) {
           if (live) setError(`Couldn't run the filter on Scryfall: ${e instanceof Error ? e.message : String(e)}`);
+          return;
+        }
+      }
+      if (ownedOn) {
+        const mine = new Set(ownedRef.current ?? []);
+        only = only ? only.filter((id) => mine.has(id)) : [...mine];
+        if (!only.length) {
+          setCombos([]);
+          setPool([]);
           return;
         }
       }
@@ -216,7 +234,7 @@ export function SuggestPanel(props: Props) {
     setAnglePool(null);
     if (!angle) return;
     supabase
-      .rpc("wording_pool", { p_phrases: angle.phrases, p_identity: identity, p_exclude: deckIds, p_lim: 60 })
+      .rpc("wording_pool", { p_phrases: angle.phrases, p_identity: identity, p_exclude: deckIds, p_lim: 60, ...(ownedOn ? { p_only: ownedRef.current ?? [] } : {}) })
       .then(({ data, error }) => {
         if (!live) return;
         if (error) setError(`Couldn't load the cards for ${angle.name}: ${error.message}`);
@@ -226,7 +244,7 @@ export function SuggestPanel(props: Props) {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [angle?.key, supabase]);
+  }, [angle?.key, ownedOn, supabase]);
 
   const target = props.bracket.target;
   const eligible = pool && combos ? pool.filter((c) => !isInDeck(c.oracle_id) && (!source.roleKey || score.rolesOf(c).includes(source.roleKey))) : [];
@@ -346,6 +364,7 @@ export function SuggestPanel(props: Props) {
   // What the picks leave out, at the top so a card hidden long ago isn't forgotten.
   const nDismissed = props.dismissed.size;
   const hiddenReasons: HiddenReason[] = [
+    ...(ownedOn ? [{ text: "Only cards in your collection", action: { label: "Show all cards", onClick: () => setOnlyOwned(false) } }] : []),
     ...(nDismissed
       ? [
           {
@@ -364,6 +383,13 @@ export function SuggestPanel(props: Props) {
   return (
     <div>
       <StyleControls settings={score.settings} onChange={props.onSettings} />
+      {props.owned && (
+        <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-foreground/15 px-3 text-sm">
+          <input type="checkbox" checked={onlyOwned} onChange={(e) => setOnlyOwned(e.target.checked)} className="h-4 w-4 accent-gold" />
+          <span className="font-medium">Only cards I own</span>
+          <span className="opacity-60">suggest from your collection</span>
+        </label>
+      )}
       <FiltersBox
         fields={["types", "rarity", "text", "mv", "price", "keyword", "set", "since", "instantSpeed", "noReserved"]}
         draft={filterDraft}
@@ -374,7 +400,7 @@ export function SuggestPanel(props: Props) {
         own={{ value: ownDraft, onChange: setOwnDraft }}
         applied={filter}
         applyLabel="Apply filters"
-        hint="narrow the picks with Scryfall search"
+        hint="type, mana value, rarity, price, set…"
         onApply={() => applyFilter()}
         onClear={() => {
           setFilterDraft(EMPTY_FILTERS);
@@ -486,7 +512,9 @@ export function SuggestPanel(props: Props) {
       )}
       {pool !== null && combos !== null && rows.length === 0 && !staples.length && !lands.length && !words.length && (
         <p className="mt-3 text-sm opacity-60">
-          {filter && !pool.length
+          {ownedOn && !pool.length
+            ? "None of the cards you own fit this deck's themes in its colors (cards already in the deck are left out)."
+            : filter && !pool.length
             ? "No cards in your colors match these filters and this deck's themes. Try loosening a filter."
             : pool.length && score.settings.style === "budget"
             ? "Nothing under this price cap. Try raising it."
