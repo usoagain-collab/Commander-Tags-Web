@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OwnedRow } from "./collection";
 import { ownedMatch, groupRows } from "./collection";
 import { collectionItems } from "./collection-view";
-import { binderPages, copiesByLocation, defaultStyle, deltaChanges, locationNameProblem, planMove, planMoveAll, readLocations, readLocationStyle, rowsIn } from "./locations";
+import { binderPages, copiesByLocation, defaultStyle, deltaChanges, locationNameProblem, planMove, planMoveAll, planMoveCounts, takeCopies, movableCopies, readLocations, readLocationStyle, rowsIn } from "./locations";
 import type { CardSummary } from "./model";
 
 const A = "11111111-1111-1111-1111-111111111111";
@@ -129,5 +129,30 @@ describe("planMoveAll", () => {
   it("does nothing when everything is already there", () => {
     const a = { ...base, quantity: 2, location_id: "A" };
     expect(planMoveAll([a], [a], "A")).toEqual([]);
+  });
+});
+
+describe("partial moves", () => {
+  const base = { oracle_id: A, printing_id: P, finish: "nonfoil" as const, printing_info: null };
+  it("moves only the asked number, Unsorted first", () => {
+    const u = { ...base, quantity: 2, location_id: null };
+    const a = { ...base, quantity: 3, location_id: "A" };
+    const take = takeCopies([a, u], "B", 3);
+    expect(take).toEqual([
+      { from: u, n: 2 },
+      { from: a, n: 1 },
+    ]);
+    const plan = planMoveCounts([u, a], take, "B");
+    expect(plan.find((p) => p.target.location_id === null)?.quantity).toBe(0);
+    expect(plan.find((p) => p.target.location_id === "A")?.quantity).toBe(2);
+    expect(plan.find((p) => p.target.location_id === "B")?.quantity).toBe(3);
+    expect(movableCopies([u, a], "A")).toBe(2);
+  });
+  it("never takes more than a row holds", () => {
+    const a = { ...base, quantity: 2, location_id: "A" };
+    expect(planMoveCounts([a], [{ from: a, n: 9 }], null)).toEqual([
+      { target: a, quantity: 0 },
+      { target: { ...a, location_id: null }, quantity: 2 },
+    ]);
   });
 });

@@ -1,11 +1,13 @@
 "use client";
 
 // Moving cards between binders and boxes on the Collection page (David, Nov 25, 2026: moving was too hard).
-// Three ways, all ending in planMoveAll (src/lib/deck/locations.ts), one save per move:
+// Three ways, all ending in planMoveCounts (src/lib/deck/locations.ts), one save per move:
 // - drag a card (or every selected card) onto a binder chip or onto the tray that rises while dragging;
 // - right-click a card for a Move to menu;
 // - Select, tap cards (or Ctrl/Cmd-click), then Move to in the bar at the bottom. This is the way on phones.
+// Whenever a card being moved has more than one copy, HowMany asks how many (all by default), also in the card sheet.
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { GlassOverlay } from "@/app/decks/[id]/glass-overlay";
 import type { CollectionLocation } from "@/lib/deck/locations";
 import { LOCATION_KINDS } from "@/lib/deck/locations";
 
@@ -220,5 +222,82 @@ export function SelectBar({
         </button>
       </div>
     </div>
+  );
+}
+
+export type HowManyLine = { key: string; name: string; image: string | null; max: number };
+
+/**
+ * How many copies to move, asked whenever a card being moved has more than one copy (David, Nov 25, 2026).
+ * Every card starts at all its copies, so Move straight away does what a drag always did.
+ */
+export function HowMany({ lines, toName, onConfirm, onCancel }: { lines: HowManyLine[]; toName: string; onConfirm: (counts: Record<string, number>) => void; onCancel: () => void }) {
+  const [counts, setCounts] = useState<Record<string, number>>(() => Object.fromEntries(lines.map((l) => [l.key, l.max])));
+  const total = lines.reduce((n, l) => n + (counts[l.key] ?? 0), 0);
+  const set = (key: string, max: number, v: number) => setCounts((c) => ({ ...c, [key]: Math.max(0, Math.min(max, Number.isFinite(v) ? Math.round(v) : 0)) }));
+  const step = "min-h-11 min-w-11 rounded-md border border-foreground/20 text-lg disabled:opacity-40";
+  return (
+    <GlassOverlay label="How many to move" paused={false} onClose={onCancel}>
+      <form
+        className="panel mx-auto max-w-md p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (total > 0) onConfirm(counts);
+        }}
+      >
+        <h2 className="display text-2xl">How many?</h2>
+        <p className="mt-1 text-sm opacity-80">Moving to {toName}. Every card starts at all its copies.</p>
+        <ul className="mt-4 max-h-[55vh] space-y-2 overflow-y-auto">
+          {lines.map((l) => {
+            const v = counts[l.key] ?? 0;
+            return (
+              <li key={l.key} className="flex items-center gap-3">
+                {l.image && <img src={l.image} alt="" width={40} height={56} draggable={false} className="h-14 w-10 shrink-0 rounded object-cover" />}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{l.name}</span>
+                  <span className="text-xs opacity-70">
+                    {l.max} {l.max === 1 ? "copy" : "copies"}
+                  </span>
+                </span>
+                {l.max > 1 ? (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <button type="button" aria-label={`One fewer ${l.name}`} disabled={v <= 0} onClick={() => set(l.key, l.max, v - 1)} className={step}>
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={l.max}
+                      value={v}
+                      aria-label={`Copies of ${l.name} to move`}
+                      onChange={(e) => set(l.key, l.max, e.target.valueAsNumber)}
+                      onFocus={(e) => e.target.select()}
+                      className="min-h-11 w-14 rounded-md border border-foreground/20 bg-transparent text-center tabular-nums"
+                    />
+                    <button type="button" aria-label={`One more ${l.name}`} disabled={v >= l.max} onClick={() => set(l.key, l.max, v + 1)} className={step}>
+                      +
+                    </button>
+                  </span>
+                ) : (
+                  <label className="flex min-h-11 shrink-0 items-center gap-2 text-sm">
+                    <input type="checkbox" checked={v === 1} onChange={(e) => set(l.key, 1, e.target.checked ? 1 : 0)} className="h-5 w-5 accent-gold" />
+                    Move
+                  </label>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-5 flex gap-2">
+          <button type="submit" autoFocus disabled={total === 0} className="btn btn-gold min-h-11 flex-1 px-4 disabled:opacity-50">
+            Move {total} {total === 1 ? "copy" : "copies"}
+          </button>
+          <button type="button" onClick={onCancel} className="btn min-h-11 px-4">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </GlassOverlay>
   );
 }

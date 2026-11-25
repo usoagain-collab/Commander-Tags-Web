@@ -32,12 +32,12 @@ import { createClient } from "@/lib/supabase/client";
 import { AddCardBox } from "@/components/add-card-box";
 import { CardDropTarget } from "@/components/card-drop-target";
 import { finishFor, infoOf } from "@/lib/deck/collection-targets";
-import { LAYOUT_LABELS, copiesByLocation, locationForAdds, locationName, planMoveAll, rowsIn, type LocationLayout, type LocationView } from "@/lib/deck/locations";
+import { LAYOUT_LABELS, copiesByLocation, locationForAdds, locationName, movableCopies, planMoveCounts, rowsIn, takeCopies, type LocationLayout, type LocationView } from "@/lib/deck/locations";
 import { useLocations } from "@/lib/deck/use-locations";
 import { CollectionSheet } from "./collection-sheet";
 import { BinderPages, CustomizeLocation, LocationBar, LocationHeader, NewLocation, SIZE_COLUMNS, SIZE_STACK } from "./locations-ui";
 import { resolveImport } from "./import-collection";
-import { DropTray, MOVE_TYPE, MoveMenu, SelectBar } from "./move-ui";
+import { DropTray, HowMany, MOVE_TYPE, MoveMenu, SelectBar } from "./move-ui";
 
 const PAGE = 200;
 const money = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
@@ -99,6 +99,7 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const [dragging, setDragging] = useState(0);
   const dragKeys = useRef<string[]>([]);
   const [moveAfterNew, setMoveAfterNew] = useState<string[] | null>(null);
+  const [asking, setAsking] = useState<{ keys: string[]; to: string | null } | null>(null);
   const endSelect = useCallback(() => {
     setSelecting(false);
     setSelected(new Set());
@@ -136,18 +137,25 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
   const itemsOf = (keys: string[]) => keys.flatMap((k) => byKey.get(k) ?? []);
   const selectedItems = itemsOf([...selected]);
 
+  /** Moves the cards; any card with more than one copy to move asks how many first (all by default). */
   const moveKeys = async (keys: string[], to: string | null) => {
     const list = itemsOf(keys);
-    const sources = list.flatMap((it) => it.rows);
-    const moving = sources.filter((r) => (r.location_id ?? null) !== to).reduce((n, r) => n + r.quantity, 0);
-    const name = locationName(locations.list, to);
-    const plan = planMoveAll(collection.rows, sources, to);
     setMenu(null);
-    if (!plan.length) return setMessage(`${list.length === 1 ? "It's" : "They're"} already in ${name}.`);
+    if (!list.some((it) => movableCopies(it.rows, to) > 0)) return setMessage(`${list.length === 1 ? "It's" : "They're"} already in ${locationName(locations.list, to)}.`);
+    if (list.some((it) => movableCopies(it.rows, to) > 1)) return setAsking({ keys, to });
+    await commitMove(keys, to, {});
+  };
+  const commitMove = async (keys: string[], to: string | null, counts: Record<string, number>) => {
+    const list = itemsOf(keys);
+    const moves = list.flatMap((it) => takeCopies(it.rows, to, counts[it.key] ?? movableCopies(it.rows, to)));
+    const moved = moves.reduce((n, m) => n + m.n, 0);
+    const cardsMoved = new Set(moves.map((m) => m.from.oracle_id + m.from.printing_id + m.from.finish)).size;
+    const plan = planMoveCounts(collection.rows, moves, to);
+    if (!plan.length) return;
     const failed = await collection.setMany(plan);
     if (failed) return setMessage(failed);
     setSelected(new Set());
-    setMessage(`Moved ${list.length === 1 ? list[0].card.name : `${list.length} cards`} (${moving} ${moving === 1 ? "copy" : "copies"}) to ${name}.`);
+    setMessage(`Moved ${list.length === 1 ? list[0].card.name : `${cardsMoved} ${cardsMoved === 1 ? "card" : "cards"}`} (${moved} ${moved === 1 ? "copy" : "copies"}) to ${locationName(locations.list, to)}.`);
   };
   const keysFor = (it: CollectionItem) => (selected.has(it.key) ? [...selected] : [it.key]);
   const toggle = (key: string) =>
@@ -416,6 +424,20 @@ export function CollectionView({ userId, savedTagView, initialQuery }: { userId:
             setNewLocation(true);
           }}
           onDone={endSelect}
+        />
+      )}
+      {asking && (
+        <HowMany
+          toName={locationName(locations.list, asking.to)}
+          lines={itemsOf(asking.keys)
+            .map((it) => ({ key: it.key, name: `${it.card.name}${prefs.perCard ? "" : ` · ${it.label}`}`, image: it.image, max: movableCopies(it.rows, asking.to) }))
+            .filter((l) => l.max > 0)}
+          onCancel={() => setAsking(null)}
+          onConfirm={(counts) => {
+            const { keys, to } = asking;
+            setAsking(null);
+            void commitMove(keys, to, counts);
+          }}
         />
       )}
       {menu && (
