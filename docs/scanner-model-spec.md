@@ -79,6 +79,10 @@ Nothing else is trustworthy without this.
 
 ## Phase 3: card recognizer (2-3 weeks)
 
+**Status (Nov 25, 2026):** code built and run end to end on a small test cache (`build_recog_cache.py`, `scanner/recog_synth.py`, `scanner/recog_model.py`, `train_recognizer.py`, `build_catalog.py`, `eval_recognizer.py`; commands in `ml/README.md`). Not trained yet. Choices made while building: one class per picture (a double-faced card's back is its own class), same-card printings up to 4 together in each batch, generalized-mean pooling (keeps small details like the set symbol), margin and fake-photo strength ramp up over the first pass, fake corners up to 4.5% off because that's what the corner finder does today. "How sure" is the gap to the best *different card*, so two printings of one card being close doesn't count as unsure.
+
+**Corner finder vs. its go / no-go (Nov 25, 2026):** corners-v2 misses by a median 4.5% of the card's width on the labeled frames (target: 2% average). A zoomed-in second pass (`ml/scanner/refine.py`) brings it to 4.2%. Rather than stall here, phase 3 goes ahead with a recognizer trained to cope with that, and `eval_recognizer.py --corners` shows whether the corners are good enough for recognition, which is what they're for.
+
 **Training pictures:** the same fake photos, then straightened using the true corners nudged by 2-3% (so it learns to cope with a corner finder that's slightly off), at 224 × 312.
 
 **Model:** EfficientNet-B0 (about 5 M settings), ending in 128 numbers. Trained with **ArcFace**, the face-recognition method: every printing is its own "person", about 110,000 of them, and the model learns to put the same printing close together and different ones apart. Printings with the same name but another set are deliberately put in the same training batches, so it learns the small differences: set symbol, frame, border, collector line.
