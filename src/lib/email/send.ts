@@ -12,12 +12,14 @@ export function emailReady(env: Record<string, string | undefined> = process.env
 export async function sendEmail(mail: OutgoingEmail): Promise<{ ok: true } | { ok: false; error: string }> {
   const key = process.env.EMAIL_API_KEY;
   const from = process.env.EMAIL_FROM;
+  // Optional: where replies go (the From address has no inbox).
+  const replyTo = process.env.EMAIL_REPLY_TO?.trim() || undefined;
   if (!key || !from) return { ok: false, error: "No email service is set up yet." };
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [mail.to], subject: mail.subject, text: mail.text, html: mail.html, headers: mail.headers }),
+      body: JSON.stringify({ from, to: [mail.to], subject: mail.subject, text: mail.text, html: mail.html, headers: mail.headers, reply_to: replyTo }),
     });
     if (res.ok) return { ok: true };
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
