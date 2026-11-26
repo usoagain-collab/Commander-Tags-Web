@@ -4,10 +4,14 @@ Input (B, 3, 312, 224), 0..1. Output (B, 128), length 1 (a "fingerprint").
 Two pictures of the same printing give fingerprints pointing the same way;
 the catalog search is a dot product with every printing's fingerprint.
 
-Training uses ArcFace: every printing is its own class with a learned
-direction, and the loss asks each fingerprint to sit closer to its own
-printing's direction than to any other by a margin. Only the backbone and
-the 128-number head ship to the phone; the class directions stay behind.
+Training (default) uses pairs: each batch holds fake phone photos and the
+clean Scryfall pictures of the same printings, and the loss asks each photo's
+fingerprint to match its own clean picture more than any other in the batch
+(and the other way round). That is exactly the scanner's job: photo against
+catalog. ArcFace (one learned direction per printing) is kept as an option,
+but with one picture per printing and 115,000 printings it collapsed in the
+first real run (Nov 26, 2026: every picture got the same fingerprint).
+Only the backbone and the 128-number head ship to the phone.
 """
 
 import math
@@ -28,6 +32,9 @@ class RecogNet(nn.Module):
         weights = torchvision.models.EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
         self.features = torchvision.models.efficientnet_b0(weights=weights).features   # 1280 channels
         self.head = nn.Sequential(nn.Dropout(0.2), nn.Linear(1280, dim, bias=False), nn.BatchNorm1d(dim))
+        # the batch norm's shift stays at 0: a learned shift lets every fingerprint slide toward one shared
+        # direction, the easy way out that both losses took in testing (everything matched everything)
+        self.head[2].bias.requires_grad_(False)
         self.register_buffer("mean", MEAN.clone(), persistent=False)
         self.register_buffer("std", STD.clone(), persistent=False)
 
@@ -57,3 +64,13 @@ class ArcFace(nn.Module):
         loss = F.cross_entropy(logits, labels)
         acc = (cos.argmax(1) == labels).float().mean()
         return loss, acc
+
+
+def pair_loss(photos: torch.Tensor, clean: torch.Tensor, temp: float = 0.05):
+    """Photo i should match clean picture i more than the batch's other clean pictures, and the other way round.
+    Both (B, DIM), length 1. Returns (loss, share of photos whose best match is their own picture)."""
+    logits = photos @ clean.T / temp
+    labels = torch.arange(len(photos), device=photos.device)
+    loss = (F.cross_entropy(logits, labels) + F.cross_entropy(logits.T, labels)) / 2
+    acc = (logits.argmax(1) == labels).float().mean()
+    return loss, acc

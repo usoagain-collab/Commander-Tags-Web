@@ -85,6 +85,8 @@ Nothing else is trustworthy without this.
 
 **Training pictures:** the same fake photos, then straightened using the true corners nudged by 2-3% (so it learns to cope with a corner finder that's slightly off), at 224 × 312.
 
+**First run (Nov 26, 2026):** the ArcFace run collapsed. On the 87 real frames it picked the right card 16% of the time at step 1,000 (mostly the pretrained network), then 0-5% by step 5,000, and every picture got the same fingerprint. With one picture per printing, each printing's learned direction is updated once per pass, and a learned shift in the last batch norm let every fingerprint slide toward one direction. Changes: train by **pairs** (fake photo against the clean picture of the same printing, the batch's other printings as the wrong answers), the batch norm shift fixed at 0, and a 10 times smaller learning rate for the pretrained backbone. Prove it on 2,000 printings before another long run.
+
 **Model:** EfficientNet-B0 (about 5 M settings), ending in 128 numbers. Trained with **ArcFace**, the face-recognition method: every printing is its own "person", about 110,000 of them, and the model learns to put the same printing close together and different ones apart. Printings with the same name but another set are deliberately put in the same training batches, so it learns the small differences: set symbol, frame, border, collector line.
 
 **Catalog:** run the finished model on every printing's clean Scryfall image (plus a few lightly altered copies, averaged) and store the 128 numbers per printing: 28 MB at half precision, or 14 MB at 8 bits if accuracy holds. Plus each printing's Scryfall id.
