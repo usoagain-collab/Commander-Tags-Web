@@ -1,23 +1,22 @@
 @import "tailwindcss";
 
-/* Redesign demo (Nov 27, 2026): indigo night + one pink accent. The accent keeps its old token name (--gold) until the whole site is moved over. */
 /* Two looks, chosen in Settings and set on <html> by the root layout. A section can force one with its own data-theme. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #161a2b;
-  --foreground: #ecebf4;
-  --panel: #1e2338;
-  --panel-raised: #2a3049;
-  --line: #363d5a;
-  --gold: #ff6fae;
-  --gold-hover: #ff93c3;
-  --gold-ink: #2a0718;
-  --glow: #262c47;
-  --art-shadow: #0c0f1c;
-  --role-protection: #dcdff0;
+  --background: #0b0c10;
+  --foreground: #f1ece2;
+  --panel: #15161c;
+  --panel-raised: #1f2028;
+  --line: #2a2b33;
+  --gold: #e8b54d;
+  --gold-hover: #f4cb74;
+  --gold-ink: #1d1505;
+  --glow: #1c2030;
+  --art-shadow: #000;
+  --role-protection: #e9e4d4;
   /* The playtest table stays dark on a light page: put the bright shades back (see the light block). */
   --color-red-400: oklch(70.4% 0.191 22.216);
   --color-amber-300: oklch(87.9% 0.169 91.605);
@@ -28,17 +27,17 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --background: #eef0f6;
-  --foreground: #181c2e;
-  --panel: #ffffff;
-  --panel-raised: #e3e6f0;
-  --line: #d4d8e6;
-  --gold: #c0186a;
-  --gold-hover: #a01258;
-  --gold-ink: #ffffff;
-  --glow: #ffffff;
+  --background: #f6f3ec;
+  --foreground: #1e1c18;
+  --panel: #fffdf8;
+  --panel-raised: #ece7dc;
+  --line: #e2dccd;
+  --gold: #8a5d00;
+  --gold-hover: #734d00;
+  --gold-ink: #fffaf0;
+  --glow: #fffdf8;
   --art-shadow: #fff;
-  --role-protection: #5e6380;
+  --role-protection: #6f6a5c;
   /* Much of the site writes status text in these bright shades, which fade out on a pale page. Same names, deeper ink. */
   --color-red-400: #b91c1c;
   --color-amber-300: #a16207;
@@ -54,26 +53,11 @@
   --color-panel-raised: var(--panel-raised);
   --color-gold: var(--gold);
   --color-gold-ink: var(--gold-ink);
-  --font-sans: var(--font-body), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --color-line: var(--line);
   /* Design refresh (option E): Fraunces for titles, the system monospace for small data labels (counts, tags, codes). */
-  --font-display: var(--font-display-face), system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", monospace;
-}
-
-html {
-  -webkit-tap-highlight-color: color-mix(in srgb, var(--gold) 20%, transparent);
-}
-
-a,
-button,
-summary,
-label {
-  touch-action: manipulation;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--gold) 40%, transparent);
 }
 
 body {
@@ -107,17 +91,18 @@ input[type="radio"] {
 @layer components {
   .display {
     font-family: var(--font-display);
-    font-weight: 700;
-    font-variation-settings: "opsz" 96;
-    letter-spacing: -0.025em;
+    font-weight: 500;
+    letter-spacing: -0.01em;
   }
 
   /* Small data labels: counts, tags, set codes. */
-  /* Small labels. Sentence case in the body face (Redesign demo: no tracked-out capitals). */
   .eyebrow {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: color-mix(in srgb, var(--foreground) 70%, transparent);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
   }
 
   .btn {
@@ -182,7 +167,7 @@ input[type="radio"] {
   }
   .card-lift:hover {
     transform: translateY(-3px);
-    box-shadow: 0 14px 30px -14px var(--art-shadow);
+    box-shadow: 0 14px 30px -14px #000;
   }
 }
 
@@ -214,16 +199,6 @@ input[type="radio"] {
 
 .complete {
   animation: complete 900ms ease-out;
-}
-
-/* Home hero: the example genome draws in once, left to right. */
-@keyframes genome-reveal {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-}
-.genome-reveal {
-  animation: genome-reveal 1100ms cubic-bezier(0.16, 1, 0.3, 1) 150ms backwards;
 }
 
 .no-scrollbar {

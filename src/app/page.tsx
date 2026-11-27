@@ -1,30 +1,31 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
-import { Layers, Sparkles, Swords } from "lucide-react";
+import { ArtCredit } from "@/components/art-credit";
+import { GenomeStrip, type GenomeGroup } from "@/components/genome-strip";
 import { roleColor } from "@/lib/tags/pretty";
 import { recentPublicDecks } from "@/lib/browse/cached";
 import { PublicDeckTile } from "@/components/public-deck-tile";
 import type { DeckTile } from "@/lib/browse/public-decks";
 
-// Redesign demo (Nov 27, 2026, stacked UI skills): the hero is the example deck's genome itself, drawn wide, with each
-// role read out under it. Color only ever means a role; the one accent marks what to do next.
+// Design refresh (option E, Nov 20, 2026): the landing page from the design canvas. The hero shows an example deck's
+// genome and role counts, so a visitor sees what the builder does before signing up.
 
 const STEPS = [
   {
-    icon: Layers,
+    n: "01 · Roles",
     color: roleColor("Ramp"),
     title: "See what your deck is missing",
     text: "Ramp, card draw, removal and more are counted as you build, each with a target you can move.",
   },
   {
-    icon: Sparkles,
+    n: "02 · Themes",
     color: roleColor("Card advantage"),
     title: "Find the cards that fit",
     text: "Suggestions match your deck's themes and fill its gaps, including the gems nobody else is playing.",
   },
   {
-    icon: Swords,
+    n: "03 · Play",
     color: roleColor("Recursion"),
     title: "Goldfish it, then share it",
     text: "Draw hands on a real table in your browser, then send friends a link to a deck that looks the part.",
@@ -40,8 +41,11 @@ const EXAMPLE: { name: string; have: number; target: number }[] = [
   { name: "Board wipes", have: 3, target: 3 },
   { name: "Recursion", have: 2, target: 2 },
 ];
-/** Cards in the example that fill no role (the deck's theme cards). */
-const EXAMPLE_OTHER = 33;
+const EXAMPLE_GENOME: GenomeGroup[] = [
+  ...EXAMPLE.map((r) => ({ key: r.name, label: r.name, color: roleColor(r.name), count: r.have })),
+  { key: "Protection", label: "Protection", color: roleColor("Protection"), count: 3 },
+  { key: "other", label: "No role", color: "color-mix(in srgb, var(--foreground) 22%, transparent)", count: 30 },
+];
 
 /**
  * Two real cards for the "by function" example, with the reason Suggest would give. Looked up by oracle id, which is
@@ -56,9 +60,18 @@ const SAMPLE_PICKS = [
 export default async function Home({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const { deleted } = await searchParams;
   const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
+  // The two most-played commanders make the fanned cards, so the page changes as the format does.
   // Fresh public decks (Nov 21, 2026) sit right under the hero, so a visitor sees people building here. A failed
   // read only hides the row.
-  const [{ data: picks }, recent] = await Promise.all([
+  const [{ data }, { data: picks }, recent] = await Promise.all([
+    supabase
+      .from("card_summaries")
+      .select("oracle_id, name, image_art_crop, artist")
+      .eq("can_be_commander", true)
+      .not("image_art_crop", "is", null)
+      .not("edhrec_rank", "is", null)
+      .order("edhrec_rank")
+      .limit(2),
     supabase
       .from("card_summaries")
       .select("oracle_id, image_normal")
@@ -71,14 +84,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       return [];
     }),
   ]);
+  const art = (data ?? []) as { oracle_id: string; name: string; image_art_crop: string; artist: string | null }[];
   const pickImage = new Map(((picks ?? []) as { oracle_id: string; image_normal: string | null }[]).map((p) => [p.oracle_id, p.image_normal]));
   const start = user ? "/decks" : "/try";
-  const stripes = [
-    ...EXAMPLE.flatMap((r) => Array.from({ length: r.have }, () => roleColor(r.name))),
-    ...Array.from({ length: 3 }, () => roleColor("Protection")),
-    ...Array.from({ length: EXAMPLE_OTHER }, () => "color-mix(in srgb, var(--foreground) 16%, transparent)"),
-  ].slice(0, 100);
-  const tatyova = pickImage.get(SAMPLE_PICKS[0].id);
 
   return (
     <main>
@@ -88,75 +96,83 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         </p>
       )}
 
-      <section className="mx-auto max-w-[1280px] px-5 pb-16 pt-12 sm:px-6 sm:pt-20">
-        <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-8">
-          <div className="min-w-0 flex-[1_1_560px]">
-            <h1 className="display text-balance text-[2.75rem] leading-[0.98] sm:text-[5.25rem]">Build your Commander deck by what each card does.</h1>
+      <section className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-14 px-6 pb-20 pt-14 sm:pt-20">
+        <div className="min-w-0 flex-[1_1_440px]">
+          <p className="eyebrow !text-gold">Commander deck builder</p>
+          <h1 className="display mt-4 text-balance text-5xl leading-[1.02] sm:text-7xl">
+            Every deck has a genome. <em className="text-gold">Read yours.</em>
+          </h1>
+          <p className="mt-6 max-w-[34rem] text-lg leading-relaxed opacity-80">
+            Deck Genome reads what each card does, from Scryfall&apos;s tags, and shows your deck as roles and themes. Fill
+            the gaps with cards that fit how your deck plays, not just what everyone else plays.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            {/* Signed out, "Start building" opens the builder straight away (/try); signing in comes when they want to keep it. */}
+            <Link href={start} className="btn btn-gold min-h-14 px-7 text-base">
+              {user ? "Go to my decks" : "Start building, free"}
+            </Link>
+            <Link href="/precons" className="btn min-h-14 px-7 text-base">
+              Open a precon
+            </Link>
           </div>
-          <div className="min-w-0 flex-[1_1_340px] pb-2">
-            <p className="max-w-[30rem] text-lg leading-relaxed text-foreground/80">
-              Deck Genome counts ramp, card draw, removal and every other job as you build, then suggests cards that fit
-              how your deck plays.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {/* Signed out, "Start building" opens the builder straight away (/try); signing in comes when they want to keep it. */}
-              <Link href={start} className="btn btn-gold min-h-13 px-7 text-base">
-                {user ? "Go to my decks" : "Start building, free"}
-              </Link>
-              <Link href="/precons" className="btn min-h-13 px-7 text-base">
-                Open a precon
-              </Link>
-            </div>
-            {!user && <p className="mt-3 text-sm text-foreground/65">No account needed until you want to keep a deck.</p>}
-          </div>
+          {!user && <p className="mt-4 text-sm opacity-65">Sign in with Discord, Google or email when you want to keep a deck.</p>}
         </div>
 
-        {/* The one bold thing on the page: a real-looking deck, one stripe per card, sorted by role. */}
-        <figure className="mt-14">
-          <p className="mb-3 text-sm text-foreground/70">An example 100-card deck, one stripe per card, sorted by role.</p>
-          <div aria-hidden className="genome-reveal flex h-24 gap-[2px] sm:h-36">
-            {stripes.map((c, i) => (
-              <span key={i} className="h-full flex-1 rounded-[2px]" style={{ background: c }} />
-            ))}
-          </div>
-          <figcaption className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-            {EXAMPLE.map((r) => {
-              const short = r.target - r.have;
-              return (
-                <div key={r.name} className="min-w-0">
-                  <p className="flex items-center gap-2 text-sm text-foreground/80">
-                    <span aria-hidden className="size-2.5 shrink-0 rounded-[2px]" style={{ background: roleColor(r.name) }} />
-                    {r.name}
-                  </p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums">
-                    {r.have}
-                    <span className="text-base font-normal text-foreground/60"> of {r.target}</span>
-                  </p>
-                  {short > 0 && <p className="text-sm font-semibold text-gold">{short} short</p>}
+        <div className="relative min-w-0 flex-[1_1_480px] pt-14">
+          {/* Two commanders fanned behind the example; their art carries its credit just below the panel. */}
+          {art.map((c, i) => (
+            <img
+              key={c.oracle_id}
+              src={c.image_art_crop}
+              alt=""
+              className={`absolute top-0 hidden aspect-[4/3] w-44 rounded-xl object-cover shadow-2xl shadow-black/60 sm:block ${
+                i === 0 ? "right-40 -rotate-6 ring-2 ring-gold" : "right-6 rotate-[8deg]"
+              }`}
+            />
+          ))}
+          <div className="panel relative flex flex-col gap-5 p-6 shadow-2xl shadow-black/50">
+            <div>
+              <p className="eyebrow">Example deck · 100 cards</p>
+              <p className="eyebrow mt-3">Genome · one stripe per card</p>
+              <GenomeStrip groups={EXAMPLE_GENOME} height={52} className="mt-2" />
+            </div>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              {EXAMPLE.map((r) => (
+                <div key={r.name}>
+                  <div className="flex justify-between text-sm">
+                    <span className="opacity-85">{r.name}</span>
+                    <span className={`font-mono text-[13px] ${r.have < r.target ? "text-red-400" : "opacity-65"}`}>
+                      {r.have}/{r.target}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-foreground/10">
+                    <div className="h-full" style={{ width: `${Math.min(100, (r.have / r.target) * 100)}%`, background: roleColor(r.name) }} />
+                  </div>
                 </div>
-              );
-            })}
-          </figcaption>
-        </figure>
-
-        <div className="mt-10 flex max-w-3xl items-center gap-5 rounded-2xl border border-gold/40 bg-gold/[0.07] p-4 sm:p-5">
-          {tatyova && <img src={tatyova} alt="Tatyova, Benthic Druid" width={488} height={680} className="h-auto w-20 shrink-0 rounded-[4.75%/3.5%] shadow-lg sm:w-24" />}
-          <p className="leading-relaxed">
-            <span className="font-bold text-gold">Suggested for this deck.</span> Card advantage is 2 short.{" "}
-            <strong>Tatyova, Benthic Druid</strong> draws a card on every land you play and shares 3 of the deck&apos;s
-            themes.
-          </p>
+              ))}
+            </div>
+            <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-gold/35 bg-gold/10 px-4 py-3 text-sm">
+              <span className="eyebrow !text-gold">Suggested</span>
+              <span>
+                Card advantage is 2 short. <strong>Tatyova, Benthic Druid</strong> draws on every land and shares 3 themes.
+              </span>
+            </p>
+          </div>
+          {art.length > 0 && <ArtCredit artists={art.map((c) => c.artist)} className="mt-2" />}
         </div>
       </section>
 
       {recent.length > 0 && (
-        <section aria-labelledby="fresh-decks" className="mx-auto max-w-[1280px] px-5 pb-16 sm:px-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 id="fresh-decks" className="display text-3xl sm:text-4xl">
-              Decks people are building
-            </h2>
+        <section aria-labelledby="fresh-decks" className="mx-auto max-w-[1280px] px-6 pb-16">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <p className="eyebrow !text-gold">From the community</p>
+              <h2 id="fresh-decks" className="display mt-2 text-3xl sm:text-4xl">
+                Fresh decks
+              </h2>
+            </div>
             <Link href="/browse" className="btn min-h-11 px-5">
-              Browse all decks
+              Browse all decks →
             </Link>
           </div>
           <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -168,59 +184,59 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       )}
 
       <section className="border-y border-line bg-panel">
-        <div className="mx-auto max-w-[1280px] px-5 py-16 sm:px-6">
-          <h2 className="display text-3xl sm:text-4xl">How a deck comes together</h2>
-          <ol className="mt-10 grid gap-10 sm:grid-cols-3">
-            {STEPS.map((s) => (
-              <li key={s.title}>
-                <s.icon aria-hidden size={28} strokeWidth={1.75} style={{ color: s.color }} />
-                <h3 className="display mt-4 text-2xl leading-tight">{s.title}</h3>
-                <p className="mt-2 max-w-[34ch] leading-relaxed text-foreground/75">{s.text}</p>
-              </li>
-            ))}
-          </ol>
+        <div className="mx-auto grid max-w-[1280px] gap-10 px-6 py-16 sm:grid-cols-3">
+          {STEPS.map((s) => (
+            <div key={s.title}>
+              <p className="font-mono text-[13px]" style={{ color: s.color }}>
+                {s.n}
+              </p>
+              <h2 className="display mt-3 text-[1.85rem] leading-tight">{s.title}</h2>
+              <p className="mt-3 leading-relaxed opacity-75">{s.text}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-12 px-5 py-20 sm:px-6">
+      <section className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-12 px-6 py-20">
         <div className="min-w-0 flex-[1_1_380px]">
-          <h2 className="display text-4xl leading-[1.02] sm:text-5xl">Suggestions by function, not popularity.</h2>
-          <p className="mt-5 max-w-[34rem] text-lg leading-relaxed text-foreground/75">
+          <p className="eyebrow !text-gold">By function, not popularity</p>
+          <h2 className="display mt-4 text-4xl leading-tight sm:text-5xl">Find the card that does the job your deck needs.</h2>
+          <p className="mt-5 max-w-[34rem] text-lg leading-relaxed opacity-75">
             Every suggestion says why: the role it fills and the themes it shares with your deck. Switch to Hidden gems
             for what fits but few people play, or set a budget cap.
           </p>
         </div>
-        <ul className="grid min-w-0 flex-[1_1_560px] gap-4 sm:grid-cols-2">
+        <div className="grid min-w-0 flex-[1_1_560px] gap-4 sm:grid-cols-2">
           {SAMPLE_PICKS.map((p) => (
-            <li key={p.name} className="panel flex gap-4 p-4">
+            <div key={p.name} className="panel flex gap-4 p-4">
               {pickImage.get(p.id) ? (
-                <img src={pickImage.get(p.id)!} alt={p.name} width={488} height={680} loading="lazy" className="h-auto w-[96px] shrink-0 self-start rounded-[4.75%/3.5%]" />
+                <img src={pickImage.get(p.id)!} alt={p.name} className="w-[96px] shrink-0 self-start rounded-[4.75%/3.5%]" />
               ) : (
                 <span aria-hidden className="aspect-[63/88] w-[96px] shrink-0 rounded-lg bg-panel-raised" />
               )}
               <div className="flex min-w-0 flex-col gap-2">
-                <p className="font-bold">{p.name}</p>
-                <p className="text-sm text-foreground/80">
+                <p className="font-semibold">{p.name}</p>
+                <p className="text-sm opacity-80">
                   Fills <strong style={{ color: roleColor(p.role) }}>{p.role}</strong>
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {p.tags.map((t) => (
-                    <span key={t} className="rounded-full bg-foreground/10 px-2.5 py-0.5 text-[13px] text-foreground/85">
+                    <span key={t} className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[11px] opacity-85">
                       {t}
                     </span>
                   ))}
                 </div>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       </section>
 
       <section className="border-t border-line">
-        <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-6 px-5 py-16 sm:px-6">
+        <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-6 px-6 py-16">
           <div>
             <h2 className="display text-4xl">Or start from a precon</h2>
-            <p className="mt-2 text-lg text-foreground/75">Every official Commander deck back to 2011, ready to open and upgrade.</p>
+            <p className="mt-2 text-lg opacity-75">Every official Commander deck back to 2011, ready to open and upgrade.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/precons" className="btn min-h-12 px-6">

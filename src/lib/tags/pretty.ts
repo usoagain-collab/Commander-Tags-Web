@@ -41,4 +41,4 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 /** Each standard role has its own color, the same everywhere; custom roles use the accent. */
-export const roleColor = (name: string) => ROLE_COLORS[name] ?? "var(--gold)";
+export const roleColor = (name: string) => ROLE_COLORS[name] ?? "#e8b54d";
