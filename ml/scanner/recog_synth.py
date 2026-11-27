@@ -205,29 +205,30 @@ class RecogSynth:
         gray = img.mean(1, keepdim=True)
         img = (gray + (img - gray) * self.u(b, 1, 1, 1, lo=1 - 0.4 * s, hi=1 + 0.3 * s)).clamp(0, 1)
 
-        # camera: lost resolution (60%), phone processing (65%), out of focus (25%), motion blur (15%),
-        # a little noise (30%), JPEG (75%)
-        lowres = self.chance(b, 0.6)
-        if lowres.any():
-            f = float(self.u(1, lo=0.35, hi=0.8))
-            small = F.interpolate(img[lowres], scale_factor=f, mode="bilinear", align_corners=False, antialias=True)
-            img[lowres] = F.interpolate(small, size=(h, w), mode="bilinear", align_corners=False)
-        phone = self.chance(b, 0.65)
+        # camera: one kind of softening per fake, not several stacked (stacked blurs made the fakes about
+        # 10 times softer than David's frames): phone processing 60%, lost resolution 15%, out of focus 9%,
+        # motion blur 6%, none 10%; then a little noise (30%) and JPEG (75%)
+        pick = self.u(b)
+        cut = torch.tensor([0.6, 0.75, 0.84, 0.9], device=dev) * s
+        phone, lowres = pick < cut[0], (pick >= cut[0]) & (pick < cut[1])
+        blur, mb = (pick >= cut[1]) & (pick < cut[2]), (pick >= cut[2]) & (pick < cut[3])
         if phone.any():
             n = int(phone.sum())
-            sig = self.u(n, lo=0.6, hi=1.3)
-            soft = gaussian_blur2d(img[phone], (7, 7), torch.stack([sig, sig], 1))
-            # noise reduction smooths grain away, then the phone sharpens the edges back a little
-            edge = soft - gaussian_blur2d(soft, (7, 7), torch.stack([sig * 1.5, sig * 1.5], 1))
-            img[phone] = soft + edge * self.u(n, 1, 1, 1, lo=0.2, hi=0.8)
-        blur = self.chance(b, 0.25)
+            sig = self.u(n, lo=0.3, hi=0.7)
+            soft = gaussian_blur2d(img[phone], (5, 5), torch.stack([sig, sig], 1))
+            # noise reduction smooths grain away, then the phone sharpens edges back
+            edge = soft - gaussian_blur2d(soft, (7, 7), torch.stack([sig * 2, sig * 2], 1))
+            img[phone] = soft + edge * self.u(n, 1, 1, 1, lo=0.7, hi=1.5)
+        if lowres.any():
+            f = float(self.u(1, lo=0.7, hi=0.95))
+            small = F.interpolate(img[lowres], scale_factor=f, mode="bilinear", align_corners=False, antialias=True)
+            img[lowres] = F.interpolate(small, size=(h, w), mode="bilinear", align_corners=False)
         if blur.any():
-            sig = self.u(int(blur.sum()), lo=0.4, hi=1.8)
-            img[blur] = gaussian_blur2d(img[blur], (9, 9), torch.stack([sig, sig], 1))
-        mb = self.chance(b, 0.15)
+            sig = self.u(int(blur.sum()), lo=0.4, hi=1.2)
+            img[blur] = gaussian_blur2d(img[blur], (7, 7), torch.stack([sig, sig], 1))
         if mb.any():
             n = int(mb.sum())
-            img[mb] = motion_blur(img[mb], 7, self.u(n, lo=0, hi=180), self.u(n, lo=-1, hi=1))
+            img[mb] = motion_blur(img[mb], 5, self.u(n, lo=0, hi=180), self.u(n, lo=-1, hi=1))
         noisy = self.chance(b, 0.3)[:, None, None, None]
         img = img + torch.randn(img.shape, generator=self.gen, device=dev) * self.u(b, 1, 1, 1, lo=0, hi=0.02 * s) * noisy
         img = img.clamp(0, 1)
