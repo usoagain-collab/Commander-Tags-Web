@@ -75,21 +75,27 @@ export async function SiteHeader() {
             <nav aria-label="Main" className="hidden sm:block">
               <NavLinks items={SIGNED_OUT} />
             </nav>
-            <div className="ml-auto flex items-center gap-1 text-sm">
-              {/* Phones: the two places as plain links, since the pills are hidden there. */}
-              <Link href="/precons" className="flex min-h-11 items-center px-2 sm:hidden">
-                Precons
-              </Link>
-              <Link href="/browse" className="flex min-h-11 items-center px-2 sm:hidden">
-                Browse
-              </Link>
-              <FeedbackButton className="flex min-h-10 items-center rounded-full px-2 text-foreground/75 hover:text-foreground sm:px-3" />
-              <Link href="/login" className="flex min-h-11 items-center px-2 font-medium sm:px-3">
+            <div className="ml-auto hidden items-center gap-1 text-sm sm:flex">
+              <FeedbackButton className="flex min-h-10 items-center rounded-full px-3 text-foreground/75 hover:text-foreground" />
+              <Link href="/login" className="flex min-h-11 items-center px-3 font-medium">
                 Sign in
               </Link>
-              <Link href="/try" className="btn btn-gold hidden sm:inline-flex">
+              <Link href="/try" className="btn btn-gold">
                 Start building
               </Link>
+            </div>
+            {/* Phones (Nov 27, 2026): the signed-out links ran 30 px past a 390 px screen, so the page
+                scrolled sideways. Sign in stays in view; the rest folds into the menu. */}
+            <div className="ml-auto flex items-center gap-1 text-sm sm:hidden">
+              <Link href="/login" className="flex min-h-11 items-center px-2 font-medium">
+                Sign in
+              </Link>
+              <HeaderMenu label={null} id="guest-menu">
+                <Link href="/try">Start building</Link>
+                <Link href="/precons">Precons</Link>
+                <Link href="/browse">Browse</Link>
+                <FeedbackButton className="text-left opacity-80 hover:bg-foreground/5" />
+              </HeaderMenu>
             </div>
           </>
         )}
