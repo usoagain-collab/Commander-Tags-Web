@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronLeft } from "lucide-react";
 import { ManaSymbol } from "@/components/mana-cost";
 import { ManaConfetti } from "./mana-confetti";
 import { ArtCredit } from "@/components/art-credit";
@@ -101,7 +102,8 @@ export function DeckHero({
         <div className="min-w-0 flex-1">
           {backLink && (
             <Link href="/decks" className="-ml-1 inline-flex min-h-9 items-center px-1 text-sm opacity-85 hover:opacity-100">
-              ← My decks
+              <ChevronLeft size={16} aria-hidden />
+              My decks
             </Link>
           )}
           {/* Design refresh (option E): the commander and colors sit above the name, the numbers beside them. */}
@@ -113,22 +115,23 @@ export function DeckHero({
                 ))}
               </span>
             )}
-            {commanders.length > 0 && <span className="eyebrow min-w-0 !text-gold">{commanders.map((c) => c.name).join(" & ")}</span>}
+            {commanders.length > 0 && <span className="min-w-0 text-[15px] font-semibold text-foreground/85">{commanders.map((c) => c.name).join(" & ")}</span>}
           </div>
           <DeckName name={name} onRename={onRename} />
           {note}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            {complete && <span className={`${celebrate ? "complete " : ""}inline-flex min-h-9 items-center rounded-full bg-gold px-3 font-semibold text-gold-ink`}>✦ Complete</span>}
+            {complete && <span className={`${celebrate ? "complete " : ""}inline-flex min-h-9 items-center gap-1.5 rounded-full bg-gold px-3 font-bold text-gold-ink`}><Check size={16} strokeWidth={2.5} aria-hidden />Complete</span>}
             <Stat good={size === 100}>
               <span key={size} className="pop inline-block">
-                {size} / 100
+                {size}
+                <span className="font-normal text-foreground/65"> of 100</span>
               </span>
             </Stat>
             <Stat>${price.toFixed(0)}</Stat>
             {status}
             {aboutLink && (
               <a href="#about" className="inline-flex min-h-9 items-center rounded-full px-2 underline opacity-85 [text-shadow:0_1px_8px_var(--art-shadow)] hover:opacity-100">
-                About this deck ↓
+                About this deck
               </a>
             )}
           </div>
@@ -147,7 +150,7 @@ export function DeckHero({
   );
 }
 
-const NAME_CLASS = "display mt-1 text-3xl leading-tight [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-[2.6rem]";
+const NAME_CLASS = "display mt-1 text-balance text-[2rem] leading-[1.02] [text-shadow:0_2px_16px_var(--art-shadow)] lg:text-[3.25rem]";
 
 /** The deck's name. With onRename, a click turns it into a box: Enter or Save keeps it, Esc or Cancel doesn't. */
 function DeckName({ name, onRename }: { name: string; onRename?: (name: string) => Promise<string | null> }) {
@@ -232,7 +235,7 @@ function DeckName({ name, onRename }: { name: string; onRename?: (name: string) 
 
 function Stat({ good, children }: { good?: boolean; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex min-h-9 items-center rounded-full bg-background/65 px-3 font-semibold tabular-nums backdrop-blur ${good ? "text-green-400" : ""}`}>
+    <span className={`inline-flex min-h-9 items-center rounded-full border border-line bg-panel/90 px-3 font-bold tabular-nums ${good ? "text-green-400" : ""}`}>
       {children}
     </span>
   );
@@ -286,7 +289,7 @@ export function MoreMenu({ groups }: { groups: MoreGroup[] }) {
   return (
     <div ref={box} className="relative">
       <button type="button" className="btn" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-        More <span aria-hidden>▾</span>
+        More <ChevronDown size={16} aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {place && (
         <div
@@ -296,7 +299,7 @@ export function MoreMenu({ groups }: { groups: MoreGroup[] }) {
         >
           {shown.map((g) => (
             <div key={g.title} role="group" aria-label={g.title} className="mb-1 break-inside-avoid last:mb-0">
-              <div className="eyebrow px-3 pb-0.5 pt-2 text-[11px] opacity-60">{g.title}</div>
+              <div className="px-3 pb-0.5 pt-2 text-xs font-bold text-foreground/60">{g.title}</div>
               {g.items.map((i) => (
                 <button
                   key={i.key}

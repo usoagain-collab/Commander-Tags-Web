@@ -6,6 +6,7 @@
 // only hidden, so the Feedback dialog inside it (a portal) survives the menu closing.
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Menu, X } from "lucide-react";
 
 export function HeaderMenu({
   label,
@@ -53,7 +54,7 @@ export function HeaderMenu({
         className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full px-1"
       >
         {label}
-        {burger && <span aria-hidden className="text-xl leading-none">{open ? "✕" : "☰"}</span>}
+        {burger && (open ? <X aria-hidden size={22} /> : <Menu aria-hidden size={22} />)}
         <span className="sr-only">{menuLabel}</span>
       </button>
       <div

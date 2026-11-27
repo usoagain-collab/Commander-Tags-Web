@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Copy, Play, Plus, Scissors, Search, Share2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   applyCategories,
@@ -1678,12 +1679,14 @@ export function DeckEditor({
           <>
             {readOnly && (
               <button type="button" className="btn btn-gold" disabled={copying} onClick={copy} title="A private copy in your decks, to change as you like">
-                {copying ? "Copying…" : builder?.precon ? "⧉ Start a deck from this" : "⧉ Copy to my decks"}
+                <Copy size={16} strokeWidth={2} aria-hidden />
+                {copying ? "Copying…" : builder?.precon ? "Start a deck from this" : "Copy to my decks"}
               </button>
             )}
             {readOnly && (
               <Link href={userId ? "/decks" : "/try"} className="btn">
-                ✦ Build your own
+                <Plus size={16} strokeWidth={2} aria-hidden />
+                Build your own
               </Link>
             )}
             {!readOnly && (commanders.length > 0 || size > 0) && (
@@ -1694,7 +1697,8 @@ export function DeckEditor({
                 aria-pressed={panel === "suggest"}
                 onClick={() => (panel === "suggest" ? setPanel(null) : suggestOverall())}
               >
-                ✦ Suggest<span className="hidden sm:inline"> cards</span>
+                <Sparkles size={16} strokeWidth={2} aria-hidden />
+                Suggest<span className="hidden sm:inline"> cards</span>
               </button>
             )}
             {!readOnly && (
@@ -1703,7 +1707,8 @@ export function DeckEditor({
                 title="Search every Commander card by name, rules text or Scryfall syntax"
                 onClick={() => (panel === "search" ? setPanel(null) : openSearch())}
               >
-                ⌕ Search
+                <Search size={16} strokeWidth={2} aria-hidden />
+                Search
               </HeaderButton>
             )}
             {guest ? (
@@ -1717,18 +1722,21 @@ export function DeckEditor({
               title="Goldfish this deck: shuffle, draw, mulligan and play"
               className="btn"
             >
-              ▶ Playtest
+              <Play size={16} strokeWidth={2} aria-hidden />
+              Playtest
             </Link>
             )}
             {!ownerOnly && size > 100 && (
               <button type="button" className="btn btn-gold" aria-pressed={panel === "cutter"} onClick={() => setPanel("cutter")} title="Smart Cutter: what to cut, and why">
-                ✂ Cut {size - 100}
+                <Scissors size={16} strokeWidth={2} aria-hidden />
+                Cut {size - 100}
               </button>
             )}
             {!ownerOnly && !guest && (
               <HeaderButton active={panel === "share"} onClick={() => setPanel(panel === "share" ? null : "share")} title="Public or private, and the deck's link">
                 {/* Always says who can see it (Nov 21, 2026): "Share" alone hid where to make a deck public. */}
-                ↗ Share <span className="text-xs opacity-75">· {visibility === "public" ? "Public" : visibility === "unlisted" ? "Link only" : "Private"}</span>
+                <Share2 size={16} strokeWidth={2} aria-hidden />
+                Share <span className="text-xs text-foreground/70">({visibility === "public" ? "Public" : visibility === "unlisted" ? "Link only" : "Private"})</span>
               </HeaderButton>
             )}
             {/* Grouped under headings (Nov 21, 2026): one flat list of 19 had grown too long to scan. */}

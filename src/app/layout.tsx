@@ -1,19 +1,28 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
-import { Fraunces, Inter } from "next/font/google";
+import { Atkinson_Hyperlegible_Next, Bricolage_Grotesque } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { getProfileLook } from "@/lib/supabase/profile";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
+// Redesign demo (Nov 27, 2026): Bricolage Grotesque for titles, Atkinson Hyperlegible Next for text (built for legibility).
+const body = Atkinson_Hyperlegible_Next({ subsets: ["latin"], variable: "--font-body", display: "swap" });
+const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display-face", display: "swap", axes: ["opsz", "wdth"] });
 // Design refresh (option E, Nov 20, 2026): Fraunces for titles, Inter for text, the system monospace for small data labels
 // (globals.css). JetBrains Mono broke the Vercel build: next/font could not read the file address Google sent its servers.
 
 export const metadata: Metadata = {
   title: "Deck Genome",
   description: "Build Commander decks by what cards do. Role targets, tag-driven suggestions and a goldfish table.",
+};
+
+/** Browser chrome follows the page (both looks). */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#161a2b" },
+    { media: "(prefers-color-scheme: light)", color: "#eef0f6" },
+  ],
 };
 
 export default async function RootLayout({
@@ -24,7 +33,7 @@ export default async function RootLayout({
   // Set on the server, so a light-mode user never sees a dark flash while the page loads.
   const { theme } = await getProfileLook();
   return (
-    <html lang="en" data-theme={theme} className={`${inter.variable} ${fraunces.variable}`}>
+    <html lang="en" data-theme={theme} className={`${body.variable} ${display.variable}`}>
       <body className="antialiased min-h-screen flex flex-col">
         <SiteHeader />
         <div className="flex-1">{children}</div>
