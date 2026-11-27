@@ -159,6 +159,30 @@ DINOv2 with averaged patch tokens instead of the CLS token: 70.3% card, 57.4% pr
 - WASM threads and WebGPU only work on a secure (https) page with cross-origin isolation, so the test files (22-88 MB) can't be served from a plain laptop address. Options: a temporary Cloudflare tunnel from the laptop (new software, David's OK), or Supabase Storage (50 MB per file limit, so split the catalog).
 - **Pass:** under 300 ms per card, the tab survives on iPhone, first download under about 40 MB. Otherwise distill: train a phone-sized model to copy DINOv2's fingerprints on the synthetic pairs.
 
+### Benchmark results (Nov 27, 2026, 101 frames, no training)
+
+Raw output on the laptop: `ml/runs/recog-v3/compare/` (`ablations.txt`, `scanlab_hand.json`, `scanlab_cv2.json`; not committed).
+
+| Method | Right card | Right printing |
+| --- | --- | --- |
+| DINOv2, hand corners | 76.2% | 58.4% |
+| DINOv2, corners-v2 (1 pass / 2 passes) | 56.4% / 62.4% | 43.6% / 50.5% |
+| DINOv2, 128 numbers, 8-bit, artwork-average catalog (7.3 MB) | 79.2% | 57.4% |
+| DINOv2, average of 3 frames | 84.2% | 64.4% |
+| Scan lab (OCR + picture), hand corners | 70.3% | 58.4% |
+| Scan lab, its own edge finder | 4% | 3% |
+| Scan lab, corners-v2 corners | 75.2% | 61.4% |
+| **DINOv2 when sure (gap 0.03+), else scan lab, hand corners** | **90.1%** | |
+| **Same, corners-v2 corners (end to end today)** | **80.2%** | |
+
+- Confidence: at a gap of 0.03+ to the next artwork, DINOv2 alone decides 68% of frames with 0 wrong (0.02: 72%, 2 wrong).
+- Only 9 of 101 frames fool both DINOv2 and the scan lab.
+- Upside-down crops drop to 28%, but corners-v2 gets orientation right on 100 of 101 frames. The collector line is cut off on about 2% of corners-v2 crops.
+- Blur and glare don't explain the misses; they are specific washed-out or showcase frames.
+- The scan lab takes about 6.3 s a frame on the laptop (two OCR passes), so it runs only on unsure frames and same-art printings.
+
+**What follows:** (1) the trained head is trained on fakes with corner-finder-sized errors, since DINOv2 loses 14 points on corners-v2 crops while the OCR copes; (2) the existing corner OCR is Stage 2 and the fallback; (3) pooling over frames; (4) a better corner finder is still worth 10-14 points to DINOv2. Catalog: artwork average, 128 numbers, 8 bits.
+
 ### Size budget (replaces the 5 MB recognizer and 14-28 MB catalog)
 
 | Part | Before | DINOv2, to be measured |
