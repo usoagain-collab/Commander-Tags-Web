@@ -111,22 +111,23 @@ DINOv2 with averaged patch tokens instead of the CLS token: 70.3% card, 57.4% pr
 
 - Fake photos were the weak link, not the model size. v2 and v3 scored 97-98% on fakes and under 30% on real frames. Matching the fakes' brightness, color and sharpness to David's frames (v3) made real frames worse.
 - A model trained on 142 million general photos already sees past haze and color casts. Start from it.
-- Every v2 miss was the wrong card. DINOv2's 18-point gap between card and printing is mostly same-art printings (reprints with identical art), which a global fingerprint can't separate well.
+- Every v2 miss was the wrong card. **All 18 of DINOv2's printing misses picked another printing of the same artwork**; it never picked a different artwork of the right card (right card 76.2% = right artwork 76.2%). The card-vs-printing gap is entirely a same-art problem, which is what Stage 2 is for.
+- The catalog has **56,811 distinct artworks**, 2.03 printings each on average: 56% have one printing, 40% have 2-5, 4% have 6-20, the largest group 41.
 - 25 cards is too few to trust: one card flipping moves the score 3-7%.
 
 **License:** DINOv2 code and weights are Apache 2.0 (checked in the downloaded README). Shipping it (even fine-tuned or shrunk) needs the license text beside the model file and a credit line on the site ("Card recognition built on DINOv2 by Meta AI, Apache License 2.0"), and no suggestion that Meta endorses us. The same repository's X-ray DINO and Cell-DINO weights are noncommercial: never use them. Check the license of any other model (DINOv3 and others) before trying it.
 
 ### Design
 
-**Stage 1, which card:** a DINOv2 fingerprint of the straightened card, searched against a catalog of every printing. Results are grouped by artwork (`illustration_id`) before deciding. The catalog stays one entry per printing (or per artwork plus frame style), because Scryfall gives a normal printing and its borderless, extended or showcase version the same `illustration_id`, and those look nothing alike as whole cards. The catalog is shrunk by PCA and quantization, measured below, not by merging printings.
+**Stage 1, which card:** a DINOv2 fingerprint of the straightened card, searched against a catalog of every printing. Results are grouped by artwork (`illustration_id`) before deciding. The catalog stays one entry per printing (or per artwork plus frame style), because Scryfall gives a normal printing and its borderless, extended or showcase version the same `illustration_id`, and those look nothing alike as whole cards. The catalog is shrunk mainly by PCA and quantization, measured below. Three artwork options are compared: the main printing's fingerprint per artwork, the average per artwork, and every printing kept with scores grouped by artwork. One per artwork would halve the catalog (7.3 MB at 128 numbers and 8 bits, 21.8 MB at 384), not cut it to a third.
 
 **Stage 2, which printing:** only among the printings that share the winning artwork (usually 2-20).
 
-- 2015+ frames: the corner reading (set code and collector number) we already built picks one.
+- 2015+ frames: the corner reading (set code and collector number) we already built picks one. Set codes are printed only since Magic 2015 and collector numbers only since Exodus (1998), and some same-art twins share a code (promo stamps, foil-only versions).
 - Older frames (no bottom-left code): set symbol, border color and frame era from small crops, else the one-tap picker.
 - Still unclear: show the candidates as pictures for one tap. Never save a guess silently.
 
-**Several frames, not one:** a sharpness and glare gate drops blurred or blown-out frames. Then the fingerprints of 3-5 sharp frames are averaged (L2-normalized), or 2 of 3 frames must agree with a clear margin over the runner-up. Auto-add only past that bar.
+**Several frames, not one:** a sharpness and glare gate drops blurred or blown-out frames. Then the fingerprints of 3-5 sharp frames are averaged (L2-normalized), or 2 of 3 frames must agree with a clear margin over the runner-up. Auto-add only past that bar. Our test frames from one clip are near-identical, so pooled scores overstate the gain from independent looks: report single-frame and pooled scores separately.
 
 **Upside-down cards:** the corner finder labels the card's own top-left first, so it already predicts orientation. Measure how often it gets 180 degrees wrong; if it matters, also search the 180-degree turned crop and keep the better score.
 
@@ -136,7 +137,7 @@ DINOv2 with averaged patch tokens instead of the CLS token: 70.3% card, 57.4% pr
 2. Only if the head stalls on the locked test: tune the last few DINOv2 blocks at a low learning rate on synthetic pairs. The worry about forgetting applies to training on 150 real cards alone, not to the full synthetic set, but it is judged on the locked test only.
 3. Never tune settings against the locked test.
 
-**Real-frame split, decided by card before any training:** about 100 cards are the locked test (the current 25 plus 75 new). The other 50 cards' frames may be used for training. The same card is never in both. Measuring 98% honestly needs about 300 test cards eventually: with 100 cards, one miss is 1%.
+**Real-frame split, decided by card before any training:** about 100 cards are the locked test (the current 25 plus 75 new). The other 50 cards' frames may be used for training. The same card is never in both. Measuring 98% honestly needs about 150 test cards at least (0 misses in 150 still allows up to 2% error at 95% confidence), and about 300 eventually. The head trains mainly on fakes; real frames only from cards outside the test set.
 
 ### Benchmarks to run first (no training)
 
@@ -144,7 +145,8 @@ DINOv2 with averaged patch tokens instead of the CLS token: 70.3% card, 57.4% pr
 
 | Test | Variants | Answers |
 | --- | --- | --- |
-| Corner error vs recognizer error | DINOv2 on (a) hand corners, (b) corners-v2 corners, (c) corners-v2 plus the zoom pass (`refine.py`), (d) hand corners nudged 2% and 4% | How much of the 23.8% card miss is warp error |
+| Corner error vs recognizer error | DINOv2 on (a) hand corners, (b) corners-v2 corners, (c) corners-v2 plus the zoom pass (`refine.py`), (d) hand corners nudged 2% and 4%; right card, artwork and printing | How much of the 23.8% card miss is warp error, and whether corners-v2 crops cut off the collector line |
+| Quality gate | Blur and glare measures against the misses | Whether a sharpness / glare gate would drop the bad frames |
 | Catalog size | 384-dim fp16, 384-dim int8, PCA to 128 plus int8, product quantization; by printing vs grouped by artwork | Smallest catalog that keeps accuracy |
 | Several frames | Average of 3-5 sharp frames; 2-of-3 agreement with a margin | Right card, and wrong-but-confident rate |
 | Upside-down | Frames turned 180 degrees | Whether orientation needs its own check |
