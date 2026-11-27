@@ -73,7 +73,9 @@ Sources (all "Last updated" Nov 13 or Nov 25, 2026):
 
 **Fit check:** a Commander game state is well under 1 MB; per-action records plus a snapshot each turn is a few hundred rows per game, so 50 million included row writes covers far more games than we'll have. The only real risk is **duration**: a table that stays connected bills 128 MB for as long as it's awake. WebSocket hibernation (sleeping between messages) keeps that low, and the PR 3 cost proof ("100 games measured, inside the $5 plan") checks it.
 
-## Decision for David
+## Decision (David, Nov 27, 2026): option A
+
+**Everything stays free, with a support button (Patreon or Ko-fi), plus limits that apply to everyone if costs need it.**
 
 **Fan Content Policy means no paid tiers ever.** The plan said a Claude coach and deck lab compute would be paid "only if the policy allows". It doesn't. Options:
 
