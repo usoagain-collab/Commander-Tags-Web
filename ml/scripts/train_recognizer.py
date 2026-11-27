@@ -9,7 +9,8 @@ Every --eval-every steps it measures:
   clean pictures (a quick "is it learning" number);
 - real: David's labeled frames (data/labels/labels.json), flattened with the
   labeled corners, against a gallery of every printing of those cards plus
-  5,000 other printings. "card" = right card, "printing" = right printing.
+  --gallery other printings (30,000 by default; 0 = the whole catalog, which
+  takes a few minutes per test). "card" = right card, "printing" = right printing.
   The full catalog test is eval_recognizer.py, after training.
 
 Output in runs/<name>/: log.csv, last.pt, best.pt (best real printing score,
@@ -62,7 +63,7 @@ def save_grid(imgs: torch.Tensor, path: Path, cols: int = 8) -> None:
 
 
 class Evaluator:
-    def __init__(self, index, arr, backgrounds, device):
+    def __init__(self, index, arr, backgrounds, device, others: int = 30000):
         self.arr, self.device = arr, device
         rng = np.random.default_rng(123)
         n = len(index)
@@ -78,8 +79,8 @@ class Evaluator:
             oracle = {index[c]["oracle_id"] for c in cls}
             self.oracle_of = np.array([r["oracle_id"] for r in index])
             same = np.array([i for i, r in enumerate(index) if r["oracle_id"] in oracle])
-            others = rng.choice(n, size=min(5000, n), replace=False)
-            self.gallery = np.unique(np.concatenate([same, others]))
+            pick = np.arange(n) if not others or others >= n else rng.choice(n, size=others, replace=False)
+            self.gallery = np.unique(np.concatenate([same, pick]))
 
     @torch.no_grad()
     def __call__(self, model) -> dict:
@@ -118,6 +119,7 @@ def main() -> None:
     p.add_argument("--corner-err", type=float, default=0.045, help="largest corner miss, share of card width")
     p.add_argument("--workers", type=int, default=3)
     p.add_argument("--eval-every", type=int, default=3000)
+    p.add_argument("--gallery", type=int, default=30000, help="other printings in the real-frame test; 0 = all")
     p.add_argument("--resume", action="store_true")
     p.add_argument("--check", action="store_true", help="60 steps: speed, memory, fakes.jpg; nothing saved")
     p.add_argument("--cpu", action="store_true")
@@ -168,7 +170,7 @@ def main() -> None:
         step, best = ck["step"], ck["best"]
         print(f"Resumed at step {step:,}", flush=True)
 
-    evaluator = None if args.check else Evaluator(index, arr, backgrounds, dev)
+    evaluator = None if args.check else Evaluator(index, arr, backgrounds, dev, args.gallery)
     if evaluator is not None and evaluator.real is not None:
         print(f"Real test: {len(evaluator.real[1])} labeled frames, gallery of {len(evaluator.gallery):,}", flush=True)
 

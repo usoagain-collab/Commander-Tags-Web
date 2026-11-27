@@ -9,8 +9,17 @@ like after a real photo:
   of table or sleeve showing at the edges;
 - sleeves (a tint and a sheen), foil rainbow, glare spots, shadow, a finger
   over an edge;
-- light: exposure, contrast, colour temperature, gamma, saturation;
-- camera: lost resolution, out of focus, motion blur, noise, JPEG blockiness.
+- light: haze (lifted blacks), exposure, contrast, a warm colour cast,
+  gamma, saturation;
+- camera: phone processing (smoothed, then re-sharpened), lost resolution,
+  out of focus, motion blur, a little noise, JPEG blockiness.
+
+Tuned Nov 27, 2026 against David's 101 labeled frames, which look hazy and
+warm: almost no true black (0.7% of pixels vs 14.5% on the clean picture),
+blue always below green (median -0.06), and smooth (phone processing and
+video compression remove grain). The first fakes kept deep blacks, swung the
+colour both ways and kept grain, and the recognizer trained on them found
+the right card in only 28% of real frames against the whole catalog.
 
 Each fake keeps its printing's class number; nothing else is needed.
 """
@@ -114,12 +123,12 @@ class RecogSynth:
             cards = F.interpolate(cards, size=(h, w), mode="bilinear", align_corners=False, antialias=True)
 
         # foil rainbow on the card itself (20%)
-        foil = self.chance(b, 0.2)
+        foil = self.chance(b, 0.1)
         if foil.any():
             ang = self.u(b, 1, 1, lo=0, hi=math.pi)
             ph = (self.xx * torch.cos(ang) + self.yy * torch.sin(ang)) * self.u(b, 1, 1, lo=0.01, hi=0.05)
             rainbow = torch.stack([torch.sin(ph), torch.sin(ph + 2.1), torch.sin(ph + 4.2)], 1) * 0.5 + 0.5
-            k = (self.u(b, lo=0.08, hi=0.3) * foil)[:, None, None, None]
+            k = (self.u(b, lo=0.05, hi=0.2) * foil)[:, None, None, None]
             cards = cards * (1 - k) + rainbow * k
 
         # place the card where slightly wrong corners would put it, over the table
@@ -133,7 +142,8 @@ class RecogSynth:
         # sleeve (35%): a tint over everything and a sheen band
         sleeve = self.chance(b, 0.35)
         if sleeve.any():
-            tint = self.u(b, 3, 1, 1)
+            # sleeves are mostly clear or matte: a near-gray tint, not a strong colour
+            tint = self.u(b, 1, 1, 1, lo=0.3, hi=0.9) + self.u(b, 3, 1, 1, lo=-0.08, hi=0.08)
             k = (self.u(b, lo=0.03, hi=0.15) * sleeve)[:, None, None, None]
             img = img * (1 - k) + tint * k
         sheen = self.chance(b, 0.4)
@@ -175,32 +185,53 @@ class RecogSynth:
 
         # light
         s = self.strength
-        img = img * self.u(b, 1, 1, 1, lo=1 - 0.5 * s, hi=1 + 0.25 * s)
+        # haze (70%): stray light in the lens or a lit room lifts the blacks toward a soft warm gray;
+        # sometimes heavy (a white card that nearly disappears)
+        haze = self.chance(b, 0.7)
+        if haze.any():
+            k = torch.where(self.u(b) < 0.06, self.u(b, lo=0.35, hi=0.55), self.u(b, lo=0.08, hi=0.32)) * haze
+            level = self.u(b, lo=0.4, hi=0.8)
+            fog = torch.stack([level * 1.04, level, level * 0.9], 1)[:, :, None, None]
+            img = img * (1 - k[:, None, None, None]) + fog * k[:, None, None, None]
+        img = img * self.u(b, 1, 1, 1, lo=1 - 0.4 * s, hi=1 + 0.2 * s)
         mean = img.mean((1, 2, 3), keepdim=True)
-        img = (img - mean) * self.u(b, 1, 1, 1, lo=1 - 0.3 * s, hi=1 + 0.3 * s) + mean
-        warm = self.u(b, lo=-0.2, hi=0.2) * s
-        img = img * torch.stack([1 + warm, torch.ones_like(warm), 1 - warm], 1)[:, :, None, None]
+        img = (img - mean) * self.u(b, 1, 1, 1, lo=1 - 0.3 * s, hi=1 + 0.15 * s) + mean
+        # colour: indoor light is warm, so blue sits below green nearly always; a few fakes stay neutral-ish
+        warm_side = self.u(b) < 0.85
+        blue = torch.where(warm_side, self.u(b, lo=-0.12, hi=-0.02), self.u(b, lo=-0.04, hi=0.04)) * s
+        red = torch.where(warm_side, self.u(b, lo=0.0, hi=0.06), self.u(b, lo=-0.03, hi=0.03)) * s
+        img = img + torch.stack([red, torch.zeros_like(red), blue], 1)[:, :, None, None]
         img = img.clamp(0, 1) ** self.u(b, 1, 1, 1, lo=1 - 0.25 * s, hi=1 + 0.35 * s)
         gray = img.mean(1, keepdim=True)
         img = (gray + (img - gray) * self.u(b, 1, 1, 1, lo=1 - 0.4 * s, hi=1 + 0.3 * s)).clamp(0, 1)
 
-        # camera: lost resolution (40%), out of focus (35%), motion blur (20%), noise, JPEG (60%)
-        lowres = self.chance(b, 0.4)
+        # camera: lost resolution (60%), phone processing (65%), out of focus (25%), motion blur (15%),
+        # a little noise (30%), JPEG (75%)
+        lowres = self.chance(b, 0.6)
         if lowres.any():
-            f = float(self.u(1, lo=0.4, hi=0.8))
+            f = float(self.u(1, lo=0.35, hi=0.8))
             small = F.interpolate(img[lowres], scale_factor=f, mode="bilinear", align_corners=False, antialias=True)
             img[lowres] = F.interpolate(small, size=(h, w), mode="bilinear", align_corners=False)
-        blur = self.chance(b, 0.35)
+        phone = self.chance(b, 0.65)
+        if phone.any():
+            n = int(phone.sum())
+            sig = self.u(n, lo=0.6, hi=1.3)
+            soft = gaussian_blur2d(img[phone], (7, 7), torch.stack([sig, sig], 1))
+            # noise reduction smooths grain away, then the phone sharpens the edges back a little
+            edge = soft - gaussian_blur2d(soft, (7, 7), torch.stack([sig * 1.5, sig * 1.5], 1))
+            img[phone] = soft + edge * self.u(n, 1, 1, 1, lo=0.2, hi=0.8)
+        blur = self.chance(b, 0.25)
         if blur.any():
             sig = self.u(int(blur.sum()), lo=0.4, hi=1.8)
             img[blur] = gaussian_blur2d(img[blur], (9, 9), torch.stack([sig, sig], 1))
-        mb = self.chance(b, 0.2)
+        mb = self.chance(b, 0.15)
         if mb.any():
             n = int(mb.sum())
             img[mb] = motion_blur(img[mb], 7, self.u(n, lo=0, hi=180), self.u(n, lo=-1, hi=1))
-        img = img + torch.randn(img.shape, generator=self.gen, device=dev) * self.u(b, 1, 1, 1, lo=0, hi=0.035 * s)
+        noisy = self.chance(b, 0.3)[:, None, None, None]
+        img = img + torch.randn(img.shape, generator=self.gen, device=dev) * self.u(b, 1, 1, 1, lo=0, hi=0.02 * s) * noisy
         img = img.clamp(0, 1)
-        jp = self.chance(b, 0.6)
+        jp = self.chance(b, 0.75)
         if jp.any():
             img[jp] = jpeg_codec_differentiable(img[jp], self.u(int(jp.sum()), lo=35, hi=95))
         return img.clamp(0, 1)
