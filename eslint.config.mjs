@@ -19,6 +19,23 @@ const eslintConfig = [
     },
   },
   {
+    // The rules engine (docs/engine-design.md): states are never changed in place, and the engine has no
+    // React, Next, database or network code, so it runs the same in the browser, Node and Cloudflare.
+    files: ["src/lib/engine/**/*.ts"],
+    rules: {
+      "no-param-reassign": ["error", { props: true }],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["react", "react-*", "next", "next/*", "@supabase/*", "server-only"], message: "The engine stays free of UI, server and database code." },
+            { group: ["@/*", "!@/lib/engine", "!@/lib/engine/*"], message: "The engine imports only its own modules." },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       "node_modules/**",
       ".next/**",

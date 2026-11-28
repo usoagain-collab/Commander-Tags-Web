@@ -16,7 +16,9 @@
     "bracket:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/bracket-check.mts",
     "wording:check": "node --env-file=.env.local scripts/run-ts.mjs scripts/wording-check.mts",
     "import:precons": "node --env-file-if-exists=.env.local scripts/import-precons.mts",
-    "import:prices": "node --env-file-if-exists=.env.local scripts/run-ts.mjs scripts/import-prices.mts"
+    "import:prices": "node --env-file-if-exists=.env.local scripts/run-ts.mjs scripts/import-prices.mts",
+    "engine:bench": "node scripts/run-ts.mjs scripts/engine-bench.mts",
+    "engine:sample": "node scripts/run-ts.mjs scripts/engine-sample.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
