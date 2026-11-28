@@ -172,7 +172,7 @@ DINOv2 with averaged patch tokens instead of the CLS token: 70.3% card, 57.4% pr
 
 Catalog search in plain JavaScript: 9 ms for 56,811 artworks at 128-dim int8 (6.9 MB), 28 ms for 115,080 printings at 384-dim (42.1 MB). The tab survived every run.
 
-Reading: **int8 on WASM** is the default (smallest download, lowest memory, under 300 ms, no WebGPU needed). fp16 on WebGPU is a little faster where WebGPU exists, but twice the download. int8 on WASM takes about 7 s to load the first time (compiling the int8 kernels), so load it in the background worker when the scanner opens, not on the first card. Three frames a card is about 0.7 s of recognition. No distillation needed for Android. iPhone Safari: not tested yet.
+Accuracy of the exported models on the 101 frames: fp16 matches the full model (76.2% card); the quick int8 conversion loses about 5 points (71.3% card / 53.5% printing). Reading: **fp16 on WebGPU** is the default (189 ms, 42 MB, no accuracy loss); fp16 on WASM (332 ms) is the fallback without WebGPU. A careful int8 conversion calibrated on card pictures may later recover the loss for phones without WebGPU. The 7 s first load was a one-time runtime start-up; later loads took 0.1-0.2 s. Load the model in the background worker when the scanner opens. A whole scan (corners, 3 pooled frames, search) is about 0.7-1 s per card. No distillation needed for Android. iPhone Safari: not tested yet.
 
 ### Benchmark results (Nov 27, 2026, 101 frames, no training)
 
