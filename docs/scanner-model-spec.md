@@ -174,6 +174,17 @@ Catalog search in plain JavaScript: 9 ms for 56,811 artworks at 128-dim int8 (6.
 
 Accuracy of the exported models on the 101 frames: fp16 matches the full model (76.2% card); the quick int8 conversion loses about 5 points (71.3% card / 53.5% printing). Reading: **fp16 on WebGPU** is the default (189 ms, 42 MB, no accuracy loss); fp16 on WASM (332 ms) is the fallback without WebGPU. A careful int8 conversion calibrated on card pictures may later recover the loss for phones without WebGPU. The 7 s first load was a one-time runtime start-up; later loads took 0.1-0.2 s. Load the model in the background worker when the scanner opens. A whole scan (corners, 3 pooled frames, search) is about 0.7-1 s per card. No distillation needed for Android. iPhone Safari: not tested yet.
 
+**iPhone (iOS 18.7, 4 cores, cross-origin isolated, WebGPU, 4 threads; opened in the LINE app's built-in browser, which is Safari's WebKit engine): pass.**
+
+| Model, backend | Download | Load | First run | Typical run |
+| --- | --- | --- | --- | --- |
+| int8, WASM | 22.9 MB, 5.8 s | 6.0 s | 480 ms | 177 ms |
+| fp16, WASM | 42.2 MB, 9.8 s | 0.2 s | 238 ms | 209 ms |
+| fp16, WebGPU | 42.2 MB, 9.7 s | 0.1 s | 606 ms | 110 ms |
+| int8, WebGPU | 22.9 MB, 5.5 s | 0.1 s | 647 ms | 283 ms |
+
+Memory isn't reported on iPhone, but the tab survived every run. Catalog search: 9 ms for 56,811 artworks at 128-dim, but 134-403 ms for the bigger catalogs, so the **artwork catalog at 128-dim int8 (6.9 MB) is the one to ship**. fp16 on WebGPU is the default on both phones; fp16 on WASM (209-332 ms) is the fallback. **Phone go / no-go: pass on both. No distillation needed.**
+
 ### Benchmark results (Nov 27, 2026, 101 frames, no training)
 
 Raw output on the laptop: `ml/runs/recog-v3/compare/` (`ablations.txt`, `scanlab_hand.json`, `scanlab_cv2.json`; not committed).
