@@ -54,9 +54,22 @@ Labeling tips (also on the page): start at the card's own top-left corner (left 
 | --- | --- | --- |
 | `uv run python -I scripts/build_cache.py` | Packs 30,000 random card pictures (224 px tall) and every background into `data/cache/` so training never waits on decoding JPEGs (3.4 GB) | 2 min |
 | `uv run python -I scripts/preview_synth.py` | Saves 24 fake training photos with their corner targets drawn on to `data/synth_preview.jpg` (gold = card's top-left, red ring = covered) and times the generator | 30 s |
-| `uv run python -I scripts/train_corners.py --name corners-v1` | Trains the corner finder on fake photos made on the fly. Every 2,000 steps it scores itself on 1,024 fixed fake photos, on every labeled real frame (labels added during training count), and on 2 surface videos kept out of training ("no card" test). `--resume` carries on after a stop. Output in `runs/<name>/` (`log.csv`, `best.pt`, `last.pt`) | about 3.5 hours for 40,000 steps |
+| `uv run python -I scripts/train_corners.py --name corners-v1` | Trains the corner finder on fake photos made on the fly. Every 2,000 steps it scores itself on 1,024 fixed fake photos, on every labeled real frame (labels added during training count), and on 2 surface videos kept out of training ("no card" test). `--resume` carries on after a stop; `--init runs/<other>/last.pt` starts from another run's weights. Output in `runs/<name>/` (`log.csv`, `best.pt`, `last.pt`) | about 3.5 hours for 40,000 steps |
 
-Code shared by the scripts lives in `scanner/`: `synth.py` (fake photos, all on the graphics card) and `corner_model.py` (MobileNetV3-Small with a heatmap per corner; positions by soft-argmax).
+| `uv run python -I scripts/eval_corners.py runs/corners-v2/best.pt` | Scores a corner finder on every labeled frame, pass by pass: pass 1 looks at the whole frame, pass 2 and 3 at a crop around the previous answer cut from the full-size frame (`scanner/refine.py`). Writes `eval_3.csv` and `eval_worst.jpg` (green = label, red = pass 1, gold = last pass) next to the checkpoint. | 1 min |
+
+### Phase 3: card recognizer
+
+| Command | What it does | Time |
+| --- | --- | --- |
+| `uv run python -I scripts/build_recog_cache.py` | Packs **every** downloaded picture at 312 x 224 into `data/cache/recog_312.npy` (about 24 GB on disk; training reads it from disk, it never has to fit in memory) plus `recog_312.csv` (class number, Scryfall id, face, oracle id, artwork id, name, set, number). `--limit 2000` makes a small test cache | 10-20 min |
+| `uv run python -I scripts/train_recognizer.py --check` | 60 training steps: prints pictures a second and graphics card memory, and saves 32 fake training pictures to `runs/recog-check/fakes.jpg`. The default (16 printings, 32 pictures a batch) fits the 6 GB card | 2 min |
+| `uv run python -I scripts/build_recog_cache.py --limit 2000 --name recog_small` then `uv run python -I scripts/train_recognizer.py --name recog-small --cache recog_small --epochs 30 --eval-every 200` | A small proof before the long run: the real-frame score should climb (only your frames whose printing is among those 2,000 count) | 15 min |
+| `uv run python -I scripts/train_recognizer.py --name recog-v3 --epochs 8 --eval-every 2000` | Trains the recognizer (EfficientNet-B0 to 128 numbers) by **pairs**: each fake photo has to match the clean picture of its own printing more than the batch's other printings, and same-card printings sit together in a batch. Every `--eval-every` steps (3,000) it scores 1,000 fake photos and your labeled frames against every printing of those cards plus 30,000 others (`--gallery`; 0 = the whole catalog), and saves `last.pt`. `--resume` carries on. Start long runs detached from Claude (`runs/detached.cmd`), or they stop when the Claude session ends. `--loss arcface` is the first method: it collapsed on the full cache (Nov 26, 2026) | about 9 hours (20 passes) |
+| `uv run python -I scripts/build_catalog.py runs/recog-v3/best.pt` | Fingerprints every printing: `catalog.npy` (about 28 MB) and `catalog.csv` next to the checkpoint | about 5 min |
+| `uv run python -I scripts/eval_recognizer.py runs/recog-v3/best.pt` | The phase 3 go / no-go on your labeled frames against the whole catalog: right card, artwork and printing, how often it would add a card on its own and get it wrong, and every miss. Add `--corners runs/corners-v2/best.pt` to flatten with the corner finder's corners instead of yours (the whole scanner minus the phone) | 1 min |
+
+Code shared by the scripts lives in `scanner/`: `synth.py` (fake photos, all on the graphics card) and `corner_model.py` (MobileNetV3-Small with a heatmap per corner; positions by soft-argmax), `refine.py` (the zoomed-in second pass), `straighten.py` (flatten a card from its 4 corners), `recog_synth.py` (fake flattened photos: corners a few % off, sleeves, foil, glare, finger, blur, JPEG), `recog_model.py` (recognizer, pair loss, ArcFace) and `recog_data.py` (cache, same-card batches, labeled frames).
 
 ## Numbers so far (Nov 22, 2026)
 
@@ -65,6 +78,8 @@ Code shared by the scripts lives in `scanner/`: `synth.py` (fake photos, all on 
 - **Videos (Nov 22, 2026):** 10 surface videos (5.2 min) and 74 card videos (9.3 min), all HEVC 1920 × 1216 at 30 fps, stored sideways with a rotation note (the scripts turn them upright).
 - **Fake photo generator:** about 310 photos a second at 384 × 256; training runs at about 200 a second including the generator. The JPEG effect was the slowest single step (46 ms a batch), so it and the blurs only run on the photos that use them.
 - **Printings:** 120,275 printings in `default_cards`; **110,941 paper printings with pictures**, 115,080 pictures counting back faces. Languages: English 108,291, then Spanish 1,207, Japanese 652, French 430 and a few hundred more.
+
+- **Corner finder on real frames (Nov 25, 2026, corners-v2 best):** median corner error 4.5% of the card's width, 35% of frames within 4% (go / no-go: 2% average, 95% within 4%). It finds a card in every labeled frame and says "no card" on every empty one. The zoomed-in second pass takes it to a median of 4.2% and 46% within 4%; a third pass adds nothing. Snapping each side to the strongest nearby edge (classic image processing) made it worse: blanket patterns and the black border's inner edge pull the lines. So the recognizer is trained on corners up to 4.5% off (`--corner-err`), and eval_recognizer.py `--corners` measures what that costs.
 
 ## Tips for long runs
 
