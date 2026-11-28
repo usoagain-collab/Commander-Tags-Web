@@ -9,8 +9,8 @@ Every --eval-every steps it measures:
 - real "no card": frames of the last 2 surface videos, which are kept out of
   training so they're surfaces the model has never seen.
 
-Output in runs/<name>/: log.csv, last.pt, best.pt (lowest real corner error
-once there are 20+ labeled frames, else lowest synthetic error).
+Output in runs/<name>/: log.csv, last.pt, best.pt (lowest median real corner
+error once there are 20+ labeled frames, else lowest synthetic error).
 
 Run:  uv run python -I scripts/train_corners.py --name corners-v1 [--steps 40000] [--resume]
 """
@@ -139,6 +139,7 @@ def main() -> None:
     p.add_argument("--lr", type=float, default=2e-3)
     p.add_argument("--eval-every", type=int, default=2000)
     p.add_argument("--resume", action="store_true")
+    p.add_argument("--init", help="start from another run's weights (e.g. runs/corners-v1/last.pt)")
     args = p.parse_args()
 
     run = ML / "runs" / args.name
@@ -169,13 +170,17 @@ def main() -> None:
         t = (step - warmup) / max(1, args.steps - warmup)
         return 1e-5 + (args.lr - 1e-5) * 0.5 * (1 + math.cos(math.pi * t))
 
-    step, best = 0, float("inf")
+    step, best, best_kind = 0, float("inf"), "syn"
     if args.resume and (run / "last.pt").exists():
         ck = torch.load(run / "last.pt", map_location="cuda")
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
-        step, best = ck["step"], ck["best"]
+        step, best, best_kind = ck["step"], ck["best"], ck.get("best_kind", "mixed")
         print(f"Resumed at step {step}", flush=True)
+    elif args.init:
+        ck = torch.load(args.init, map_location="cuda")
+        model.load_state_dict(ck["model"])
+        print(f"Starting from the weights in {args.init}", flush=True)
 
     log_path = run / "log.csv"
     fields = ["step", "time", "lr", "loss", "xy", "heat", "present", "hidden", "syn_err", "syn_within4",
@@ -215,8 +220,14 @@ def main() -> None:
             log.writerow(row)
             logf.flush()
             run_loss, parts_sum, n = 0.0, {}, 0
-            score = res["real_err"] if res.get("real_n", 0) >= 20 else res["syn_err"]
-            ck = {"model": model.state_dict(), "opt": opt.state_dict(), "step": step, "best": min(best, score)}
+            # Rank by real frames once there are enough. Never compare a real score with a synthetic
+            # one (corners-v1 kept an early synthetic best forever): restart "best" when the kind changes.
+            kind = "real" if res.get("real_n", 0) >= 20 else "syn"
+            score = res["real_median"] if kind == "real" else res["syn_err"]
+            if kind != best_kind:
+                best, best_kind = float("inf"), kind
+            ck = {"model": model.state_dict(), "opt": opt.state_dict(), "step": step, "best": min(best, score),
+                  "best_kind": best_kind}
             if score < best:
                 best = score
                 torch.save(ck, run / "best.pt")
