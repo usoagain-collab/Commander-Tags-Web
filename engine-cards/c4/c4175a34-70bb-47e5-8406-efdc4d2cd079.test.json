@@ -1,0 +1,93 @@
+{
+  "card": "c4175a34-70bb-47e5-8406-efdc4d2cd079",
+  "name": "Sami, Wildcat Captain",
+  "tests": [
+    {
+      "name": "cast for {4}{R}{W}: a 4/4",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Sami, Wildcat Captain"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Sami, Wildcat Captain"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "chars": "Sami, Wildcat Captain",
+          "power": 4,
+          "toughness": 4
+        }
+      ]
+    },
+    {
+      "name": "double strike and vigilance",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Sami, Wildcat Captain"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Sami, Wildcat Captain",
+          "has": [
+            "double strike",
+            "vigilance"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "your spells have affinity for artifacts",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Hill Giant"
+            ],
+            "battlefield": [
+              "Sami, Wildcat Captain",
+              "Mountain",
+              "Sol Ring"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Hill Giant"
+        }
+      ],
+      "expect": [
+        {
+          "stack": 1
+        }
+      ],
+      "pending": "PR 4c"
+    }
+  ]
+}

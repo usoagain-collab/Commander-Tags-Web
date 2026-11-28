@@ -1,0 +1,39 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "b1544f21-7e98-461b-aed5-e748b0168c52",
+  "name": "Swords to Plowshares",
+  "oracleHash": "03c7ae8fb4c3ffc6",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "type": "creature"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "exile": "$t"
+            },
+            {
+              "gainLife": {
+                "amount": {
+                  "power": "$t",
+                  "lki": true
+                },
+                "player": {
+                  "controllerOf": "$t"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

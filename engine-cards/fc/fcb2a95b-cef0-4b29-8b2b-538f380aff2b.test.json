@@ -1,0 +1,99 @@
+{
+  "card": "fcb2a95b-cef0-4b29-8b2b-538f380aff2b",
+  "name": "Vampire Hexmage",
+  "tests": [
+    {
+      "name": "removes every counter: a planeswalker dies",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Vampire Hexmage"
+            ]
+          },
+          {
+            "battlefield": [
+              "Jace, the Mind Sculptor"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "activate": "Vampire Hexmage"
+        },
+        {
+          "targets": [
+            "Jace, the Mind Sculptor"
+          ]
+        },
+        {
+          "check": [
+            {
+              "zone": "graveyard",
+              "seat": 0,
+              "has": [
+                "Vampire Hexmage"
+              ]
+            }
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Jace, the Mind Sculptor"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "removes +1/+1 counters",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Vampire Hexmage",
+              {
+                "card": "Grizzly Bears",
+                "counters": {
+                  "+1/+1": 3
+                }
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Vampire Hexmage"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "chars": "Grizzly Bears",
+          "power": 2
+        },
+        {
+          "counters": "Grizzly Bears",
+          "kind": "+1/+1",
+          "is": 0
+        }
+      ]
+    }
+  ]
+}

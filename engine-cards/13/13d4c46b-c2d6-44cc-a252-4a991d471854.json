@@ -1,0 +1,27 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "13d4c46b-c2d6-44cc-a252-4a991d471854",
+  "name": "Sylvan Caryatid",
+  "oracleHash": "1ff64c9531b0439b",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "defender"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "hexproof"
+        },
+        {
+          "kind": "mana",
+          "cost": "tap",
+          "add": {
+            "anyColor": 1
+          }
+        }
+      ]
+    }
+  ]
+}

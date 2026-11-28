@@ -1,0 +1,58 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "c7b044c3-3cfa-407e-bf20-2875e8e04b7b",
+  "name": "Brazen Borrower // Petty Theft",
+  "oracleHash": "3889be2c62d0d0b7",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "flash"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "flying"
+        },
+        {
+          "kind": "static",
+          "effects": [
+            {
+              "ruleEffect": {
+                "canBlockOnly": {
+                  "with": {
+                    "keyword": "flying"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "permanent",
+                "not": {
+                  "type": "land"
+                },
+                "controller": "opponent"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "bounce": "$t"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

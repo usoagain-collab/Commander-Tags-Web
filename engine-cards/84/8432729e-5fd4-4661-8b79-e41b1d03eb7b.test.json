@@ -1,0 +1,129 @@
+{
+  "card": "8432729e-5fd4-4661-8b79-e41b1d03eb7b",
+  "name": "Travel Preparations",
+  "tests": [
+    {
+      "name": "a +1/+1 counter on each of up to two creatures",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Travel Preparations"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest",
+              "Grizzly Bears",
+              "Savannah Lions"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Travel Preparations"
+        },
+        {
+          "targets": [
+            "Grizzly Bears",
+            "Savannah Lions"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "counters": "Grizzly Bears",
+          "kind": "+1/+1",
+          "is": 1
+        },
+        {
+          "chars": "Savannah Lions",
+          "power": 3,
+          "toughness": 2
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Travel Preparations"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "flashback {1}{W} from the graveyard, then exile it",
+      "setup": {
+        "seats": [
+          {
+            "graveyard": [
+              "Travel Preparations"
+            ],
+            "battlefield": [
+              "Plains",
+              "Plains",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Travel Preparations",
+          "via": "flashback"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "counters": "Grizzly Bears",
+          "kind": "+1/+1",
+          "is": 1
+        },
+        {
+          "zone": "exile",
+          "has": [
+            "Travel Preparations"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "flashback only from the graveyard",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Travel Preparations"
+            ],
+            "battlefield": [
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "cast": "Travel Preparations",
+            "via": "flashback"
+          },
+          "match": "graveyard"
+        }
+      ]
+    }
+  ]
+}

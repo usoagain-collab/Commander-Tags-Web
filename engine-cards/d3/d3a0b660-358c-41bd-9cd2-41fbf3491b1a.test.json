@@ -1,0 +1,89 @@
+{
+  "card": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
+  "name": "Birds of Paradise",
+  "tests": [
+    {
+      "name": "taps for one mana of any color",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Birds of Paradise"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "mana": "Birds of Paradise",
+          "color": "G"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "G": 1
+          }
+        },
+        {
+          "tapped": "Birds of Paradise"
+        }
+      ]
+    },
+    {
+      "name": "can't tap the turn it arrives (302.6)",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              {
+                "card": "Birds of Paradise",
+                "sick": true
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "mana": "Birds of Paradise",
+            "color": "U"
+          },
+          "match": "arrived this turn"
+        }
+      ]
+    },
+    {
+      "name": "asks which color",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Birds of Paradise"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "mana": "Birds of Paradise"
+          },
+          "match": "choose a color"
+        }
+      ],
+      "expect": [
+        {
+          "keywords": "Birds of Paradise",
+          "has": [
+            "flying"
+          ]
+        }
+      ]
+    }
+  ]
+}

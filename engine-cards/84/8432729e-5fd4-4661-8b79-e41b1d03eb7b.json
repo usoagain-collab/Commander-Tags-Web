@@ -1,0 +1,47 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "8432729e-5fd4-4661-8b79-e41b1d03eb7b",
+  "name": "Travel Preparations",
+  "oracleHash": "82fe2d920ae8b846",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "type": "creature"
+              },
+              "count": {
+                "min": 0,
+                "max": 2
+              }
+            }
+          ],
+          "effect": [
+            {
+              "forEach": {
+                "over": "$t",
+                "do": [
+                  {
+                    "addCounters": {
+                      "kind": "+1/+1",
+                      "on": "$each"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "keyword",
+          "keyword": "flashback",
+          "cost": "{1}{W}"
+        }
+      ]
+    }
+  ]
+}

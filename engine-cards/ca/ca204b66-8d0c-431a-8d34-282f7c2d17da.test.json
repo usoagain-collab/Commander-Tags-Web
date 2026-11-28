@@ -1,0 +1,155 @@
+{
+  "card": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+  "name": "Lightning Greaves",
+  "tests": [
+    {
+      "name": "equip {0} attaches it to a creature you control",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Lightning Greaves",
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "activate": "Lightning Greaves"
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Grizzly Bears"
+              ],
+              "notChoices": [
+                "Hill Giant"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "attached": "Lightning Greaves",
+          "to": "Grizzly Bears"
+        }
+      ]
+    },
+    {
+      "name": "equip only as a sorcery",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Lightning Greaves",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ],
+        "active": 1
+      },
+      "do": [
+        {
+          "pass": true
+        },
+        {
+          "refused": {
+            "activate": "Lightning Greaves",
+            "seat": 0
+          },
+          "match": "main phase"
+        }
+      ]
+    },
+    {
+      "name": "falls off when the creature leaves (704.5n)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains",
+              "Grizzly Bears",
+              {
+                "card": "Lightning Greaves",
+                "attachedTo": "Grizzly Bears"
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Swords to Plowshares"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "attached": "Lightning Greaves",
+          "to": null
+        },
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Lightning Greaves"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "the equipped creature has haste and shroud",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Grizzly Bears",
+              {
+                "card": "Lightning Greaves",
+                "attachedTo": "Grizzly Bears"
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Grizzly Bears",
+          "has": [
+            "haste"
+          ]
+        }
+      ],
+      "pending": "PR 4c"
+    }
+  ]
+}

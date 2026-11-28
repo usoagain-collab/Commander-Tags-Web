@@ -1,0 +1,92 @@
+{
+  "card": "397b9dcf-690a-4a58-8637-bb9baab7cc2f",
+  "name": "Elder Gargaroth",
+  "tests": [
+    {
+      "name": "cast for {3}{G}{G}: a 6/6",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Elder Gargaroth"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Elder Gargaroth"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "chars": "Elder Gargaroth",
+          "power": 6,
+          "toughness": 6,
+          "types": [
+            "Creature"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reach, vigilance, trample",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Elder Gargaroth"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Elder Gargaroth",
+          "has": [
+            "reach",
+            "vigilance",
+            "trample"
+          ],
+          "lacks": [
+            "flying"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "attacking makes a Beast, gains 3 or draws",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Elder Gargaroth"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "zone": "battlefield",
+          "has": [
+            "Beast"
+          ]
+        }
+      ],
+      "pending": "PR 3"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "437b2dab-15e0-4b9a-a204-58622d37a3b3",
+  "name": "Fact or Fiction",
+  "oracleHash": "f71f561a61f01bdb",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "reveal": {
+                "top": 5,
+                "player": "you",
+                "as": "revealed"
+              }
+            },
+            {
+              "choose": {
+                "opponent": true,
+                "as": "opp"
+              }
+            },
+            {
+              "splitPiles": {
+                "objects": "$revealed",
+                "player": "$opp",
+                "as": "piles"
+              }
+            },
+            {
+              "choosePile": {
+                "from": "$piles",
+                "player": "you",
+                "as": "chosen",
+                "other": "rest"
+              }
+            },
+            {
+              "move": {
+                "objects": "$chosen",
+                "to": "hand"
+              }
+            },
+            {
+              "move": {
+                "objects": "$rest",
+                "to": "graveyard"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

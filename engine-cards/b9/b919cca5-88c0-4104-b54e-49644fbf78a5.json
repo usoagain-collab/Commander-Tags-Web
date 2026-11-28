@@ -1,0 +1,48 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "b919cca5-88c0-4104-b54e-49644fbf78a5",
+  "name": "Door to Nothingness",
+  "oracleHash": "e976aac5deb4de15",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "replacement",
+          "self": true,
+          "replaces": {
+            "event": "enters",
+            "object": "self"
+          },
+          "with": {
+            "enterTapped": true
+          }
+        },
+        {
+          "kind": "activated",
+          "cost": [
+            "{W}{W}{U}{U}{B}{B}{R}{R}{G}{G}",
+            "tap",
+            {
+              "sacrifice": {
+                "object": "self"
+              }
+            }
+          ],
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "player"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "loseGame": "$t"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

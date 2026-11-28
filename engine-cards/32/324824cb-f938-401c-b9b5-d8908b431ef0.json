@@ -1,0 +1,45 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "324824cb-f938-401c-b9b5-d8908b431ef0",
+  "name": "Snuff Out",
+  "oracleHash": "d32c1690d70da2d8",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "cost",
+          "name": "payLife",
+          "alternative": {
+            "payLife": 4
+          },
+          "if": {
+            "exists": {
+              "type": "land",
+              "subtype": "Swamp",
+              "controller": "you"
+            }
+          }
+        },
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "type": "creature",
+                "not": {
+                  "color": "black"
+                }
+              }
+            }
+          ],
+          "effect": [
+            {
+              "destroy": "$t"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

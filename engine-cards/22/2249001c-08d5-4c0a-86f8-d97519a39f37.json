@@ -1,0 +1,45 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "2249001c-08d5-4c0a-86f8-d97519a39f37",
+  "name": "Stoke the Flames",
+  "oracleHash": "8dab181b07b20d5a",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "convoke"
+        },
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "anyOf": [
+                  {
+                    "type": [
+                      "creature",
+                      "planeswalker"
+                    ]
+                  },
+                  {
+                    "kind": "player"
+                  }
+                ]
+              }
+            }
+          ],
+          "effect": [
+            {
+              "dealDamage": {
+                "amount": 4,
+                "to": "$t"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

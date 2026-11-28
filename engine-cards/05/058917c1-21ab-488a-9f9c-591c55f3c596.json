@@ -1,0 +1,33 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "058917c1-21ab-488a-9f9c-591c55f3c596",
+  "name": "Diabolic Edict",
+  "oracleHash": "00a567ef84c001a0",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "player"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "sacrifice": {
+                "select": {
+                  "type": "creature"
+                },
+                "player": "$t"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

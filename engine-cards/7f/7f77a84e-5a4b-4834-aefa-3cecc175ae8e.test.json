@@ -1,0 +1,287 @@
+{
+  "card": "7f77a84e-5a4b-4834-aefa-3cecc175ae8e",
+  "name": "Jace, the Mind Sculptor",
+  "tests": [
+    {
+      "name": "+2: look at the top of a library, maybe put it on the bottom",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Jace, the Mind Sculptor"
+            ]
+          },
+          {
+            "library": [
+              "Forest",
+              "Island",
+              "Island"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "activate": "Jace, the Mind Sculptor",
+          "ability": 0
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "yesNo",
+              "purpose": "may"
+            }
+          ]
+        },
+        {
+          "yes": true
+        }
+      ],
+      "expect": [
+        {
+          "bottom": "Forest",
+          "seat": 1
+        },
+        {
+          "counters": "Jace, the Mind Sculptor",
+          "kind": "loyalty",
+          "is": 5
+        },
+        {
+          "event": "look"
+        }
+      ]
+    },
+    {
+      "name": "0: draw three, put two back in order",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Jace, the Mind Sculptor"
+            ],
+            "library": [
+              "Forest",
+              "Plains",
+              "Mountain",
+              "Swamp"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Jace, the Mind Sculptor",
+          "ability": 1
+        },
+        {
+          "resolve": true
+        },
+        {
+          "choose": [
+            "Mountain",
+            "Forest"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "top": [
+            "Mountain",
+            "Forest",
+            "Swamp"
+          ]
+        },
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Plains"
+          ],
+          "count": 1
+        },
+        {
+          "counters": "Jace, the Mind Sculptor",
+          "kind": "loyalty",
+          "is": 3
+        }
+      ]
+    },
+    {
+      "name": "−1: bounce a creature",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Jace, the Mind Sculptor"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "activate": "Jace, the Mind Sculptor",
+          "ability": 2
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "counters": "Jace, the Mind Sculptor",
+          "kind": "loyalty",
+          "is": 2
+        }
+      ]
+    },
+    {
+      "name": "one loyalty ability a turn, at sorcery speed (606.3)",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Jace, the Mind Sculptor"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Jace, the Mind Sculptor",
+          "ability": 1
+        },
+        {
+          "refused": {
+            "activate": "Jace, the Mind Sculptor",
+            "ability": 0
+          },
+          "match": "main phase"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "choose": [
+            "Island",
+            "Island"
+          ]
+        },
+        {
+          "refused": {
+            "activate": "Jace, the Mind Sculptor",
+            "ability": 0
+          },
+          "match": "already used"
+        }
+      ]
+    },
+    {
+      "name": "−12 needs 12 loyalty; then exiles a library and shuffles the hand in",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              {
+                "card": "Jace, the Mind Sculptor",
+                "counters": {
+                  "loyalty": 12
+                }
+              }
+            ]
+          },
+          {
+            "hand": [
+              "Grizzly Bears",
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "activate": "Jace, the Mind Sculptor",
+          "ability": 3
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "librarySize": 2,
+          "seat": 1
+        },
+        {
+          "handSize": 0,
+          "seat": 1
+        },
+        {
+          "zone": "exile",
+          "count": 10
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Jace, the Mind Sculptor"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "−12 is refused with too little loyalty",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Jace, the Mind Sculptor"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "activate": "Jace, the Mind Sculptor",
+            "ability": 3
+          },
+          "match": "loyalty"
+        }
+      ]
+    }
+  ]
+}

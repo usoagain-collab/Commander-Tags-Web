@@ -1,0 +1,164 @@
+{
+  "card": "c7b044c3-3cfa-407e-bf20-2875e8e04b7b",
+  "name": "Brazen Borrower // Petty Theft",
+  "tests": [
+    {
+      "name": "Petty Theft returns an opponent's nonland permanent, then the card waits in exile (715.4)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Brazen Borrower // Petty Theft"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant",
+              "Forest"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Brazen Borrower",
+          "face": 1
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Hill Giant"
+              ],
+              "notChoices": [
+                "Grizzly Bears",
+                "Forest"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 1,
+          "has": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "zone": "exile",
+          "has": [
+            "Brazen Borrower"
+          ]
+        },
+        {
+          "legal": {
+            "kind": "cast",
+            "card": "Brazen Borrower"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the creature can be cast from exile after its Adventure",
+      "setup": {
+        "seats": [
+          {
+            "exile": [
+              {
+                "card": "Brazen Borrower // Petty Theft",
+                "onAdventure": true
+              }
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Brazen Borrower",
+          "face": 0
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Brazen Borrower"
+          ]
+        },
+        {
+          "keywords": "Brazen Borrower",
+          "has": [
+            "flash",
+            "flying"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "flash: cast on an opponent's turn",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Brazen Borrower // Petty Theft"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ],
+        "active": 1
+      },
+      "do": [
+        {
+          "pass": true
+        },
+        {
+          "cast": "Brazen Borrower",
+          "face": 0,
+          "seat": 0
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Brazen Borrower"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "card": "13d4c46b-c2d6-44cc-a252-4a991d471854",
+  "name": "Sylvan Caryatid",
+  "tests": [
+    {
+      "name": "taps for one mana of any color",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Sylvan Caryatid"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "mana": "Sylvan Caryatid",
+          "color": "U"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "U": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "hexproof, defender",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Sylvan Caryatid",
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "pass": true
+        },
+        {
+          "cast": "Swords to Plowshares",
+          "seat": 1
+        }
+      ],
+      "expect": [
+        {
+          "notChoices": [
+            "Sylvan Caryatid"
+          ],
+          "choices": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "keywords": "Sylvan Caryatid",
+          "has": [
+            "defender",
+            "hexproof"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "16e015b2-f8a3-4b1a-80be-58a8f5fb5e8c",
+  "name": "Frantic Search",
+  "oracleHash": "9214e83822ade80a",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "draw": 2
+            },
+            {
+              "discard": 2
+            },
+            {
+              "choose": {
+                "select": {
+                  "type": "land",
+                  "controller": "you"
+                },
+                "count": {
+                  "min": 0,
+                  "max": 3
+                },
+                "prompt": "Untap up to three lands",
+                "as": "lands"
+              }
+            },
+            {
+              "untap": "$lands"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

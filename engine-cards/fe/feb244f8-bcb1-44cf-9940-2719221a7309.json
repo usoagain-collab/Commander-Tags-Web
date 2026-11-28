@@ -1,0 +1,24 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "feb244f8-bcb1-44cf-9940-2719221a7309",
+  "name": "Vampire Nighthawk",
+  "oracleHash": "bd97debb2672fd5f",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "flying"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "deathtouch"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "lifelink"
+        }
+      ]
+    }
+  ]
+}

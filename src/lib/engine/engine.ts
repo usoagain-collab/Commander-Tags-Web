@@ -1,42 +1,44 @@
 // The engine: `step(state, seat, action) -> { state, events, decision }` (engine-design.md).
 // A pure function. It never waits for anyone: it returns the next Decision and stops.
 //
-// PR 1 covers: turn steps, priority, playing lands, mana from basic land types (305.6), casting spells with
-// no abilities and rolling a cast back when it can't be paid (601.2, 733), the stack, resolving, basic
-// state-based actions, conceding and basic player elimination. Combat, Commander rules and mulligans are
-// PR 3; card abilities arrive with the card language (PR 2).
+// PR 1 built turn steps, priority, playing lands, casting with rollback (601.2, 733), the stack, basic
+// state-based actions and elimination. PR 2 adds the card language: spells and abilities with scripts,
+// activated and mana abilities, targets (and rechecking them, 608.2b), modes, kicker, X, alternative costs,
+// effects that ask questions mid-resolution, extra turns, and the state checks for tokens, deathtouch,
+// Auras, Equipment and counters. Combat, Commander rules and mulligans are PR 3; triggers PR 4a.
 
-import { chars } from "./chars";
+import { chars, hasKeyword } from "./chars";
 import { castableFaces, isPermanentFace, playableLandFaces, printedFace } from "./cards";
-import { intrinsicMana, parseCost, payFromPool, planAutoPay, poolTotal, type ManaSource } from "./mana";
-import { pmapDelete, pmapEmpty } from "./pmap";
+import { pmapEmpty } from "./pmap";
+import { eliminate } from "./players";
+import {
+  activateActions,
+  activateManaAbility,
+  activateRefusal,
+  askPayment,
+  beginActivation,
+  beginCast,
+  castActions,
+  castRefusal,
+  castWords,
+  isCastDecision,
+  answerCast,
+  manaActions,
+  manaSources,
+  recheckTargets,
+  selfOf,
+  stackActivatable,
+  planFor,
+} from "./play";
+import { answerResolution, leaveStack, newResolution, runResolution, setManaSourceProvider } from "./lang/run";
 import { RULES } from "./rules-refs";
 import { specialRefusal } from "./special";
-import {
-  drawCard,
-  emptyPools,
-  living,
-  maybeObj,
-  moveObject,
-  nextDecisionId,
-  nextLiving,
-  obj,
-  setObj,
-  setSeat,
-  setTapped,
-} from "./state";
-import type {
-  Action,
-  Choice,
-  Decision,
-  GameEvent,
-  GameState,
-  ManaType,
-  ObjectId,
-  Seat,
-  Step,
-  StepResult,
-} from "./types";
+import { ceaseToExist, drawCard, emptyPools, living, maybeObj, moveObject, nextDecisionId, nextLiving, obj, setObj, setTapped } from "./state";
+import type { Action, Choice, Decision, GameEvent, GameState, ObjectId, Seat, Step, StepResult } from "./types";
+
+export { manaSources } from "./play";
+
+setManaSourceProvider((s, seat, convoke) => manaSources(s, seat, convoke));
 
 export const STEP_ORDER: Step[] = [
   "untap",
@@ -80,23 +82,42 @@ export function step(state: GameState, seat: Seat, action: Action): StepResult {
   if (!d) return refuse("nothing to decide");
   if (d.seat !== seat) return refuse(`waiting for seat ${d.seat}`);
 
-  switch (d.kind) {
-    case "priority":
-      return priorityAction(state, ev, seat, action, refuse, done);
-    case "payCost":
-      if (action.kind === "activateMana") {
-        const r = manaAbility(state, ev, seat, action.object, action.ability);
-        if (typeof r === "string") return refuse(r);
-        return done(askPayment(r));
-      }
-      if (action.kind !== "answer" || action.decision !== d.id) return refuse("answer the payment first (pay, or cancel the spell)");
-      return done(payOrRollback(state, ev, action.choice));
-    case "chooseObjects":
-      if (action.kind !== "answer" || action.decision !== d.id) return refuse("answer the pending choice first");
-      return answerDiscard(state, ev, d, action.choice, refuse, done);
-    default:
-      return refuse(`not yet: ${d.kind} decisions`);
+  if (d.kind === "priority") return priorityAction(state, ev, seat, action, refuse, done);
+
+  if (isCastDecision(state)) {
+    if (action.kind === "activateMana" && d.kind === "payCost") {
+      const r = activateManaAbility(state, ev, seat, action.object, action.ability, action.color);
+      if (typeof r === "string") return refuse(r);
+      return done(askPayment({ ...r, pendingDecision: null }));
+    }
+    if (action.kind !== "answer" || action.decision !== d.id) return refuse(d.kind === "payCost" ? "answer the payment first (pay, or cancel the spell)" : "answer the pending choice first (or cancel)");
+    const r = answerCast(state, ev, action.choice);
+    if (typeof r === "string") return refuse(r);
+    return done(afterCasting(r, ev, seat));
   }
+
+  if (action.kind !== "answer" || action.decision !== d.id) return refuse("answer the pending choice first");
+
+  if (state.resolving?.waiting) {
+    const r = answerResolution(state, ev, action.choice);
+    if (typeof r === "string") return refuse(r);
+    return done(afterResolving(r, ev));
+  }
+
+  if (d.kind === "chooseObjects" && d.purpose === "discard") return answerDiscard(state, ev, d, action.choice, refuse, done);
+  return refuse(`not yet: ${d.kind} decisions`);
+}
+
+/** A cast or activation that just finished (or rolled back) hands priority back (601.2i, 117.3c). */
+function afterCasting(s: GameState, ev: GameEvent[], seat: Seat): GameState {
+  if (s.casting || s.pendingDecision || s.over) return s;
+  return givePriority(s, ev, seat);
+}
+
+/** A resolution that finished: the active player gets priority (117.3b). */
+function afterResolving(s: GameState, ev: GameEvent[]): GameState {
+  if (s.pendingDecision || s.over) return s;
+  return givePriority(s, ev, s.turn.activeSeat);
 }
 
 // ---------------------------------------------------------------- priority
@@ -118,17 +139,20 @@ function priorityAction(
       return done(playLand(s, ev, seat, action.object, resolveFace(s, action.object, action.face, "land")));
     }
     case "cast": {
-      const why = castRefusal(s, seat, action.object, action.face);
+      const why = castRefusal(s, seat, action.object, action.face, action.via);
       if (why) return refuse(why);
-      return done(beginCast(s, ev, seat, action.object, resolveFace(s, action.object, action.face, "cast")));
+      return done(afterCasting(beginCast(s, ev, seat, action.object, resolveFace(s, action.object, action.face, "cast"), action.via), ev, seat));
     }
     case "activateMana": {
-      const r = manaAbility(s, ev, seat, action.object, action.ability);
+      const r = activateManaAbility(s, ev, seat, action.object, action.ability, action.color);
       if (typeof r === "string") return refuse(r);
       return done(givePriority(r, ev, seat)); // mana abilities don't use the stack; the player keeps priority
     }
-    case "activate":
-      return refuse("not yet: activated abilities arrive with the card language (PR 2)");
+    case "activate": {
+      const why = activateRefusal(s, seat, action.object, action.ability);
+      if (why) return refuse(why);
+      return done(afterCasting(beginActivation(s, ev, seat, action.object, action.ability), ev, seat));
+    }
     case "special":
       return refuse(specialRefusal(action.special));
     case "answer":
@@ -144,11 +168,8 @@ export function legalStartingActions(s: GameState, seat: Seat): Action[] {
   for (const id of s.zones.hand[seat]) {
     const o = obj(s, id);
     for (const face of playableLandFaces(o.def)) if (!landRefusal(s, seat, id, face)) out.push({ kind: "playLand", object: id, face });
-    for (const face of castableFaces(o.def)) if (!castRefusal(s, seat, id, face)) out.push({ kind: "cast", object: id, face });
   }
-  for (const src of manaSources(s, seat)) {
-    src.produces.forEach((_, ability) => out.push({ kind: "activateMana", object: src.object, ability }));
-  }
+  out.push(...castActions(s, seat), ...activateActions(s, seat), ...manaActions(s, seat));
   return out;
 }
 
@@ -192,7 +213,7 @@ function pass(s: GameState, ev: GameEvent[], seat: Seat): GameState {
   // 117.4: all players passed in succession.
   if (s.zones.stack.length === 0) return advanceStep({ ...s, pendingDecision: null }, ev);
   const resolved = resolveTop({ ...s, pendingDecision: null }, ev);
-  return givePriority(resolved, ev, resolved.turn.activeSeat); // 117.3b
+  return afterResolving(resolved, ev); // 117.3b
 }
 
 function givePriorityKeepPasses(s: GameState, ev: GameEvent[], seat: Seat): GameState {
@@ -208,7 +229,7 @@ export function startTurn(s0: GameState, ev: GameEvent[], seat: Seat): GameState
     turn: { number, activeSeat: seat, step: "untap", attackersDeclared: false },
     priority: { seat: null, passedInRow: [] },
     pendingDecision: null,
-    turnMemory: { landsPlayed: {}, spellsCast: {} },
+    turnMemory: { landsPlayed: {}, spellsCast: {}, loyaltyUsed: [], activated: [] },
     lki: pmapEmpty(), // LKI is kept for the turn only (PR 1)
     gameMemory: {
       ...s0.gameMemory,
@@ -252,7 +273,19 @@ function skipsDraw(s: GameState): boolean {
 export function advanceStep(s0: GameState, ev: GameEvent[]): GameState {
   let s = emptyPools(s0, ev); // 500.4
   const current = s.turn.step;
-  if (current === "cleanup") return startTurn(s, ev, nextLiving(s, s.turn.activeSeat));
+  if (current === "cleanup") {
+    // 500.7: extra turns come right after this one, the most recently created first.
+    // After them, play goes on from the player whose regular turn came before them.
+    const extra = s.gameMemory.extraTurns.filter((seat) => !s.seats[seat].lost);
+    const resume = s.gameMemory.resumeAfter ?? s.turn.activeSeat;
+    if (extra.length) {
+      const [seat, ...rest] = extra;
+      return startTurn({ ...s, gameMemory: { ...s.gameMemory, extraTurns: rest, resumeAfter: resume } }, ev, seat);
+    }
+    const { resumeAfter: _done, ...memory } = s.gameMemory;
+    void _done;
+    return startTurn({ ...s, gameMemory: memory }, ev, nextLiving(s, resume));
+  }
   let next = STEP_ORDER[STEP_ORDER.indexOf(current) + 1];
   if (next === "draw" && skipsDraw(s)) next = "main1";
   // 508.8: with no attackers, the declare blockers and combat damage steps are skipped.
@@ -351,160 +384,49 @@ function playLand(s0: GameState, ev: GameEvent[], seat: Seat, id: ObjectId, face
   return givePriority(s, ev, seat); // 116.3c: after a special action the player receives priority
 }
 
-/** Untapped permanents the seat controls with mana abilities (PR 1: basic land types, 305.6). */
-export function manaSources(s: GameState, seat: Seat): ManaSource[] {
-  const out: ManaSource[] = [];
-  for (const id of s.zones.battlefield) {
-    const o = obj(s, id);
-    if (o.controller !== seat || o.status.tapped) continue;
-    const c = chars(s, id);
-    if (c.types.includes("Creature") && o.summoningSick) continue; // 302.6
-    const produces = intrinsicMana(c.subtypes);
-    if (produces.length) out.push({ object: id, produces });
-  }
-  return out;
-}
-
-/** Activates a mana ability (605.3: resolves at once, no stack). Returns a reason string when refused. */
-function manaAbility(s0: GameState, ev: GameEvent[], seat: Seat, id: ObjectId, ability: number): GameState | string {
-  const o = maybeObj(s0, id);
-  if (!o || o.zone !== "battlefield") return "that isn't on the battlefield";
-  if (o.controller !== seat) return "you don't control that";
-  const src = manaSources(s0, seat).find((x) => x.object === id);
-  if (!src) return o.status.tapped ? "it's already tapped" : "that has no mana ability you can use now";
-  const mana = src.produces[ability];
-  if (!mana) return "no such mana ability";
-  let s = setTapped(s0, ev, id, true);
-  const pool = s.seats[seat].pool;
-  s = setSeat(s, seat, { pool: { ...pool, [mana]: pool[mana] + 1 } });
-  ev.push({ type: "manaAdded", seat, mana, amount: 1 });
-  return s;
-}
-
-// ---------------------------------------------------------------- casting (601.2) and rollback (733)
-
-function castRefusal(s: GameState, seat: Seat, id: ObjectId, face?: number): string | null {
-  const o = maybeObj(s, id);
-  if (!o || o.zone !== "hand" || o.owner !== seat) return "that card isn't in your hand";
-  const faces = castableFaces(o.def);
-  if (faces.length === 0) return "that card can't be cast";
-  if (face !== undefined && !faces.includes(face)) return "that face can't be cast";
-  if (face === undefined && faces.length > 1) return "choose which face to cast";
-  const f = o.def.faces[face ?? faces[0]];
-  if (f.manaCost === null) return "a card with no mana cost can't be cast without another way to pay";
-  const cost = parseCost(f.manaCost);
-  if (cost.unsupported.length) return `not yet: costs with ${cost.unsupported.join(" ")}`;
-  const instantSpeed = f.types.includes("Instant");
-  if (!instantSpeed) {
-    // 307.1: sorcery timing.
-    if (s.turn.activeSeat !== seat || !isMain(s.turn.step) || s.zones.stack.length > 0)
-      return "that can only be cast in your main phase with an empty stack";
-  }
-  return null;
-}
-
-function beginCast(s0: GameState, ev: GameEvent[], seat: Seat, id: ObjectId, face: number): GameState {
-  const checkpoint = s0;
-  const o = obj(s0, id);
-  const cost = o.def.faces[face].manaCost ?? "";
-  // 601.2a: the card moves to the stack. Its upFace says which face is being cast (712.8f).
-  const [s, spell] = moveObject({ ...s0, pendingDecision: null }, ev, id, "stack", {
-    controller: seat,
-    upFace: o.def.layout === "modal_dfc" ? face : 0,
-    castInfo: { face, fromZone: o.zone, turn: s0.turn.number },
-  });
-  const withCast: GameState = { ...s, casting: { object: spell, seat, cost, checkpoint } };
-  const parsed = parseCost(cost);
-  if (parsed.generic === 0 && Object.values(parsed.symbols).every((n) => n === 0)) return completeCast(withCast, ev, []);
-  return askPayment(withCast);
-}
-
-function askPayment(s0: GameState): GameState {
-  const c = s0.casting;
-  if (!c) throw new Error("askPayment without a spell being cast");
-  const [s, id] = nextDecisionId(s0);
-  const cost = parseCost(c.cost);
-  const pool = s.seats[c.seat].pool;
-  const sources = manaSources(s, c.seat);
-  const options: Action[] = [];
-  if (planAutoPay(pool, cost, sources)) options.push({ kind: "answer", decision: id, choice: { pay: "auto" } });
-  if (payFromPool(pool, cost)) options.push({ kind: "answer", decision: id, choice: { pay: "pool" } });
-  options.push({ kind: "answer", decision: id, choice: { cancel: true } });
-  for (const src of sources) src.produces.forEach((_, ability) => options.push({ kind: "activateMana", object: src.object, ability }));
-  const decision: Decision = {
-    id,
-    seat: c.seat,
-    kind: "payCost",
-    prompt: `Pay ${c.cost} for ${chars(s, c.object).name}`,
-    source: c.object,
-    options,
-    default: { pay: "auto" },
-    hiddenFromOthers: false,
-  };
-  return { ...s, pendingDecision: decision };
-}
-
-function rollback(s: GameState, ev: GameEvent[], reason: string): GameState {
-  const c = s.casting;
-  if (!c) throw new Error("rollback without a spell being cast");
-  // 733: everything goes back to how it was before the cast began, including mana abilities used during it.
-  // Their events were already sent with earlier steps; castRolledBack tells a screen to drop them.
-  ev.push({ type: "castRolledBack", seat: c.seat, reason });
-  return c.checkpoint;
-}
-
-function payOrRollback(s: GameState, ev: GameEvent[], choice: Choice): GameState {
-  const c = s.casting;
-  if (!c) throw new Error("payment without a spell being cast");
-  if ("cancel" in choice) return rollback(s, ev, "cancelled");
-  if (!("pay" in choice)) return rollback(s, ev, "no payment given");
-  const cost = parseCost(c.cost);
-  const pool = s.seats[c.seat].pool;
-  if (choice.pay === "pool") {
-    if (!payFromPool(pool, cost)) return rollback(s, ev, `can't pay ${c.cost} from the mana pool`);
-    return completeCast(s, ev, []);
-  }
-  const plan = planAutoPay(pool, cost, manaSources(s, c.seat));
-  if (!plan) return rollback(s, ev, `can't pay ${c.cost}`);
-  return completeCast(s, ev, plan);
-}
-
-function completeCast(s0: GameState, ev: GameEvent[], plan: { object: ObjectId; mana: ManaType }[]): GameState {
-  const c = s0.casting!;
-  let s = s0;
-  for (const step of plan) {
-    s = setTapped(s, ev, step.object, true);
-    const pool = s.seats[c.seat].pool;
-    s = setSeat(s, c.seat, { pool: { ...pool, [step.mana]: pool[step.mana] + 1 } });
-    ev.push({ type: "manaAdded", seat: c.seat, mana: step.mana, amount: 1 });
-  }
-  const before = s.seats[c.seat].pool;
-  const after = payFromPool(before, parseCost(c.cost));
-  if (!after) throw new Error("payment plan didn't cover the cost");
-  if (poolTotal(before) !== poolTotal(after)) {
-    const spent = Object.fromEntries(Object.entries(before).map(([k, v]) => [k, v - after[k as keyof typeof after]]).filter(([, v]) => v));
-    ev.push({ type: "manaSpent", seat: c.seat, mana: spent });
-  }
-  s = setSeat(s, c.seat, { pool: after });
-  const spellsCast = { ...s.turnMemory.spellsCast, [c.seat]: (s.turnMemory.spellsCast[c.seat] ?? 0) + 1 };
-  s = { ...s, casting: null, pendingDecision: null, turnMemory: { ...s.turnMemory, spellsCast } };
-  ev.push({ type: "cast", seat: c.seat, object: c.object, face: obj(s, c.object).castInfo?.face ?? 0 });
-  return givePriority(s, ev, c.seat); // 117.3c
-}
-
 // ---------------------------------------------------------------- resolving (608)
 
 function resolveTop(s0: GameState, ev: GameEvent[]): GameState {
   const top = s0.zones.stack[s0.zones.stack.length - 1];
   const o = obj(s0, top);
-  const f = printedFace(o);
   ev.push({ type: "resolve", object: top });
-  if (isPermanentFace(f)) {
-    // 608.3: a permanent spell enters the battlefield under its controller's control, as the face cast.
-    return moveObject(s0, ev, top, "battlefield", { controller: o.controller, upFace: o.status.upFace })[0];
+  // 608.2b: a spell or ability whose every target is now illegal doesn't resolve.
+  const { vars, had, anyLegal } = recheckTargets(s0, o);
+  if (had && !anyLegal) {
+    ev.push({ type: "fizzle", object: top });
+    return leaveStack(s0, ev, top, "graveyard");
   }
-  if (o.def.layout === "adventure" && o.castInfo?.face === 1) return moveObject(s0, ev, top, "exile")[0]; // 715.4
-  return moveObject(s0, ev, top, "graveyard")[0]; // 608.2n
+  const info = o.castInfo;
+  const face = o.ability ? o.ability.face : info?.face ?? 0;
+  const plan = planFor(s0, o, { seat: o.controller, face, via: info?.via, modes: info?.modes, kicked: info?.kicked, x: info?.x, targets: o.targets ?? {} });
+  if (!o.ability && isPermanentFace(printedFace(o))) {
+    // 608.3: a permanent spell enters the battlefield under its controller's control, as the face cast.
+    const moved = moveObject(s0, ev, top, "battlefield", { controller: o.controller, upFace: o.status.upFace });
+    let s = moved[0];
+    const id = moved[1];
+    // 303.4f: an Aura spell enters attached to the object it targeted.
+    if (printedFace(o).subtypes.includes("Aura")) {
+      const target = (vars.enchant ?? Object.values(vars)[0] ?? [])[0];
+      if (target && "o" in target && maybeObj(s, target.o)) {
+        s = setObj(s, { ...obj(s, id), attachedTo: target.o });
+        ev.push({ type: "attached", object: id, to: target.o });
+      }
+    }
+    return s;
+  }
+  if (o.ability && !stackActivatable(o)) return leaveStack(s0, ev, top, "graveyard");
+  const resolution = newResolution({
+    object: top,
+    controller: o.controller,
+    self: selfOf(o),
+    castWith: castWords(info),
+    x: info?.x ?? 0,
+    divide: o.divide ?? {},
+    effect: plan.effect,
+    vars,
+    chosen: o.targets ?? {},
+  });
+  return runResolution({ ...s0, resolving: resolution }, ev);
 }
 
 // ---------------------------------------------------------------- state-based actions (704)
@@ -520,66 +442,53 @@ export function stateBasedActions(s0: GameState, ev: GameEvent[]): GameState {
       else if (p.poison >= 10) losers.push([seat, `10 or more poison counters (${RULES.sbaPoison})`]);
     }
     const dying: ObjectId[] = [];
+    const unattach: ObjectId[] = [];
+    const annihilate: ObjectId[] = [];
+    // 704.5d: a token that has left the battlefield ceases to exist.
+    const gone: ObjectId[] = [];
+    for (const zone of ["graveyard", "hand", "library"] as const) for (const seat of s.seatOrder) for (const id of s.zones[zone][seat] ?? []) if (obj(s, id).isToken) gone.push(id);
+    for (const id of [...s.zones.exile, ...s.zones.command]) if (obj(s, id).isToken) gone.push(id);
     for (const id of s.zones.battlefield) {
       const c = chars(s, id);
       const o = obj(s, id);
+      const indestructible = hasKeyword(s, id, "indestructible");
       if (c.types.includes("Creature") && c.toughness !== null) {
         if (c.toughness <= 0) dying.push(id); // 704.5f
-        else if (o.damage >= c.toughness) dying.push(id); // 704.5g
+        else if (o.damage >= c.toughness && !indestructible) dying.push(id); // 704.5g, 702.12b
+        else if (o.deathtouchHit && o.damage > 0 && !indestructible) dying.push(id); // 704.5h
       } else if (c.types.includes("Planeswalker") && (o.counters.loyalty ?? 0) <= 0) dying.push(id); // 704.5i
+      const host = typeof o.attachedTo === "number" ? maybeObj(s, o.attachedTo) : undefined;
+      if (c.subtypes.includes("Aura") && (!host || host.zone !== "battlefield")) dying.push(id); // 704.5m
+      if (c.subtypes.includes("Equipment") && o.attachedTo !== null && (!host || host.zone !== "battlefield" || !chars(s, host.id).types.includes("Creature"))) unattach.push(id); // 704.5n
+      if ((o.counters["+1/+1"] ?? 0) > 0 && (o.counters["-1/-1"] ?? 0) > 0) annihilate.push(id); // 704.5q
     }
-    if (losers.length === 0 && dying.length === 0) return s;
-    for (const id of dying) [s] = moveObject(s, ev, id, "graveyard");
+    if (losers.length === 0 && dying.length === 0 && gone.length === 0 && unattach.length === 0 && annihilate.length === 0) return s;
+    for (const id of new Set(dying)) [s] = moveObject(s, ev, id, "graveyard");
+    for (const id of gone) if (maybeObj(s, id)) s = ceaseToExist(s, ev, id);
+    for (const id of unattach) if (maybeObj(s, id)) s = setObj(s, { ...obj(s, id), attachedTo: null });
+    for (const id of annihilate) {
+      if (!maybeObj(s, id)) continue;
+      const o = obj(s, id);
+      const n = Math.min(o.counters["+1/+1"], o.counters["-1/-1"]);
+      const counters: Record<string, number> = { ...o.counters, "+1/+1": o.counters["+1/+1"] - n, "-1/-1": o.counters["-1/-1"] - n };
+      for (const k of ["+1/+1", "-1/-1"]) if (counters[k] === 0) delete counters[k];
+      s = setObj(s, { ...o, counters });
+    }
     for (const [seat, reason] of losers) s = eliminate(s, ev, seat, reason);
     if (s.over) return s;
   }
   throw new Error(`state-based actions didn't settle (${RULES.loopGuard})`);
 }
 
-// ---------------------------------------------------------------- losing (104, 800.4a basic)
-
-/**
- * Basic elimination for PR 1 (800.4a): the player loses and every object they own leaves the game.
- * Ending control effects and exiling objects they control but don't own come with PR 4c (no control
- * changes exist before layers).
- */
-export function eliminate(s0: GameState, ev: GameEvent[], seat: Seat, reason: string): GameState {
-  let s = setSeat(s0, seat, { lost: true, lossReason: reason, drewFromEmpty: false });
-  ev.push({ type: "lose", seat, reason });
-  const owned = (id: ObjectId) => obj(s0, id).owner === seat;
-  const gone: ObjectId[] = [];
-  const keep = (list: ObjectId[]) => list.filter((id) => (owned(id) ? (gone.push(id), false) : true));
-  const z = s.zones;
-  s = {
-    ...s,
-    zones: {
-      library: { ...z.library, [seat]: [] },
-      hand: { ...z.hand, [seat]: [] },
-      graveyard: { ...z.graveyard, [seat]: [] },
-      battlefield: keep(z.battlefield),
-      stack: keep(z.stack),
-      exile: keep(z.exile),
-      command: keep(z.command),
-    },
-  };
-  for (const id of [...z.library[seat], ...z.hand[seat], ...z.graveyard[seat]]) gone.push(id);
-  let objects = s.objects;
-  for (const id of gone) objects = pmapDelete(objects, id);
-  s = { ...s, objects, priority: { ...s.priority, passedInRow: s.priority.passedInRow.filter((x) => x !== seat) } };
-  if (s.casting?.seat === seat) s = { ...s, casting: null };
-  if (s.pendingDecision?.seat === seat) s = { ...s, pendingDecision: null };
-  const left = living(s);
-  if (left.length <= 1) {
-    const winner = left[0] ?? null;
-    ev.push({ type: "gameOver", winner });
-    return { ...s, over: true, winner, pendingDecision: null, casting: null };
-  }
-  return s;
-}
-
 /** After a concession: keep the game moving if the leaver was the one deciding or the active player. */
-function afterLoss(s: GameState, ev: GameEvent[]): GameState {
+function afterLoss(s0: GameState, ev: GameEvent[]): GameState {
+  let s = s0;
   if (s.over) return s;
+  // A resolution waiting on the player who left goes on without that choice (800.4a simplification).
+  if (s.resolving && !s.resolving.waiting && !s.pendingDecision) {
+    s = runResolution(s, ev);
+    if (s.pendingDecision || s.over) return s;
+  }
   const active = s.turn.activeSeat;
   if (s.seats[active].lost) return startTurn(s, ev, nextLiving(s, active));
   if (s.pendingDecision) return s;

@@ -77,6 +77,11 @@ export type MoveOptions = {
   bottom?: boolean; // library bottom instead of top
   upFace?: number;
   castInfo?: GameObject["castInfo"];
+  tapped?: boolean; // enters the battlefield tapped
+  faceDown?: boolean;
+  onAdventure?: boolean; // 715.4: exiled by its own Adventure
+  /** Keep these fields from the old object (a spell's targets travel with it onto the stack and off it). */
+  keep?: Partial<Pick<GameObject, "targets" | "divide">>;
 };
 
 /**
@@ -86,7 +91,8 @@ export type MoveOptions = {
 export function moveObject(s0: GameState, ev: GameEvent[], id: ObjectId, to: ZoneName, opts: MoveOptions = {}): [GameState, ObjectId] {
   let s = s0;
   const o = obj(s, id);
-  if (o.zone === "battlefield" || o.zone === "stack") s = { ...s, lki: pmapSet(s.lki, id, chars(s, id)) };
+  // Last known information (113.7a, 608.2h): kept for every object that changes zones, until the turn ends.
+  s = { ...s, lki: pmapSet(s.lki, id, chars(s, id)) };
   const fromSeat = zoneSeat(o);
   s = withZoneList(s, o.zone, fromSeat, zoneList(s, o.zone, fromSeat).filter((x) => x !== id));
   s = { ...s, objects: pmapDelete(s.objects, id) };
@@ -100,7 +106,7 @@ export function moveObject(s0: GameState, ev: GameEvent[], id: ObjectId, to: Zon
     owner: o.owner,
     controller: to === "battlefield" || to === "stack" ? opts.controller ?? o.controller : o.owner,
     zone: to,
-    status: freshStatus(upFace),
+    status: { ...freshStatus(upFace), tapped: to === "battlefield" && !!opts.tapped, faceDown: opts.faceDown ? "other" : null },
     counters: {},
     damage: 0,
     deathtouchHit: false,
@@ -109,6 +115,9 @@ export function moveObject(s0: GameState, ev: GameEvent[], id: ObjectId, to: Zon
     timestamp: s.nextTimestamp,
     ...(opts.castInfo ? { castInfo: opts.castInfo } : to === "battlefield" && o.castInfo ? { castInfo: o.castInfo } : {}),
     ...(o.isCommander ? { isCommander: true } : {}),
+    ...(o.isToken ? { isToken: true } : {}),
+    ...(opts.onAdventure ? { onAdventure: true } : {}),
+    ...(opts.keep ?? {}),
   };
   s = { ...s, nextObjectId: newId + 1, nextTimestamp: s.nextTimestamp + 1, objects: pmapSet(s.objects, newId, moved) };
 
@@ -152,6 +161,46 @@ export function emptyPools(s0: GameState, ev: GameEvent[]): GameState {
     }
   }
   return s;
+}
+
+/** Creates a new object directly on the battlefield (tokens, 111.1). */
+export function createObject(s0: GameState, ev: GameEvent[], def: GameObject["def"], owner: Seat, opts: { tapped?: boolean; token?: boolean } = {}): [GameState, ObjectId] {
+  const id = s0.nextObjectId;
+  const o: GameObject = {
+    id,
+    cardId: s0.nextCardId,
+    def,
+    owner,
+    controller: owner,
+    zone: "battlefield",
+    status: { ...freshStatus(), tapped: !!opts.tapped },
+    counters: {},
+    damage: 0,
+    deathtouchHit: false,
+    summoningSick: true,
+    attachedTo: null,
+    timestamp: s0.nextTimestamp,
+    ...(opts.token ? { isToken: true } : {}),
+  };
+  const s: GameState = {
+    ...s0,
+    nextObjectId: id + 1,
+    nextCardId: s0.nextCardId + 1,
+    nextTimestamp: s0.nextTimestamp + 1,
+    objects: pmapSet(s0.objects, id, o),
+    zones: { ...s0.zones, battlefield: [...s0.zones.battlefield, id] },
+  };
+  if (opts.token) ev.push({ type: "tokenCreated", object: id, name: def.faces[0].name });
+  return [s, id];
+}
+
+/** Removes an object from the game entirely (a token off the battlefield, an ability leaving the stack). */
+export function ceaseToExist(s: GameState, ev: GameEvent[], id: ObjectId): GameState {
+  const o = obj(s, id);
+  const seat = zoneSeat(o);
+  const s1 = withZoneList(s, o.zone, seat, zoneList(s, o.zone, seat).filter((x) => x !== id));
+  ev.push({ type: "ceased", object: id });
+  return { ...s1, objects: pmapDelete(s1.objects, id) };
 }
 
 export function nextDecisionId(s: GameState): [GameState, number] {

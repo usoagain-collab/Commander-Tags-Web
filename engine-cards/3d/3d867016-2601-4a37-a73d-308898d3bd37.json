@@ -1,0 +1,54 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "3d867016-2601-4a37-a73d-308898d3bd37",
+  "name": "Thrasios, Triton Hero",
+  "oracleHash": "cbc507618f15e146",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "activated",
+          "cost": "{4}",
+          "effect": [
+            {
+              "scry": 1
+            },
+            {
+              "reveal": {
+                "top": 1,
+                "player": "you",
+                "as": "top"
+              }
+            },
+            {
+              "if": {
+                "exists": {
+                  "is": "$top",
+                  "type": "land"
+                }
+              },
+              "then": [
+                {
+                  "move": {
+                    "objects": "$top",
+                    "to": "battlefield",
+                    "tapped": true
+                  }
+                }
+              ],
+              "else": [
+                {
+                  "draw": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "keyword",
+          "keyword": "partner"
+        }
+      ]
+    }
+  ]
+}

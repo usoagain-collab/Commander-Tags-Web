@@ -1,0 +1,82 @@
+{
+  "card": "9f2e7533-cfc1-4dd8-a9b8-09cdc712ef2f",
+  "name": "Hulking Raptor",
+  "tests": [
+    {
+      "name": "cast for {2}{G}{G}: a 5/3",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Hulking Raptor"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Hulking Raptor"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "chars": "Hulking Raptor",
+          "power": 5,
+          "toughness": 3
+        }
+      ]
+    },
+    {
+      "name": "has ward {2}",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Hulking Raptor"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Hulking Raptor",
+          "has": [
+            "ward"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "adds {G}{G} at the start of your first main phase",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Hulking Raptor"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "pool": {
+            "G": 2
+          }
+        }
+      ],
+      "pending": "PR 4a"
+    }
+  ]
+}

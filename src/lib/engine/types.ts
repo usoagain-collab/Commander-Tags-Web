@@ -4,6 +4,9 @@
 
 import type { PMap } from "./pmap";
 import type { RngState } from "./rng";
+import type { CardScript, Ref, Step as ScriptStep, Val } from "./lang/script-types";
+
+export type { Ref, Val } from "./lang/script-types";
 
 export type Seat = number;
 export type ObjectId = number;
@@ -53,7 +56,7 @@ export type CardDef = {
   oracleId: string;
   layout: Layout;
   faces: FaceDef[];
-  script: null; // card scripts arrive in PR 2; null = manual card
+  script: CardScript | null; // null = manual card (plays by hand, PR 5)
 };
 
 // ---------- game objects ----------
@@ -76,6 +79,19 @@ export type CastInfo = {
   face: number; // face cast (MDFC back, adventure, split half)
   fromZone: ZoneName;
   turn: number;
+  /** How it was cast: "flashback", "overload", or a cost ability's name (an alternative cost, 118.9). */
+  via?: string;
+  kicked?: boolean;
+  x?: number;
+  modes?: number[];
+};
+
+/** An activated or loyalty ability on the stack (602.2a). It isn't a card; it ceases to exist when it leaves. */
+export type StackAbility = {
+  source: ObjectId; // the permanent (or card) it came from, as it was when activated
+  sourceCard: CardInstanceId;
+  face: number;
+  index: number; // index into that face's script abilities
 };
 
 export type GameObject = {
@@ -94,6 +110,14 @@ export type GameObject = {
   timestamp: number;
   castInfo?: CastInfo;
   isCommander?: boolean;
+  isToken?: boolean;
+  ability?: StackAbility;
+  /** Chosen targets of a spell or ability on the stack, by target id (601.2c). */
+  targets?: Record<string, Ref[]>;
+  /** Divided amounts (601.2d), by target id, in the same order as `targets`. */
+  divide?: Record<string, number[]>;
+  /** A card exiled by its own Adventure (715.4): its owner may cast the creature half from exile. */
+  onAdventure?: boolean;
 };
 
 // ---------- derived characteristics ----------
@@ -111,7 +135,11 @@ export type Characteristics = {
   toughness: number | null;
   loyalty: number | null;
   controller: Seat;
+  /** Keyword abilities (702), as script keyword entries ({ keyword, cost?, from? ... }). */
+  keywords: KeywordAbility[];
 };
+
+export type KeywordAbility = { keyword: string; [field: string]: unknown };
 
 // ---------- players and turns ----------
 
@@ -156,12 +184,20 @@ export type TurnState = {
 export type TurnMemory = {
   landsPlayed: Record<Seat, number>;
   spellsCast: Record<Seat, number>;
+  /** Planeswalkers that used a loyalty ability this turn (606.3). */
+  loyaltyUsed: ObjectId[];
+  /** "Activate only once each turn" uses, as "objectId:ability". */
+  activated: string[];
 };
 
 export type GameMemory = {
   commanderCasts: Record<CardInstanceId, number>; // shape for PR 3 (tax)
   firstSeat: Seat;
   turnsTaken: Record<Seat, number>;
+  /** Extra turns to take, next first (500.7: the most recently created is taken first). */
+  extraTurns: Seat[];
+  /** While extra turns run: whose regular turn came before them, so play resumes after that seat. */
+  resumeAfter?: Seat;
 };
 
 export type TableRules = {
@@ -176,13 +212,46 @@ export type ReplacementInstance = { readonly kind: "notYet" };
 export type DelayedTrigger = { readonly kind: "notYet" };
 export type PendingTrigger = { readonly kind: "notYet" };
 
-/** A spell being cast (601.2). If it can't finish, the game goes back to `checkpoint` exactly (733). */
+/**
+ * A spell being cast (601.2) or an ability being activated (602.2). Choices are made one decision at a
+ * time; if it can't finish, the game goes back to `checkpoint` exactly (733).
+ */
 export type CastInProgress = {
-  object: ObjectId; // the spell, already on the stack (601.2a)
+  kind: "spell" | "ability";
+  object: ObjectId; // the spell or ability, already on the stack (601.2a, 602.2a)
   seat: Seat;
-  cost: string;
+  cost: string; // the total mana cost, worked out once every choice is made (601.2f)
   checkpoint: GameState;
+  face: number;
+  via?: string;
+  modes?: number[];
+  kicked?: boolean;
+  x?: number;
+  targets: Record<string, Ref[]>;
+  divide: Record<string, number[]>;
+  /** Objects chosen to pay non-mana costs: sacrifice, discard, crew. */
+  costObjects?: ObjectId[];
+  /** Life and other non-mana costs, paid when the cast completes (601.2h). */
+  lifeCost?: number;
+  ready?: boolean; // every choice made; only payment is left
 };
+
+/** A spell or ability resolving (608.2), paused while someone answers a choice. */
+export type Resolution = {
+  object: ObjectId; // the stack object resolving
+  controller: Seat;
+  self: ObjectId; // what "self" means: the spell, or the ability's source
+  todo: Task[];
+  vars: Record<string, Val>;
+  castWith: string[];
+  x: number;
+  divide: Record<string, number[]>;
+  /** Objects that moved during this resolution: old id -> new id (for `follow`). */
+  moved: Record<number, number>;
+  waiting: { step: ScriptStep; data: Val | null } | null;
+};
+
+export type Task = { step: ScriptStep } | { bind: string; value: Val };
 
 export type GameState = {
   engineVersion: string;
@@ -214,6 +283,7 @@ export type GameState = {
   turnMemory: TurnMemory;
   gameMemory: GameMemory;
   casting: CastInProgress | null;
+  resolving: Resolution | null;
   pendingDecision: Decision | null;
   loopGuard: { seen: string[] };
   table: TableRules;
@@ -240,15 +310,26 @@ export type SpecialKind =
 export type Choice =
   | { pay: "auto" } // auto-pay: tap what's needed, then pay from the pool
   | { pay: "pool" } // pay from the pool only
+  | { pay: "decline" } // "unless that player pays": don't pay
   | { cancel: true }
-  | { objects: ObjectId[] };
+  | { objects: ObjectId[] } // in order, when the order matters
+  | { targets: Ref[] }
+  | { modes: number[] }
+  | { number: number }
+  | { yes: boolean }
+  | { amounts: number[] }
+  | { piles: ObjectId[][] }
+  | { pile: number }
+  | { top: ObjectId[]; bottom: ObjectId[] } // scry, surveil: top first
+  | { color: ManaType }
+  | { player: Seat };
 
 export type Action =
   | { kind: "pass" }
   | { kind: "playLand"; object: ObjectId; face?: number }
-  | { kind: "cast"; object: ObjectId; face?: number }
+  | { kind: "cast"; object: ObjectId; face?: number; via?: string }
   | { kind: "activate"; object: ObjectId; ability: number }
-  | { kind: "activateMana"; object: ObjectId; ability: number }
+  | { kind: "activateMana"; object: ObjectId; ability: number; color?: ManaType }
   | { kind: "special"; special: SpecialKind; object?: ObjectId }
   | { kind: "answer"; decision: DecisionId; choice: Choice }
   | { kind: "concede" }
@@ -279,7 +360,10 @@ export type DecisionKind =
   | "declareBlockers"
   | "orderBlockers"
   | "commanderToCommandZone"
-  | "legendRule";
+  | "legendRule"
+  | "arrange"
+  | "chooseColor"
+  | "chooseNumber";
 
 export type Decision = {
   id: DecisionId;
@@ -293,9 +377,17 @@ export type Decision = {
   max?: number;
   default?: Choice;
   hiddenFromOthers: boolean;
-  /** chooseObjects: what the chosen objects are for. */
-  purpose?: "discard";
+  /** chooseObjects / arrange / yesNo: what the choice is for. */
+  purpose?: "discard" | "sacrifice" | "search" | "choose" | "scry" | "surveil" | "kicker" | "may" | "crew" | "cost" | "unless";
   candidates?: ObjectId[];
+  /** chooseTargets: every legal target (objects and players). */
+  refs?: Ref[];
+  /** chooseObjects: the order of the answer matters (first = top of library). */
+  ordered?: boolean;
+  /** chooseTargets with division (601.2d): the total to divide. */
+  total?: number;
+  /** crew: total power needed. */
+  power?: number;
 };
 
 // ---------- events ----------
@@ -320,7 +412,24 @@ export type GameEvent =
   | { type: "discard"; seat: Seat; object: ObjectId }
   | { type: "damageRemoved" }
   | { type: "lose"; seat: Seat; reason: string }
-  | { type: "gameOver"; winner: Seat | null };
+  | { type: "gameOver"; winner: Seat | null }
+  | { type: "activate"; seat: Seat; object: ObjectId; source: ObjectId }
+  | { type: "fizzle"; object: ObjectId } // 608.2b: every target illegal
+  | { type: "countered"; object: ObjectId }
+  | { type: "cantBeCountered"; object: ObjectId }
+  | { type: "reveal"; seat: Seat; objects: ObjectId[] }
+  | { type: "look"; seat: Seat; objects: ObjectId[] } // seen only by `seat` (views, PR 5)
+  | { type: "searched"; seat: Seat; library: Seat; found: number }
+  | { type: "damage"; source: ObjectId; to: Ref; amount: number }
+  | { type: "lifeGain"; seat: Seat; amount: number }
+  | { type: "lifeLoss"; seat: Seat; amount: number }
+  | { type: "counters"; object: ObjectId | null; seat?: Seat; kind: string; amount: number } // amount < 0: removed
+  | { type: "tokenCreated"; object: ObjectId; name: string }
+  | { type: "attached"; object: ObjectId; to: ObjectId | null }
+  | { type: "transformed"; object: ObjectId; face: number }
+  | { type: "extraTurn"; seat: Seat }
+  | { type: "ceased"; object: ObjectId } // a token off the battlefield (704.5d) or an ability leaving the stack
+  | { type: "notYet"; block: string; runs: string; object: ObjectId }; // a step this engine version doesn't run yet
 
 export type StepResult = {
   state: GameState;

@@ -1,0 +1,40 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+  "name": "Lightning Greaves",
+  "oracleHash": "badf1b1153288d70",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "static",
+          "effects": [
+            {
+              "continuous": {
+                "layer": "6",
+                "affects": {
+                  "attachedTo": "self"
+                },
+                "do": {
+                  "gainAbility": [
+                    {
+                      "keyword": "haste"
+                    },
+                    {
+                      "keyword": "shroud"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "keyword",
+          "keyword": "equip",
+          "cost": "{0}"
+        }
+      ]
+    }
+  ]
+}

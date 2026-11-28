@@ -1,0 +1,170 @@
+{
+  "card": "c61fe162-2202-4e56-9ba0-393547f9875f",
+  "name": "Mana Leak",
+  "tests": [
+    {
+      "name": "counters a spell whose controller doesn't pay",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Grizzly Bears"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest"
+            ]
+          },
+          {
+            "hand": [
+              "Mana Leak"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Grizzly Bears"
+        },
+        {
+          "pass": true
+        },
+        {
+          "cast": "Mana Leak",
+          "seat": 1
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "pay": "decline"
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "event": "countered"
+        },
+        {
+          "stack": 0
+        }
+      ]
+    },
+    {
+      "name": "paying {3} saves the spell",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Grizzly Bears"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest"
+            ]
+          },
+          {
+            "hand": [
+              "Mana Leak"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Grizzly Bears"
+        },
+        {
+          "pass": true
+        },
+        {
+          "cast": "Mana Leak",
+          "seat": 1
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "pay": "auto"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "noEvent": "countered"
+        }
+      ]
+    },
+    {
+      "name": "only spells can be targeted",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "hand": [
+              "Mana Leak"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "pass": true
+        },
+        {
+          "cast": "Mana Leak",
+          "seat": 1
+        }
+      ],
+      "expect": [
+        {
+          "event": "castRolledBack"
+        }
+      ]
+    }
+  ]
+}

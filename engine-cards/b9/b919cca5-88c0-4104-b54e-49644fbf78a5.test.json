@@ -1,0 +1,126 @@
+{
+  "card": "b919cca5-88c0-4104-b54e-49644fbf78a5",
+  "name": "Door to Nothingness",
+  "tests": [
+    {
+      "name": "target player loses the game",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Door to Nothingness",
+              "Plains",
+              "Plains",
+              "Island",
+              "Island",
+              "Swamp",
+              "Swamp",
+              "Mountain",
+              "Mountain",
+              "Forest",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Door to Nothingness"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "check": [
+            {
+              "zone": "graveyard",
+              "seat": 0,
+              "has": [
+                "Door to Nothingness"
+              ]
+            }
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "winner": 0
+        }
+      ]
+    },
+    {
+      "name": "needs to be untapped",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              {
+                "card": "Door to Nothingness",
+                "tapped": true
+              },
+              "Plains",
+              "Plains",
+              "Island",
+              "Island",
+              "Swamp",
+              "Swamp",
+              "Mountain",
+              "Mountain",
+              "Forest",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "activate": "Door to Nothingness"
+          },
+          "match": "tapped"
+        }
+      ]
+    },
+    {
+      "name": "enters tapped",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Door to Nothingness"
+            ],
+            "battlefield": [
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Door to Nothingness"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "tapped": "Door to Nothingness"
+        }
+      ],
+      "pending": "PR 4b"
+    }
+  ]
+}

@@ -57,7 +57,12 @@ export function checkInvariants(s: GameState): string[] {
       if (d.kind === "priority" && s.priority.seat !== d.seat) out.push(`priority decision for ${d.seat} but priority is with ${s.priority.seat}`);
       if (d.kind === "payCost" && !s.casting) out.push("payment asked with no spell being cast");
     }
-    if (s.casting && s.pendingDecision?.kind !== "payCost") out.push("a spell is mid-cast but no payment is being asked");
+    const castKinds = ["chooseModes", "yesNo", "chooseX", "chooseTargets", "divide", "chooseObjects", "payCost"];
+    if (s.casting && !castKinds.includes(s.pendingDecision?.kind ?? "")) out.push("a spell is mid-cast but no casting choice is being asked");
+    if (s.casting && s.pendingDecision && s.pendingDecision.seat !== s.casting.seat) out.push("a casting choice is asked of someone other than the caster");
+    if (s.casting && s.resolving) out.push("casting and resolving at once");
+    if (s.resolving && !s.resolving.waiting) out.push("a resolution stopped without waiting on a choice");
+    if (s.resolving?.waiting && s.pendingDecision?.kind === "priority") out.push("a resolution is waiting but priority was given");
   }
   return out;
 }

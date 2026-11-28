@@ -1,0 +1,35 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "464c0150-3dbc-403b-9ada-fef25ab1f29d",
+  "name": "Brain Freeze",
+  "oracleHash": "de82967539baaabe",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "player"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "mill": {
+                "amount": 3,
+                "player": "$t"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "keyword",
+          "keyword": "storm"
+        }
+      ]
+    }
+  ]
+}

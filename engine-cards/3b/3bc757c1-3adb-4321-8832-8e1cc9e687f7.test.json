@@ -1,0 +1,124 @@
+{
+  "card": "3bc757c1-3adb-4321-8832-8e1cc9e687f7",
+  "name": "Lurrus of the Dream-Den",
+  "tests": [
+    {
+      "name": "cast with hybrid mana: {1}{W/B}{W/B}",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Lurrus of the Dream-Den"
+            ],
+            "battlefield": [
+              "Plains",
+              "Swamp",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Lurrus of the Dream-Den"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Lurrus of the Dream-Den"
+          ]
+        },
+        {
+          "chars": "Lurrus of the Dream-Den",
+          "power": 3,
+          "toughness": 2,
+          "manaValue": 3
+        }
+      ]
+    },
+    {
+      "name": "lifelink and companion",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Lurrus of the Dream-Den"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Lurrus of the Dream-Den",
+          "has": [
+            "lifelink",
+            "companion"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "hybrid needs white or black",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Lurrus of the Dream-Den"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Lurrus of the Dream-Den"
+        }
+      ],
+      "expect": [
+        {
+          "event": "castRolledBack"
+        }
+      ]
+    },
+    {
+      "name": "casts a 2-drop permanent from the graveyard once a turn",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Lurrus of the Dream-Den",
+              "Forest",
+              "Forest"
+            ],
+            "graveyard": [
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "legal": {
+            "kind": "cast",
+            "card": "Grizzly Bears"
+          }
+        }
+      ],
+      "pending": "PR 4c"
+    }
+  ]
+}

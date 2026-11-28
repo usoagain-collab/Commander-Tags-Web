@@ -1,0 +1,118 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "7f77a84e-5a4b-4834-aefa-3cecc175ae8e",
+  "name": "Jace, the Mind Sculptor",
+  "oracleHash": "cc266626ee19d856",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "loyalty",
+          "loyalty": 2,
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "player"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "look": {
+                "top": 1,
+                "player": "$t",
+                "as": "seen"
+              }
+            },
+            {
+              "may": {
+                "do": [
+                  {
+                    "putOnBottom": "$seen"
+                  }
+                ],
+                "prompt": "Put it on the bottom?"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "loyalty",
+          "loyalty": 0,
+          "effect": [
+            {
+              "draw": 3
+            },
+            {
+              "choose": {
+                "select": {
+                  "zone": "hand",
+                  "owner": "you"
+                },
+                "count": 2,
+                "ordered": true,
+                "prompt": "Put two cards on top (first = top)",
+                "as": "back"
+              }
+            },
+            {
+              "putOnTop": "$back"
+            }
+          ]
+        },
+        {
+          "kind": "loyalty",
+          "loyalty": -1,
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "type": "creature"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "bounce": "$t"
+            }
+          ]
+        },
+        {
+          "kind": "loyalty",
+          "loyalty": -12,
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "player"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "exile": {
+                "select": {
+                  "zone": "library",
+                  "owner": "$t"
+                }
+              }
+            },
+            {
+              "move": {
+                "select": {
+                  "zone": "hand",
+                  "owner": "$t"
+                },
+                "to": "library"
+              }
+            },
+            {
+              "shuffle": "$t"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "45f1e957-09f0-4d46-8e32-238f26060a87",
+  "name": "Kolaghan's Command",
+  "oracleHash": "9ab2ebab0808428b",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "modes": {
+            "count": 2,
+            "options": [
+              {
+                "targets": [
+                  {
+                    "id": "card",
+                    "select": {
+                      "zone": "graveyard",
+                      "owner": "you",
+                      "type": "creature"
+                    }
+                  }
+                ],
+                "effect": [
+                  {
+                    "move": {
+                      "object": "$card",
+                      "to": "hand"
+                    }
+                  }
+                ],
+                "text": "Return target creature card from your graveyard to your hand."
+              },
+              {
+                "targets": [
+                  {
+                    "id": "p",
+                    "select": {
+                      "kind": "player"
+                    }
+                  }
+                ],
+                "effect": [
+                  {
+                    "discard": {
+                      "amount": 1,
+                      "player": "$p"
+                    }
+                  }
+                ],
+                "text": "Target player discards a card."
+              },
+              {
+                "targets": [
+                  {
+                    "id": "art",
+                    "select": {
+                      "type": "artifact"
+                    }
+                  }
+                ],
+                "effect": [
+                  {
+                    "destroy": "$art"
+                  }
+                ],
+                "text": "Destroy target artifact."
+              },
+              {
+                "targets": [
+                  {
+                    "id": "any",
+                    "select": {
+                      "anyOf": [
+                        {
+                          "type": [
+                            "creature",
+                            "planeswalker"
+                          ]
+                        },
+                        {
+                          "kind": "player"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "effect": [
+                  {
+                    "dealDamage": {
+                      "amount": 2,
+                      "to": "$any"
+                    }
+                  }
+                ],
+                "text": "Deals 2 damage to any target."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

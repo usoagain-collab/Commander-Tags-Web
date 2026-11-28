@@ -1,0 +1,137 @@
+{
+  "card": "b1544f21-7e98-461b-aed5-e748b0168c52",
+  "name": "Swords to Plowshares",
+  "tests": [
+    {
+      "name": "exile; its controller gains life equal to its power",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Swords to Plowshares"
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "exile",
+          "has": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "life": [
+            40,
+            43
+          ]
+        }
+      ]
+    },
+    {
+      "name": "uses the power it last had, counters included (608.2h)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains"
+            ]
+          },
+          {
+            "battlefield": [
+              {
+                "card": "Grizzly Bears",
+                "counters": {
+                  "+1/+1": 2
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Swords to Plowshares"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            40,
+            44
+          ]
+        }
+      ]
+    },
+    {
+      "name": "on your own creature, you gain the life",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains",
+              "Savannah Lions"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Swords to Plowshares"
+        },
+        {
+          "targets": [
+            "Savannah Lions"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            42,
+            40
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "card": "144119bc-7fd1-45c5-9e29-f742e7c255ac",
+  "name": "Clearwater Pathway // Murkwater Pathway",
+  "tests": [
+    {
+      "name": "played as Clearwater, taps for {U}",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Clearwater Pathway // Murkwater Pathway"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "play": "Clearwater Pathway",
+          "face": 0
+        },
+        {
+          "mana": "Clearwater Pathway"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "U": 1,
+            "B": 0
+          }
+        },
+        {
+          "chars": "Clearwater Pathway",
+          "name": "Clearwater Pathway"
+        }
+      ]
+    },
+    {
+      "name": "played as Murkwater, taps for {B}",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Clearwater Pathway // Murkwater Pathway"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "play": "Clearwater Pathway",
+          "face": 1
+        },
+        {
+          "mana": "Clearwater Pathway"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "B": 1,
+            "U": 0
+          }
+        },
+        {
+          "chars": "Clearwater Pathway",
+          "name": "Murkwater Pathway"
+        }
+      ]
+    }
+  ]
+}

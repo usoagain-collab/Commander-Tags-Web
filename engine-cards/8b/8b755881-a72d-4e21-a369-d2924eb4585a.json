@@ -1,0 +1,67 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "8b755881-a72d-4e21-a369-d2924eb4585a",
+  "name": "Cultivate",
+  "oracleHash": "f8952bf1d76fc6e5",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "search": {
+                "select": {
+                  "type": "land",
+                  "supertype": "basic"
+                },
+                "max": 2,
+                "reveal": true,
+                "as": "found"
+              }
+            },
+            {
+              "choose": {
+                "from": "$found",
+                "count": {
+                  "min": {
+                    "min": [
+                      1,
+                      {
+                        "count": "$found"
+                      }
+                    ]
+                  },
+                  "max": 1
+                },
+                "prompt": "Choose the land to put onto the battlefield",
+                "as": "toField"
+              }
+            },
+            {
+              "move": {
+                "objects": "$toField",
+                "to": "battlefield",
+                "tapped": true
+              }
+            },
+            {
+              "move": {
+                "objects": {
+                  "minus": [
+                    "$found",
+                    "$toField"
+                  ]
+                },
+                "to": "hand"
+              }
+            },
+            {
+              "shuffle": "you"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

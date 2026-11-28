@@ -1,0 +1,40 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "fcb2a95b-cef0-4b29-8b2b-538f380aff2b",
+  "name": "Vampire Hexmage",
+  "oracleHash": "feff7152041289e9",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "first strike"
+        },
+        {
+          "kind": "activated",
+          "cost": {
+            "sacrifice": {
+              "object": "self"
+            }
+          },
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "permanent"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "removeCounters": {
+                "kind": "all",
+                "on": "$t"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

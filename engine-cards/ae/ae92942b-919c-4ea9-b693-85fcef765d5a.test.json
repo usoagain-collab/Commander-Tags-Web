@@ -1,0 +1,161 @@
+{
+  "card": "ae92942b-919c-4ea9-b693-85fcef765d5a",
+  "name": "Fire // Ice",
+  "tests": [
+    {
+      "name": "Fire divides 2 damage between two targets",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Fire // Ice"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {
+            "battlefield": [
+              "Savannah Lions"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Fire",
+          "face": 0
+        },
+        {
+          "targets": [
+            "Savannah Lions",
+            "player:1"
+          ]
+        },
+        {
+          "check": [
+            {
+              "decision": "divide"
+            }
+          ]
+        },
+        {
+          "refused": {
+            "divide": [
+              2,
+              0
+            ]
+          },
+          "match": "at least 1"
+        },
+        {
+          "divide": [
+            1,
+            1
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Savannah Lions"
+          ]
+        },
+        {
+          "life": [
+            40,
+            39
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Fire with one target deals all 2 to it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Fire // Ice"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Fire",
+          "face": 0
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            40,
+            38
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ice taps a permanent and draws",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Fire // Ice"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Ice",
+          "face": 1
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "tapped": "Hill Giant"
+        },
+        {
+          "handSize": 1
+        }
+      ]
+    }
+  ]
+}

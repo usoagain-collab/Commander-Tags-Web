@@ -34,7 +34,7 @@ describe("printed card data", () => {
 describe("mana", () => {
   it("parses costs and mana values", () => {
     expect(parseCost("{2}{W}{W}")).toMatchObject({ generic: 2, symbols: { W: 2 }, unsupported: [] });
-    expect(parseCost("{X}{R}").unsupported).toEqual(["{X}"]);
+    expect(parseCost("{X}{R}")).toMatchObject({ x: 1, unsupported: [] });
     expect(manaValue("{X}{R}")).toBe(1);
     expect(manaValue("{2/W}{G/U}")).toBe(3);
     expect(intrinsicMana(["Plains", "Island"])).toEqual(["W", "U"]);
@@ -48,13 +48,13 @@ describe("mana", () => {
 
   it("auto-pay finds a working assignment of dual lands", () => {
     const sources = [
-      { object: 1, produces: ["W" as const, "U" as const] },
-      { object: 2, produces: ["W" as const] },
+      { object: 1, options: [{ ability: 0, bundle: ["W" as const] }, { ability: 1, bundle: ["U" as const] }] },
+      { object: 2, options: [{ ability: 0, bundle: ["W" as const] }] },
     ];
     // a greedy pick of land 1 for W would leave no U
     expect(planAutoPay(emptyPool(), parseCost("{W}{U}"), sources)).toEqual([
-      { object: 1, mana: "U" },
-      { object: 2, mana: "W" },
+      { object: 1, ability: 1, bundle: ["U"] },
+      { object: 2, ability: 0, bundle: ["W"] },
     ]);
     expect(planAutoPay(emptyPool(), parseCost("{U}{U}"), sources)).toBeNull();
     expect(planAutoPay({ ...emptyPool(), U: 1 }, parseCost("{1}{U}"), sources)).toHaveLength(1);
@@ -68,7 +68,7 @@ describe("special actions (116.2)", () => {
     ]);
     const s = stacked([deckOf([FOREST, 20]), deckOf([FOREST, 20])]);
     expect(step(s, 0, { kind: "special", special: "foretell" }).error).toMatch(/not yet: Foretell \(116.2h\)/);
-    expect(step(s, 0, { kind: "activate", object: 1, ability: 0 }).error).toMatch(/not yet/);
+    expect(step(s, 0, { kind: "activate", object: s.zones.hand[0][0], ability: 0 }).error).toMatch(/no such ability/);
     expect(step(s, 0, { kind: "rewind", toAction: 0 }).error).toMatch(/PR 5/);
   });
 });

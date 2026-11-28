@@ -1,0 +1,198 @@
+{
+  "card": "45f1e957-09f0-4d46-8e32-238f26060a87",
+  "name": "Kolaghan's Command",
+  "tests": [
+    {
+      "name": "discard + 2 damage",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Kolaghan's Command"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {
+            "hand": [
+              "Grizzly Bears",
+              "Forest"
+            ],
+            "battlefield": [
+              "Savannah Lions"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Kolaghan's Command"
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseModes"
+            }
+          ]
+        },
+        {
+          "modes": [
+            1,
+            3
+          ]
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "targets": [
+            "Savannah Lions"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseObjects",
+              "seat": 1
+            }
+          ]
+        },
+        {
+          "choose": [
+            "Grizzly Bears"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears",
+            "Savannah Lions"
+          ]
+        },
+        {
+          "zone": "hand",
+          "seat": 1,
+          "has": [
+            "Forest"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "return a creature card + destroy an artifact",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Kolaghan's Command"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Mountain",
+              "Mountain"
+            ],
+            "graveyard": [
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "battlefield": [
+              "Sol Ring"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Kolaghan's Command"
+        },
+        {
+          "modes": [
+            0,
+            2
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "targets": [
+            "Sol Ring"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Sol Ring"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "the same mode can't be chosen twice",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Kolaghan's Command"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Kolaghan's Command"
+        },
+        {
+          "refused": {
+            "modes": [
+              3,
+              3
+            ]
+          },
+          "match": "twice"
+        },
+        {
+          "refused": {
+            "modes": [
+              3
+            ]
+          },
+          "match": "2"
+        }
+      ]
+    }
+  ]
+}

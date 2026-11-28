@@ -1,0 +1,99 @@
+{
+  "card": "e9e25800-9ee7-40c9-b22d-611c7281c125",
+  "name": "Coalition Victory",
+  "tests": [
+    {
+      "name": "wins with every basic land type and a creature of each color",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Coalition Victory"
+            ],
+            "battlefield": [
+              "Plains",
+              "Island",
+              "Swamp",
+              "Mountain",
+              "Forest",
+              "Plains",
+              "Island",
+              "Swamp",
+              "Savannah Lions",
+              "Blue Drake",
+              "Dusk Imp",
+              "Hill Giant",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Coalition Victory"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "winner": 0
+        },
+        {
+          "lost": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "does nothing without a blue creature",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Coalition Victory"
+            ],
+            "battlefield": [
+              "Plains",
+              "Island",
+              "Swamp",
+              "Mountain",
+              "Forest",
+              "Plains",
+              "Island",
+              "Swamp",
+              "Savannah Lions",
+              "Dusk Imp",
+              "Hill Giant",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Coalition Victory"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "lost": []
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Coalition Victory"
+          ]
+        }
+      ]
+    }
+  ]
+}

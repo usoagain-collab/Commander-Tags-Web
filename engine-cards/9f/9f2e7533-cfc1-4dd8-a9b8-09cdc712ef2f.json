@@ -1,0 +1,30 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "9f2e7533-cfc1-4dd8-a9b8-09cdc712ef2f",
+  "name": "Hulking Raptor",
+  "oracleHash": "4ce7f627bc202eb4",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "ward",
+          "cost": "{2}"
+        },
+        {
+          "kind": "triggered",
+          "when": {
+            "event": "beginStep",
+            "step": "main1",
+            "player": "you"
+          },
+          "effect": [
+            {
+              "addMana": "{G}{G}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

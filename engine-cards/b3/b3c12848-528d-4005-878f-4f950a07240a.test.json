@@ -1,0 +1,140 @@
+{
+  "card": "b3c12848-528d-4005-878f-4f950a07240a",
+  "name": "Prey Upon",
+  "tests": [
+    {
+      "name": "your creature fights theirs",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Prey Upon"
+            ],
+            "battlefield": [
+              "Forest",
+              "Hill Giant"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Prey Upon"
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Hill Giant"
+              ],
+              "notChoices": [
+                "Grizzly Bears"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "damage": "Hill Giant",
+          "is": 2
+        }
+      ]
+    },
+    {
+      "name": "no fight if one is gone (701.14b)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Prey Upon"
+            ],
+            "battlefield": [
+              "Forest",
+              "Hill Giant"
+            ]
+          },
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Grizzly Bears",
+              "Plains"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Prey Upon"
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "pass": true
+        },
+        {
+          "cast": "Swords to Plowshares",
+          "seat": 1
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "exile",
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "damage": "Hill Giant",
+          "is": 0
+        }
+      ]
+    }
+  ]
+}

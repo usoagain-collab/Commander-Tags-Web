@@ -1,0 +1,116 @@
+{
+  "card": "dbd6a94b-62ff-4a10-9d52-bdd90b26e425",
+  "name": "Time Warp",
+  "tests": [
+    {
+      "name": "take an extra turn after this one",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Time Warp"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Time Warp"
+        },
+        {
+          "targets": [
+            "player:0"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "passTo": {
+            "seat": 0,
+            "step": "upkeep"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "turn": {
+            "seat": 0,
+            "number": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "then play goes on from where it was (500.7)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Time Warp"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {},
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Time Warp"
+        },
+        {
+          "targets": [
+            "player:2"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "passTo": {
+            "seat": 2,
+            "step": "main1"
+          }
+        },
+        {
+          "check": [
+            {
+              "turn": {
+                "number": 2
+              }
+            }
+          ]
+        },
+        {
+          "passTo": {
+            "seat": 1,
+            "step": "main1"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "turn": {
+            "seat": 1,
+            "number": 3
+          }
+        }
+      ]
+    }
+  ]
+}

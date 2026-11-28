@@ -1,0 +1,59 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+  "name": "Cyclonic Rift",
+  "oracleHash": "c6622e2c086f9a84",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "overload",
+          "cost": "{6}{U}"
+        },
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "if": {
+                "castWith": "overload"
+              },
+              "then": [
+                {
+                  "bounce": {
+                    "select": {
+                      "kind": "permanent",
+                      "not": {
+                        "type": "land"
+                      },
+                      "controller": "notYou"
+                    }
+                  }
+                }
+              ],
+              "else": [
+                {
+                  "targets": [
+                    {
+                      "id": "t",
+                      "select": {
+                        "kind": "permanent",
+                        "not": {
+                          "type": "land"
+                        },
+                        "controller": "notYou"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "bounce": "$t"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

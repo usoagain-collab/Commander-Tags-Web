@@ -1,0 +1,114 @@
+{
+  "card": "058917c1-21ab-488a-9f9c-591c55f3c596",
+  "name": "Diabolic Edict",
+  "tests": [
+    {
+      "name": "a player with one creature sacrifices it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Diabolic Edict"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Swamp"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Diabolic Edict"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "that player chooses which",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Diabolic Edict"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Swamp"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears",
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Diabolic Edict"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseObjects",
+              "purpose": "sacrifice",
+              "seat": 1
+            }
+          ]
+        },
+        {
+          "choose": [
+            "Grizzly Bears"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "zone": "battlefield",
+          "seat": 1,
+          "has": [
+            "Hill Giant"
+          ]
+        }
+      ]
+    }
+  ]
+}

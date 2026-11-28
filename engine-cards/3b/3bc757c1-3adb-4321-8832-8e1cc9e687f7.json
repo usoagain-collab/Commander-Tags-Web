@@ -1,0 +1,61 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "3bc757c1-3adb-4321-8832-8e1cc9e687f7",
+  "name": "Lurrus of the Dream-Den",
+  "oracleHash": "ea61c132c77cc3ae",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "companion",
+          "condition": {
+            "everyCard": {
+              "anyOf": [
+                {
+                  "not": {
+                    "type": [
+                      "artifact",
+                      "creature",
+                      "enchantment",
+                      "land",
+                      "planeswalker",
+                      "battle"
+                    ]
+                  }
+                },
+                {
+                  "manaValue": {
+                    "<=": 2
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": "keyword",
+          "keyword": "lifelink"
+        },
+        {
+          "kind": "static",
+          "effects": [
+            {
+              "permission": {
+                "castFrom": "graveyard",
+                "select": {
+                  "kind": "permanent",
+                  "manaValue": {
+                    "<=": 2
+                  }
+                },
+                "limit": "oncePerTurn",
+                "turn": "yours"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

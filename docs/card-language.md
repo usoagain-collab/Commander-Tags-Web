@@ -156,6 +156,16 @@ alternativeCost: { payLife: { manaValue: spell } }                              
 
 Permissions are what the priority decision reads to offer "cast from top of library" and so on. A `perTurn` permission keeps its usage in `turnMemory`, tied to the source object's id (so a Muldrotha that leaves and returns is a new object with fresh uses).
 
+## v1 as built (PR 2, Nov 28, 2026)
+
+- **Code:** `src/lib/engine/lang/` (`blocks.ts` the block and keyword table, `validate.ts` the schema check, `eval.ts` selectors and numbers, `run.ts` the block runtime, `abilities.ts` costs and keyword expansions, `tokens.ts`, `scenario.ts` the card test runner) and `src/lib/engine/play.ts` (casting and activating: modes, kicker, X, targets, divide, cost choices, payment, rollback).
+- **Blocks:** 60 in the table. The 41 core blocks run now (one more than the plan's 40). The other 19 pass the schema check and say when they run (PR 3, 4a, 4b, 4c, later); a card that reaches one gets a `notYet` event instead of a wrong result.
+- **What runs now:** one-shot effects (spells, activated abilities, mana abilities), casting from hand, graveyard (flashback) and exile (Adventures), alternative and additional costs (overload, kicker, convoke, affinity, crew, equip, cycling), targets rechecked on resolution (608.2b), Auras attaching on resolution, extra turns, and new state checks 704.5d, h, m, n, q. Hexproof and protection count only on the battlefield (113.6).
+- **What waits:** triggered abilities (PR 3 / 4a), replacement effects (4b) and continuous effects in layers (4c). Their scripts already pass the schema check; their tests are written and marked pending with the PR that turns them on.
+- **Cards:** 46 hand-written scripts in `engine-cards/<first 2 characters>/<oracle id>.json`, each with a `.test.json` beside it, covering every core block and all 30 keywords. `engine-cards/printed.json` holds their printed faces until `card_faces` is migrated. 130 tests: 118 run now and pass, 12 are pending.
+- **Gate proofs:** `src/lib/engine/engine-cards.test.ts` (every script valid and in the right file, every card 2+ running tests that pass, coverage of blocks and keywords, bad scripts refused with the path and reason: unknown block, field or keyword, missing field, unbound `$var`, wrong layer, wrong version, wrong name or face count).
+- **Test file format:** `{ card, name, tests: [{ name, setup: { seats: [{ hand, battlefield, library, graveyard, exile, life }] }, do: [...], expect: [...], pending? }] }`. Moves in `do` are `cast`, `play`, `activate`, `mana`, `pass`, `resolve`, `targets`, `choose`, `modes`, `x`, `yes`, `pay`, `divide`, `arrange`, `cancel`, `refused` and `check`; checks cover zones, life, tapped, counters, characteristics, damage, decisions, events and winners (see `scenario.ts`).
+
 ## Bound variables and last known information
 
 - Names start with `$`. They come from targets (`$t`), trigger bindings (`$p`, `$o`), and `as:` on effect steps (`$exiled`, `$returned`, `$found`).

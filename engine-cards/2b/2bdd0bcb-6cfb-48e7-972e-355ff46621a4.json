@@ -1,0 +1,59 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "2bdd0bcb-6cfb-48e7-972e-355ff46621a4",
+  "name": "Cryptcaller Chariot",
+  "oracleHash": "c1ed295cf503cfde",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "menace"
+        },
+        {
+          "kind": "triggered",
+          "when": {
+            "event": "discard",
+            "player": "you",
+            "as": {
+              "count": "n"
+            }
+          },
+          "effect": [
+            {
+              "createToken": {
+                "token": "zombie",
+                "count": "$n",
+                "tapped": true
+              }
+            }
+          ]
+        },
+        {
+          "kind": "keyword",
+          "keyword": "crew",
+          "amount": 2
+        }
+      ]
+    }
+  ],
+  "tokens": [
+    {
+      "id": "zombie",
+      "name": "Zombie",
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Zombie"
+      ],
+      "colors": [
+        "black"
+      ],
+      "pt": [
+        2,
+        2
+      ]
+    }
+  ]
+}

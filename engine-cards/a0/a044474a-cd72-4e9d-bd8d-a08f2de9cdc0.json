@@ -1,0 +1,41 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0",
+  "name": "Reanimate",
+  "oracleHash": "f1ecf392c79ffa78",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "zone": "graveyard",
+                "type": "creature"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "returnToBattlefield": {
+                "object": "$t",
+                "underControlOf": "you"
+              }
+            },
+            {
+              "loseLife": {
+                "amount": {
+                  "manaValue": "$t",
+                  "lki": true
+                },
+                "player": "you"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

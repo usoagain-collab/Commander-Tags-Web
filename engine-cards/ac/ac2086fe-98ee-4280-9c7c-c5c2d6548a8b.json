@@ -1,0 +1,61 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "ac2086fe-98ee-4280-9c7c-c5c2d6548a8b",
+  "name": "Burst Lightning",
+  "oracleHash": "17dac5bb4f995559",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "kicker",
+          "cost": "{4}"
+        },
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "anyOf": [
+                  {
+                    "type": [
+                      "creature",
+                      "planeswalker"
+                    ]
+                  },
+                  {
+                    "kind": "player"
+                  }
+                ]
+              }
+            }
+          ],
+          "effect": [
+            {
+              "if": {
+                "castWith": "kicker"
+              },
+              "then": [
+                {
+                  "dealDamage": {
+                    "amount": 4,
+                    "to": "$t"
+                  }
+                }
+              ],
+              "else": [
+                {
+                  "dealDamage": {
+                    "amount": 2,
+                    "to": "$t"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

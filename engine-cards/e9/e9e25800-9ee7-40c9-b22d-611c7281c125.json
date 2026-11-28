@@ -1,0 +1,98 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "e9e25800-9ee7-40c9-b22d-611c7281c125",
+  "name": "Coalition Victory",
+  "oracleHash": "c2c300d16bfd35af",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "if": {
+                "and": [
+                  {
+                    "exists": {
+                      "type": "land",
+                      "subtype": "Plains",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "land",
+                      "subtype": "Island",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "land",
+                      "subtype": "Swamp",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "land",
+                      "subtype": "Mountain",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "land",
+                      "subtype": "Forest",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "creature",
+                      "color": "white",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "creature",
+                      "color": "blue",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "creature",
+                      "color": "black",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "creature",
+                      "color": "red",
+                      "controller": "you"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "type": "creature",
+                      "color": "green",
+                      "controller": "you"
+                    }
+                  }
+                ]
+              },
+              "then": [
+                {
+                  "winGame": "you"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

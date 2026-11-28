@@ -1,0 +1,164 @@
+{
+  "card": "324824cb-f938-401c-b9b5-d8908b431ef0",
+  "name": "Snuff Out",
+  "tests": [
+    {
+      "name": "pay 4 life instead of its mana cost",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Snuff Out"
+            ],
+            "battlefield": [
+              "Swamp"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears",
+              "Dusk Imp"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Snuff Out",
+          "via": "payLife"
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Grizzly Bears"
+              ],
+              "notChoices": [
+                "Dusk Imp"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            36,
+            40
+          ]
+        },
+        {
+          "tapped": "Swamp",
+          "is": false
+        },
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "no Swamp, no free cast",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Snuff Out"
+            ],
+            "battlefield": [
+              "Plains"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "check": [
+            {
+              "legal": {
+                "kind": "cast",
+                "card": "Snuff Out",
+                "via": "payLife"
+              },
+              "is": false
+            }
+          ]
+        },
+        {
+          "refused": {
+            "cast": "Snuff Out",
+            "via": "payLife"
+          },
+          "match": "can't use"
+        }
+      ]
+    },
+    {
+      "name": "or pay {3}{B}",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Snuff Out"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Swamp",
+              "Swamp",
+              "Swamp"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Snuff Out"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            40,
+            40
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        }
+      ]
+    }
+  ]
+}
