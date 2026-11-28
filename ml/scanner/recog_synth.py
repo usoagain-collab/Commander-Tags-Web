@@ -47,13 +47,23 @@ def rounded_alpha(h: int, w: int, device) -> torch.Tensor:
 
 class RecogSynth:
     def __init__(self, backgrounds: torch.Tensor | None, device="cuda", seed: int | None = None,
-                 corner_err: float = 0.045, strength: float = 1.0):
+                 corner_err: float = 0.045, strength: float = 1.0,
+                 errors: torch.Tensor | None = None, real_share: float = 0.7):
         """backgrounds: (M, H, W, 3) uint8 photos of tables (or None: made-up textures only).
 
         corner_err: the largest corner miss, as a share of the card's width.
         strength: 0..1 scales how often and how strongly the effects apply
         (training can start gentler).
+        errors: (N, 4, 2) real corner misses in card widths (data/corner_errors.npy); when given,
+        real_share of the fakes copy one of them. Misses over 0.3 card widths are dropped
+        (a corner put on the wrong thing entirely, not a near miss).
         """
+        self.errors = None
+        self.real_share = real_share
+        if errors is not None:
+            e = torch.as_tensor(errors, dtype=torch.float32)
+            e = e[e.norm(dim=2).amax(1) < 0.3]
+            self.errors = e.to(device) if len(e) else None
         self.device = device
         self.bgs = None if backgrounds is None else backgrounds.to(device).permute(0, 3, 1, 2).contiguous()
         self.gen = torch.Generator(device=device)
@@ -99,12 +109,25 @@ class RecogSynth:
                 out[use] = F.grid_sample(src, grid, mode="bilinear", padding_mode="reflection", align_corners=False)
         return out
 
+    def real_misses(self, b: int) -> torch.Tensor:
+        """(b, 4, 2) corner offsets in card widths, drawn from a corner finder's real misses
+        (scripts/corner_errors.py), each scaled 0.5-1.5 times and mirrored left-right half the time."""
+        e = self.errors[torch.randint(0, len(self.errors), (b,), generator=self.gen, device=self.device)]
+        flip = self.u(b) < 0.5
+        mirrored = e[:, [1, 0, 3, 2]] * torch.tensor([-1.0, 1.0], device=self.device)
+        e = torch.where(flip[:, None, None], mirrored, e)
+        return e * self.u(b, 1, 1, lo=0.5, hi=1.5)
+
     def misplace(self, b: int) -> torch.Tensor:
         """(b, 4, 2) where the card's corners land in the flat picture when the found corners are off."""
         w, h = self.w, self.h
         rect = torch.tensor([[0, 0], [w, 0], [w, h], [0, h]], device=self.device).float()
         err = self.u(b, 1, 1, lo=0, hi=self.corner_err * self.strength) * w
         q = rect + torch.randn(b, 4, 2, generator=self.gen, device=self.device) * err * 0.6
+        if self.errors is not None:
+            # most fakes miss like the real corner finder does; the rest keep the made-up misses above
+            real = self.u(b) < self.real_share * self.strength
+            q = torch.where(real[:, None, None], rect + self.real_misses(b) * w, q)
         # the whole card a bit bigger or smaller (finder drawn to the inner or outer edge) and shifted
         scale = 1 + self.u(b, 1, 1, lo=-1, hi=1) * 0.03 * self.strength
         centre = rect.mean(0)
