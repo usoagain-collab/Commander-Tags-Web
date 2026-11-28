@@ -95,6 +95,27 @@ export function playableLandFaces(def: CardDef): number[] {
   return isLandFace(def.faces[0]) ? [0] : [];
 }
 
+/**
+ * Which face's script applies right now: the same choice as `printedFace`. "all" for a split card off the
+ * stack (709.4: both halves' text), -1 for a face-down object (no text, 708.2).
+ */
+export function printedFaceIndex(obj: GameObject): number | "all" {
+  const { def, zone, status } = obj;
+  if (status.faceDown) return -1;
+  const onStackOrField = zone === "stack" || zone === "battlefield";
+  switch (def.layout) {
+    case "transform":
+    case "modal_dfc":
+      return onStackOrField ? status.upFace : 0;
+    case "adventure":
+      return zone === "stack" && obj.castInfo?.face === 1 ? 1 : 0;
+    case "split":
+      return zone === "stack" && obj.castInfo ? obj.castInfo.face : "all";
+    default:
+      return 0;
+  }
+}
+
 /** Face-down objects are 2/2 with no name, text, cost or color (708.2). */
 const FACE_DOWN: FaceDef = face({ name: "", typeLine: "Creature", power: "2", toughness: "2", colors: [] });
 

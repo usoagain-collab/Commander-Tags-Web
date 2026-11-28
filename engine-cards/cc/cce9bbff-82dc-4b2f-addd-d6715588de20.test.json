@@ -1,0 +1,74 @@
+{
+  "card": "cce9bbff-82dc-4b2f-addd-d6715588de20",
+  "name": "Thoughtcast",
+  "tests": [
+    {
+      "name": "costs {1} less for each artifact you control",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Thoughtcast"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Sol Ring",
+              "Trinket",
+              "Ornithopter"
+            ]
+          },
+          {
+            "battlefield": [
+              "Trinket"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Thoughtcast"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "handSize": 2
+        },
+        {
+          "tapped": "Sol Ring",
+          "is": false
+        }
+      ]
+    },
+    {
+      "name": "without artifacts it costs {4}{U}",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Thoughtcast"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Thoughtcast"
+        }
+      ],
+      "expect": [
+        {
+          "event": "castRolledBack"
+        }
+      ]
+    }
+  ]
+}

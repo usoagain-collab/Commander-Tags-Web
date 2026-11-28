@@ -1,0 +1,90 @@
+{
+  "card": "feb244f8-bcb1-44cf-9940-2719221a7309",
+  "name": "Vampire Nighthawk",
+  "tests": [
+    {
+      "name": "flying, deathtouch, lifelink",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Vampire Nighthawk"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Vampire Nighthawk",
+          "has": [
+            "flying",
+            "deathtouch",
+            "lifelink"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "deathtouch kills, lifelink gains (704.5h, 702.15b)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Prey Upon"
+            ],
+            "battlefield": [
+              "Forest",
+              "Vampire Nighthawk"
+            ]
+          },
+          {
+            "battlefield": [
+              "Big Colossus"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Prey Upon"
+        },
+        {
+          "targets": [
+            "Vampire Nighthawk"
+          ]
+        },
+        {
+          "targets": [
+            "Big Colossus"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Big Colossus"
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Vampire Nighthawk"
+          ]
+        },
+        {
+          "life": [
+            42,
+            40
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "8164b1e8-3350-465e-8a17-75f57d326344",
+  "name": "Exsanguinate",
+  "oracleHash": "c5df71917238dce0",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "loseLife": {
+                "amount": {
+                  "x": true
+                },
+                "players": "opponents",
+                "as": "lost"
+              }
+            },
+            {
+              "gainLife": {
+                "amount": "$lost",
+                "player": "you"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

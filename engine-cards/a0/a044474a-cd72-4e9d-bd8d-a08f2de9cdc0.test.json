@@ -1,0 +1,95 @@
+{
+  "card": "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0",
+  "name": "Reanimate",
+  "tests": [
+    {
+      "name": "takes a creature from an opponent's graveyard; lose life equal to its mana value",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Reanimate"
+            ],
+            "battlefield": [
+              "Swamp"
+            ]
+          },
+          {
+            "graveyard": [
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Reanimate"
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "chars": "Hill Giant",
+          "controller": 0
+        },
+        {
+          "life": [
+            36,
+            40
+          ]
+        }
+      ]
+    },
+    {
+      "name": "only creature cards in graveyards",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Reanimate"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Grizzly Bears"
+            ],
+            "graveyard": [
+              "Savannah Lions",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Reanimate"
+        }
+      ],
+      "expect": [
+        {
+          "choices": [
+            "Savannah Lions"
+          ],
+          "notChoices": [
+            "Grizzly Bears",
+            "Forest"
+          ]
+        }
+      ]
+    }
+  ]
+}

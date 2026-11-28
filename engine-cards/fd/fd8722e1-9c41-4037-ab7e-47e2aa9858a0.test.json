@@ -1,0 +1,117 @@
+{
+  "card": "fd8722e1-9c41-4037-ab7e-47e2aa9858a0",
+  "name": "Paladin en-Vec",
+  "tests": [
+    {
+      "name": "red spells can't target it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Burst Lightning"
+            ],
+            "battlefield": [
+              "Mountain"
+            ]
+          },
+          {
+            "battlefield": [
+              "Paladin en-Vec",
+              "Savannah Lions"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Burst Lightning"
+        },
+        {
+          "yes": false
+        }
+      ],
+      "expect": [
+        {
+          "choices": [
+            "Savannah Lions",
+            "player:1"
+          ],
+          "notChoices": [
+            "Paladin en-Vec"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "damage from black or red is prevented",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Prey Upon"
+            ],
+            "battlefield": [
+              "Forest",
+              "Hill Giant"
+            ]
+          },
+          {
+            "battlefield": [
+              "Paladin en-Vec"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Prey Upon"
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "targets": [
+            "Paladin en-Vec"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "damage": "Paladin en-Vec",
+          "is": 0
+        },
+        {
+          "damage": "Hill Giant",
+          "is": 2
+        }
+      ]
+    },
+    {
+      "name": "first strike and protection",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Paladin en-Vec"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Paladin en-Vec",
+          "has": [
+            "first strike",
+            "protection"
+          ]
+        }
+      ]
+    }
+  ]
+}

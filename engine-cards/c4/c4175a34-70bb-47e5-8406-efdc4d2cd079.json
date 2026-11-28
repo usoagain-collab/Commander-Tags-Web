@@ -1,0 +1,44 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "c4175a34-70bb-47e5-8406-efdc4d2cd079",
+  "name": "Sami, Wildcat Captain",
+  "oracleHash": "80b1a582b4e20f69",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "double strike"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "vigilance"
+        },
+        {
+          "kind": "static",
+          "effects": [
+            {
+              "continuous": {
+                "layer": "6",
+                "affects": {
+                  "select": {
+                    "kind": "spell",
+                    "controller": "you"
+                  }
+                },
+                "do": {
+                  "gainAbility": {
+                    "keyword": "affinity",
+                    "for": {
+                      "type": "artifact"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

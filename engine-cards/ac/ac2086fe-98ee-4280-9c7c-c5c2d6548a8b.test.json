@@ -1,0 +1,150 @@
+{
+  "card": "ac2086fe-98ee-4280-9c7c-c5c2d6548a8b",
+  "name": "Burst Lightning",
+  "tests": [
+    {
+      "name": "2 damage to any target",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Burst Lightning"
+            ],
+            "battlefield": [
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Burst Lightning"
+        },
+        {
+          "yes": false
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            40,
+            38
+          ]
+        }
+      ]
+    },
+    {
+      "name": "kicked: 4 damage",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Burst Lightning"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Mountain",
+              "Mountain",
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Burst Lightning"
+        },
+        {
+          "check": [
+            {
+              "decision": "yesNo",
+              "purpose": "kicker"
+            }
+          ]
+        },
+        {
+          "yes": true
+        },
+        {
+          "targets": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Hill Giant"
+          ]
+        },
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "name": "kicker it can't pay rolls the cast back",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Burst Lightning"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Burst Lightning"
+        },
+        {
+          "yes": true
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "event": "castRolledBack"
+        },
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Burst Lightning"
+          ]
+        }
+      ]
+    }
+  ]
+}

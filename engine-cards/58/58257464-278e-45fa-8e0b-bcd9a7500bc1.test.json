@@ -1,0 +1,127 @@
+{
+  "card": "58257464-278e-45fa-8e0b-bcd9a7500bc1",
+  "name": "Ash Barrens",
+  "tests": [
+    {
+      "name": "taps for {C}",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Ash Barrens"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "mana": "Ash Barrens"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "C": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "basic landcycling {1} finds a basic land",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Ash Barrens"
+            ],
+            "battlefield": [
+              "Island"
+            ],
+            "library": [
+              "Swamp",
+              "Forest",
+              "Swamp"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Ash Barrens"
+        },
+        {
+          "check": [
+            {
+              "stack": 1
+            },
+            {
+              "zone": "graveyard",
+              "seat": 0,
+              "has": [
+                "Ash Barrens"
+              ]
+            },
+            {
+              "tapped": "Island"
+            }
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseObjects",
+              "purpose": "search"
+            }
+          ]
+        },
+        {
+          "choose": [
+            "Forest"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Forest"
+          ]
+        },
+        {
+          "librarySize": 2
+        },
+        {
+          "event": "shuffle"
+        }
+      ]
+    },
+    {
+      "name": "landcycling can't be used from the battlefield",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Ash Barrens",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "activate": "Ash Barrens"
+          },
+          "match": "hand"
+        }
+      ]
+    }
+  ]
+}

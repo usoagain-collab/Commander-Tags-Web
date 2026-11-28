@@ -1,0 +1,109 @@
+{
+  "card": "16e015b2-f8a3-4b1a-80be-58a8f5fb5e8c",
+  "name": "Frantic Search",
+  "tests": [
+    {
+      "name": "draw two, discard two, untap three lands",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Frantic Search",
+              "Forest"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Frantic Search"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseObjects",
+              "purpose": "discard"
+            }
+          ]
+        },
+        {
+          "choose": [
+            "Forest",
+            "Island"
+          ]
+        },
+        {
+          "choose": [
+            "Island",
+            "Island",
+            "Island"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Forest",
+            "Island",
+            "Frantic Search"
+          ]
+        },
+        {
+          "handSize": 1
+        },
+        {
+          "event": "untap",
+          "times": 3
+        }
+      ]
+    },
+    {
+      "name": "may untap none",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Frantic Search"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Frantic Search"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "choose": []
+        }
+      ],
+      "expect": [
+        {
+          "handSize": 0
+        },
+        {
+          "noEvent": "untap"
+        }
+      ]
+    }
+  ]
+}

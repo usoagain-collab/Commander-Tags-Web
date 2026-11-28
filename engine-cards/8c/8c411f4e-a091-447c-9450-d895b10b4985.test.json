@@ -1,0 +1,161 @@
+{
+  "card": "8c411f4e-a091-447c-9450-d895b10b4985",
+  "name": "Carnage Tyrant",
+  "tests": [
+    {
+      "name": "Mana Leak can't counter it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Carnage Tyrant"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest",
+              "Forest"
+            ]
+          },
+          {
+            "hand": [
+              "Mana Leak"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Carnage Tyrant"
+        },
+        {
+          "pass": true
+        },
+        {
+          "cast": "Mana Leak",
+          "seat": 1
+        },
+        {
+          "targets": [
+            "Carnage Tyrant"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "payOrNot",
+              "seat": 0
+            }
+          ]
+        },
+        {
+          "pay": "decline"
+        },
+        {
+          "check": [
+            {
+              "event": "cantBeCountered"
+            }
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Carnage Tyrant"
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "has": [
+            "Mana Leak"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "hexproof: an opponent can't target it",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Carnage Tyrant",
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "pass": true
+        },
+        {
+          "cast": "Swords to Plowshares",
+          "seat": 1
+        }
+      ],
+      "expect": [
+        {
+          "choices": [
+            "Grizzly Bears"
+          ],
+          "notChoices": [
+            "Carnage Tyrant"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "its controller can target it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Carnage Tyrant",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Swords to Plowshares"
+        }
+      ],
+      "expect": [
+        {
+          "choices": [
+            "Carnage Tyrant"
+          ]
+        }
+      ]
+    }
+  ]
+}

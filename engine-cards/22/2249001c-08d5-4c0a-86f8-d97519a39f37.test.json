@@ -1,0 +1,134 @@
+{
+  "card": "2249001c-08d5-4c0a-86f8-d97519a39f37",
+  "name": "Stoke the Flames",
+  "tests": [
+    {
+      "name": "convoke: creatures help pay",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Stoke the Flames"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Mountain",
+              "Grizzly Bears",
+              {
+                "card": "Savannah Lions",
+                "sick": true
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Stoke the Flames"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            40,
+            36
+          ]
+        },
+        {
+          "tapped": "Grizzly Bears"
+        },
+        {
+          "tapped": "Savannah Lions"
+        }
+      ]
+    },
+    {
+      "name": "a red creature pays {R}",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Stoke the Flames"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Island",
+              "Island",
+              "Hill Giant"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Stoke the Flames"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            40,
+            36
+          ]
+        },
+        {
+          "tapped": "Hill Giant"
+        }
+      ]
+    },
+    {
+      "name": "not enough even with creatures",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Stoke the Flames"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Stoke the Flames"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "event": "castRolledBack"
+        },
+        {
+          "tapped": "Grizzly Bears",
+          "is": false
+        }
+      ]
+    }
+  ]
+}

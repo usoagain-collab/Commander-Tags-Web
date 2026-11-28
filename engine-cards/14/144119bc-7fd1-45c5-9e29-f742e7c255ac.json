@@ -1,0 +1,26 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "144119bc-7fd1-45c5-9e29-f742e7c255ac",
+  "name": "Clearwater Pathway // Murkwater Pathway",
+  "oracleHash": "a4cb959ae35fa399",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "mana",
+          "cost": "tap",
+          "add": "{U}"
+        }
+      ]
+    },
+    {
+      "abilities": [
+        {
+          "kind": "mana",
+          "cost": "tap",
+          "add": "{B}"
+        }
+      ]
+    }
+  ]
+}

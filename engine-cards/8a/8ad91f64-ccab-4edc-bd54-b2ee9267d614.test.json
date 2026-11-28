@@ -1,0 +1,86 @@
+{
+  "card": "8ad91f64-ccab-4edc-bd54-b2ee9267d614",
+  "name": "Lotus Cobra",
+  "tests": [
+    {
+      "name": "cast for {1}{G}: a 2/1",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Lotus Cobra"
+            ],
+            "battlefield": [
+              "Forest",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Lotus Cobra"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "chars": "Lotus Cobra",
+          "power": 2,
+          "toughness": 1
+        }
+      ]
+    },
+    {
+      "name": "has landfall",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Lotus Cobra"
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "keywords": "Lotus Cobra",
+          "has": [
+            "landfall"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "landfall adds one mana of any color",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Forest"
+            ],
+            "battlefield": [
+              "Lotus Cobra"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "play": "Forest"
+        }
+      ],
+      "expect": [
+        {
+          "decision": "chooseColor"
+        }
+      ],
+      "pending": "PR 4a"
+    }
+  ]
+}

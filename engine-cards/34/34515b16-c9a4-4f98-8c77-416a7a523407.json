@@ -1,0 +1,24 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "34515b16-c9a4-4f98-8c77-416a7a523407",
+  "name": "Wrath of God",
+  "oracleHash": "35902648b91a3be1",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "destroy": {
+                "select": {
+                  "type": "creature"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

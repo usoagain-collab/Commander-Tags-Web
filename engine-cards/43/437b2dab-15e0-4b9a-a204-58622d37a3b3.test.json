@@ -1,0 +1,212 @@
+{
+  "card": "437b2dab-15e0-4b9a-a204-58622d37a3b3",
+  "name": "Fact or Fiction",
+  "tests": [
+    {
+      "name": "an opponent splits five cards; you take a pile",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Fact or Fiction"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Grizzly Bears",
+              "Forest",
+              "Plains",
+              "Mountain",
+              "Swamp",
+              "Hill Giant"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Fact or Fiction"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "splitPiles",
+              "seat": 1
+            }
+          ]
+        },
+        {
+          "piles": [
+            [
+              "Grizzly Bears"
+            ],
+            [
+              "Forest",
+              "Plains",
+              "Mountain",
+              "Swamp"
+            ]
+          ]
+        },
+        {
+          "check": [
+            {
+              "decision": "choosePile",
+              "seat": 0
+            }
+          ]
+        },
+        {
+          "pile": 1
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Forest",
+            "Plains",
+            "Mountain",
+            "Swamp"
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears",
+            "Fact or Fiction"
+          ]
+        },
+        {
+          "top": [
+            "Hill Giant"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "taking the small pile",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Fact or Fiction"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Grizzly Bears",
+              "Forest",
+              "Plains",
+              "Mountain",
+              "Swamp"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Fact or Fiction"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "piles": [
+            [
+              "Grizzly Bears"
+            ],
+            [
+              "Forest",
+              "Plains",
+              "Mountain",
+              "Swamp"
+            ]
+          ]
+        },
+        {
+          "pile": 0
+        }
+      ],
+      "expect": [
+        {
+          "handSize": 1
+        },
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "name": "every card goes in exactly one pile",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Fact or Fiction"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Grizzly Bears",
+              "Forest",
+              "Plains",
+              "Mountain",
+              "Swamp"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Fact or Fiction"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "refused": {
+            "piles": [
+              [
+                "Grizzly Bears"
+              ],
+              [
+                "Forest"
+              ]
+            ]
+          },
+          "match": "exactly one pile"
+        }
+      ]
+    }
+  ]
+}

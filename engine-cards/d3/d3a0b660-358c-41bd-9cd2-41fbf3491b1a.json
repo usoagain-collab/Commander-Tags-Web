@@ -1,0 +1,23 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
+  "name": "Birds of Paradise",
+  "oracleHash": "c59d430350b655c6",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "flying"
+        },
+        {
+          "kind": "mana",
+          "cost": "tap",
+          "add": {
+            "anyColor": 1
+          }
+        }
+      ]
+    }
+  ]
+}

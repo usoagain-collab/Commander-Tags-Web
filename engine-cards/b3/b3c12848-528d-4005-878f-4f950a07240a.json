@@ -1,0 +1,39 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "b3c12848-528d-4005-878f-4f950a07240a",
+  "name": "Prey Upon",
+  "oracleHash": "b13672d6f2f86c3c",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "mine",
+              "select": {
+                "type": "creature",
+                "controller": "you"
+              }
+            },
+            {
+              "id": "theirs",
+              "select": {
+                "type": "creature",
+                "controller": "notYou"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "fight": {
+                "object": "$mine",
+                "with": "$theirs"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

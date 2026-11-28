@@ -1,0 +1,147 @@
+{
+  "card": "216cb26e-8da9-478b-bfbc-8030f7adee72",
+  "name": "Avacyn, Angel of Hope",
+  "tests": [
+    {
+      "name": "cast for {5}{W}{W}{W}; flying, vigilance, indestructible",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Avacyn, Angel of Hope"
+            ],
+            "battlefield": [
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Avacyn, Angel of Hope"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Avacyn, Angel of Hope"
+          ]
+        },
+        {
+          "keywords": "Avacyn, Angel of Hope",
+          "has": [
+            "flying",
+            "vigilance",
+            "indestructible"
+          ]
+        },
+        {
+          "chars": "Avacyn, Angel of Hope",
+          "power": 8,
+          "toughness": 8
+        }
+      ]
+    },
+    {
+      "name": "survives Wrath of God (702.12b)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Wrath of God"
+            ],
+            "battlefield": [
+              "Avacyn, Angel of Hope",
+              "Grizzly Bears",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Wrath of God"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Avacyn, Angel of Hope"
+          ],
+          "lacks": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears",
+            "Wrath of God"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "other permanents you control have indestructible",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Wrath of God"
+            ],
+            "battlefield": [
+              "Avacyn, Angel of Hope",
+              "Grizzly Bears",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Wrath of God"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        }
+      ],
+      "pending": "PR 4c"
+    }
+  ]
+}

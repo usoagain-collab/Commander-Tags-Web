@@ -1,0 +1,31 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "8c411f4e-a091-447c-9450-d895b10b4985",
+  "name": "Carnage Tyrant",
+  "oracleHash": "c5b53a4c25bb4642",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "static",
+          "zone": "stack",
+          "effects": [
+            {
+              "ruleEffect": {
+                "cantBeCountered": true
+              }
+            }
+          ]
+        },
+        {
+          "kind": "keyword",
+          "keyword": "trample"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "hexproof"
+        }
+      ]
+    }
+  ]
+}

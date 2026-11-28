@@ -1,0 +1,28 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "dbd6a94b-62ff-4a10-9d52-bdd90b26e425",
+  "name": "Time Warp",
+  "oracleHash": "44bae33403bf935c",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "player"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "extraTurn": "$t"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

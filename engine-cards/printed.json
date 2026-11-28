@@ -1,0 +1,656 @@
+[
+  {
+    "oracleId": "58257464-278e-45fa-8e0b-bcd9a7500bc1",
+    "name": "Ash Barrens",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Ash Barrens",
+        "manaCost": null,
+        "typeLine": "Land",
+        "oracleText": "{T}: Add {C}.\nBasic landcycling {1} ({1}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)"
+      }
+    ]
+  },
+  {
+    "oracleId": "216cb26e-8da9-478b-bfbc-8030f7adee72",
+    "name": "Avacyn, Angel of Hope",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Avacyn, Angel of Hope",
+        "manaCost": "{5}{W}{W}{W}",
+        "typeLine": "Legendary Creature — Angel",
+        "oracleText": "Flying, vigilance, indestructible\nOther permanents you control have indestructible.",
+        "power": "8",
+        "toughness": "8"
+      }
+    ]
+  },
+  {
+    "oracleId": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
+    "name": "Birds of Paradise",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Birds of Paradise",
+        "manaCost": "{G}",
+        "typeLine": "Creature — Bird",
+        "oracleText": "Flying\n{T}: Add one mana of any color.",
+        "power": "0",
+        "toughness": "1"
+      }
+    ]
+  },
+  {
+    "oracleId": "3f0c9466-5ab9-4205-a84f-b4b27b5a678e",
+    "name": "Bloodbraid Elf",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Bloodbraid Elf",
+        "manaCost": "{2}{R}{G}",
+        "typeLine": "Creature — Elf Berserker",
+        "oracleText": "Haste (This creature can attack and {T} as soon as it comes under your control.)\nCascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)",
+        "power": "3",
+        "toughness": "2"
+      }
+    ]
+  },
+  {
+    "oracleId": "464c0150-3dbc-403b-9ada-fef25ab1f29d",
+    "name": "Brain Freeze",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Brain Freeze",
+        "manaCost": "{1}{U}",
+        "typeLine": "Instant",
+        "oracleText": "Target player mills three cards.\nStorm (When you cast this spell, copy it for each spell cast before it this turn. You may choose new targets for the copies.)"
+      }
+    ]
+  },
+  {
+    "oracleId": "c7b044c3-3cfa-407e-bf20-2875e8e04b7b",
+    "name": "Brazen Borrower // Petty Theft",
+    "layout": "adventure",
+    "faces": [
+      {
+        "name": "Brazen Borrower",
+        "manaCost": "{1}{U}{U}",
+        "typeLine": "Creature — Faerie Rogue",
+        "oracleText": "Flash\nFlying\nThis creature can block only creatures with flying.",
+        "power": "3",
+        "toughness": "1"
+      },
+      {
+        "name": "Petty Theft",
+        "manaCost": "{1}{U}",
+        "typeLine": "Instant — Adventure",
+        "oracleText": "Return target nonland permanent an opponent controls to its owner's hand."
+      }
+    ]
+  },
+  {
+    "oracleId": "ac2086fe-98ee-4280-9c7c-c5c2d6548a8b",
+    "name": "Burst Lightning",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Burst Lightning",
+        "manaCost": "{R}",
+        "typeLine": "Instant",
+        "oracleText": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nBurst Lightning deals 2 damage to any target. If this spell was kicked, it deals 4 damage instead."
+      }
+    ]
+  },
+  {
+    "oracleId": "8c411f4e-a091-447c-9450-d895b10b4985",
+    "name": "Carnage Tyrant",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Carnage Tyrant",
+        "manaCost": "{4}{G}{G}",
+        "typeLine": "Creature — Dinosaur",
+        "oracleText": "This spell can't be countered.\nTrample, hexproof",
+        "power": "7",
+        "toughness": "6"
+      }
+    ]
+  },
+  {
+    "oracleId": "144119bc-7fd1-45c5-9e29-f742e7c255ac",
+    "name": "Clearwater Pathway // Murkwater Pathway",
+    "layout": "modal_dfc",
+    "faces": [
+      {
+        "name": "Clearwater Pathway",
+        "manaCost": null,
+        "typeLine": "Land",
+        "oracleText": "{T}: Add {U}."
+      },
+      {
+        "name": "Murkwater Pathway",
+        "manaCost": null,
+        "typeLine": "Land",
+        "oracleText": "{T}: Add {B}."
+      }
+    ]
+  },
+  {
+    "oracleId": "e9e25800-9ee7-40c9-b22d-611c7281c125",
+    "name": "Coalition Victory",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Coalition Victory",
+        "manaCost": "{3}{W}{U}{B}{R}{G}",
+        "typeLine": "Sorcery",
+        "oracleText": "You win the game if you control a land of each basic land type and a creature of each color."
+      }
+    ]
+  },
+  {
+    "oracleId": "4c9bcba6-87b5-4fb3-97ee-6fe5b739337d",
+    "name": "Consider",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Consider",
+        "manaCost": "{U}",
+        "typeLine": "Instant",
+        "oracleText": "Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)\nDraw a card."
+      }
+    ]
+  },
+  {
+    "oracleId": "2bdd0bcb-6cfb-48e7-972e-355ff46621a4",
+    "name": "Cryptcaller Chariot",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Cryptcaller Chariot",
+        "manaCost": "{3}{B}",
+        "typeLine": "Artifact — Vehicle",
+        "oracleText": "Menace\nWhenever you discard one or more cards, create that many tapped 2/2 black Zombie creature tokens.\nCrew 2"
+      }
+    ]
+  },
+  {
+    "oracleId": "8b755881-a72d-4e21-a369-d2924eb4585a",
+    "name": "Cultivate",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Cultivate",
+        "manaCost": "{2}{G}",
+        "typeLine": "Sorcery",
+        "oracleText": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle."
+      }
+    ]
+  },
+  {
+    "oracleId": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+    "name": "Cyclonic Rift",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Cyclonic Rift",
+        "manaCost": "{1}{U}",
+        "typeLine": "Instant",
+        "oracleText": "Return target nonland permanent you don't control to its owner's hand.\nOverload {6}{U} (You may cast this spell for its overload cost. If you do, change \"target\" in its text to \"each.\")"
+      }
+    ]
+  },
+  {
+    "oracleId": "058917c1-21ab-488a-9f9c-591c55f3c596",
+    "name": "Diabolic Edict",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Diabolic Edict",
+        "manaCost": "{1}{B}",
+        "typeLine": "Instant",
+        "oracleText": "Target player sacrifices a creature of their choice."
+      }
+    ]
+  },
+  {
+    "oracleId": "b919cca5-88c0-4104-b54e-49644fbf78a5",
+    "name": "Door to Nothingness",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Door to Nothingness",
+        "manaCost": "{5}",
+        "typeLine": "Artifact",
+        "oracleText": "This artifact enters tapped.\n{W}{W}{U}{U}{B}{B}{R}{R}{G}{G}, {T}, Sacrifice this artifact: Target player loses the game."
+      }
+    ]
+  },
+  {
+    "oracleId": "397b9dcf-690a-4a58-8637-bb9baab7cc2f",
+    "name": "Elder Gargaroth",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Elder Gargaroth",
+        "manaCost": "{3}{G}{G}",
+        "typeLine": "Creature — Beast",
+        "oracleText": "Reach, vigilance, trample\nWhenever this creature attacks or blocks, choose one —\n• Create a 3/3 green Beast creature token.\n• You gain 3 life.\n• Draw a card.",
+        "power": "6",
+        "toughness": "6"
+      }
+    ]
+  },
+  {
+    "oracleId": "8164b1e8-3350-465e-8a17-75f57d326344",
+    "name": "Exsanguinate",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Exsanguinate",
+        "manaCost": "{X}{B}{B}",
+        "typeLine": "Sorcery",
+        "oracleText": "Each opponent loses X life. You gain life equal to the life lost this way."
+      }
+    ]
+  },
+  {
+    "oracleId": "437b2dab-15e0-4b9a-a204-58622d37a3b3",
+    "name": "Fact or Fiction",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Fact or Fiction",
+        "manaCost": "{3}{U}",
+        "typeLine": "Instant",
+        "oracleText": "Reveal the top five cards of your library. An opponent separates those cards into two piles. Put one pile into your hand and the other into your graveyard."
+      }
+    ]
+  },
+  {
+    "oracleId": "ae92942b-919c-4ea9-b693-85fcef765d5a",
+    "name": "Fire // Ice",
+    "layout": "split",
+    "faces": [
+      {
+        "name": "Fire",
+        "manaCost": "{1}{R}",
+        "typeLine": "Instant",
+        "oracleText": "Fire deals 2 damage divided as you choose among one or two targets."
+      },
+      {
+        "name": "Ice",
+        "manaCost": "{1}{U}",
+        "typeLine": "Instant",
+        "oracleText": "Tap target permanent.\nDraw a card."
+      }
+    ]
+  },
+  {
+    "oracleId": "16e015b2-f8a3-4b1a-80be-58a8f5fb5e8c",
+    "name": "Frantic Search",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Frantic Search",
+        "manaCost": "{2}{U}",
+        "typeLine": "Instant",
+        "oracleText": "Draw two cards, then discard two cards. Untap up to three lands."
+      }
+    ]
+  },
+  {
+    "oracleId": "9f2e7533-cfc1-4dd8-a9b8-09cdc712ef2f",
+    "name": "Hulking Raptor",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Hulking Raptor",
+        "manaCost": "{2}{G}{G}",
+        "typeLine": "Creature — Dinosaur",
+        "oracleText": "Ward {2}\nAt the beginning of your first main phase, add {G}{G}.",
+        "power": "5",
+        "toughness": "3"
+      }
+    ]
+  },
+  {
+    "oracleId": "7f77a84e-5a4b-4834-aefa-3cecc175ae8e",
+    "name": "Jace, the Mind Sculptor",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Jace, the Mind Sculptor",
+        "manaCost": "{2}{U}{U}",
+        "typeLine": "Legendary Planeswalker — Jace",
+        "oracleText": "+2: Look at the top card of target player's library. You may put that card on the bottom of that player's library.\n0: Draw three cards, then put two cards from your hand on top of your library in any order.\n−1: Return target creature to its owner's hand.\n−12: Exile all cards from target player's library, then that player shuffles their hand into their library.",
+        "loyalty": "3"
+      }
+    ]
+  },
+  {
+    "oracleId": "45f1e957-09f0-4d46-8e32-238f26060a87",
+    "name": "Kolaghan's Command",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Kolaghan's Command",
+        "manaCost": "{1}{B}{R}",
+        "typeLine": "Instant",
+        "oracleText": "Choose two —\n• Return target creature card from your graveyard to your hand.\n• Target player discards a card.\n• Destroy target artifact.\n• Kolaghan's Command deals 2 damage to any target."
+      }
+    ]
+  },
+  {
+    "oracleId": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+    "name": "Lightning Greaves",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Lightning Greaves",
+        "manaCost": "{2}",
+        "typeLine": "Artifact — Equipment",
+        "oracleText": "Equipped creature has haste and shroud. (It can't be the target of spells or abilities.)\nEquip {0}"
+      }
+    ]
+  },
+  {
+    "oracleId": "8ad91f64-ccab-4edc-bd54-b2ee9267d614",
+    "name": "Lotus Cobra",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Lotus Cobra",
+        "manaCost": "{1}{G}",
+        "typeLine": "Creature — Snake",
+        "oracleText": "Landfall — Whenever a land you control enters, add one mana of any color.",
+        "power": "2",
+        "toughness": "1"
+      }
+    ]
+  },
+  {
+    "oracleId": "3bc757c1-3adb-4321-8832-8e1cc9e687f7",
+    "name": "Lurrus of the Dream-Den",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Lurrus of the Dream-Den",
+        "manaCost": "{1}{W/B}{W/B}",
+        "typeLine": "Legendary Creature — Cat Nightmare",
+        "oracleText": "Companion — Each permanent card in your starting deck has mana value 2 or less. (If this card is your chosen companion, you may put it into your hand from outside the game for {3} as a sorcery.)\nLifelink\nOnce during each of your turns, you may cast a permanent spell with mana value 2 or less from your graveyard.",
+        "power": "3",
+        "toughness": "2"
+      }
+    ]
+  },
+  {
+    "oracleId": "c61fe162-2202-4e56-9ba0-393547f9875f",
+    "name": "Mana Leak",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Mana Leak",
+        "manaCost": "{1}{U}",
+        "typeLine": "Instant",
+        "oracleText": "Counter target spell unless its controller pays {3}."
+      }
+    ]
+  },
+  {
+    "oracleId": "fd8722e1-9c41-4037-ab7e-47e2aa9858a0",
+    "name": "Paladin en-Vec",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Paladin en-Vec",
+        "manaCost": "{1}{W}{W}",
+        "typeLine": "Creature — Human Knight",
+        "oracleText": "First strike, protection from black and from red (This creature deals combat damage before creatures without first strike. It can't be blocked, targeted, dealt damage, or enchanted by anything black or red.)",
+        "power": "2",
+        "toughness": "2"
+      }
+    ]
+  },
+  {
+    "oracleId": "b3c12848-528d-4005-878f-4f950a07240a",
+    "name": "Prey Upon",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Prey Upon",
+        "manaCost": "{G}",
+        "typeLine": "Sorcery",
+        "oracleText": "Target creature you control fights target creature you don't control. (Each deals damage equal to its power to the other.)"
+      }
+    ]
+  },
+  {
+    "oracleId": "9d2d6479-531c-4ce1-b52b-00e36fa63b64",
+    "name": "Rancor",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Rancor",
+        "manaCost": "{G}",
+        "typeLine": "Enchantment — Aura",
+        "oracleText": "Enchant creature\nEnchanted creature gets +2/+0 and has trample.\nWhen this Aura is put into a graveyard from the battlefield, return it to its owner's hand."
+      }
+    ]
+  },
+  {
+    "oracleId": "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0",
+    "name": "Reanimate",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Reanimate",
+        "manaCost": "{B}",
+        "typeLine": "Sorcery",
+        "oracleText": "Put target creature card from a graveyard onto the battlefield under your control. You lose life equal to that card's mana value."
+      }
+    ]
+  },
+  {
+    "oracleId": "c4175a34-70bb-47e5-8406-efdc4d2cd079",
+    "name": "Sami, Wildcat Captain",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Sami, Wildcat Captain",
+        "manaCost": "{4}{R}{W}",
+        "typeLine": "Legendary Creature — Human Artificer Rogue",
+        "oracleText": "Double strike, vigilance\nSpells you cast have affinity for artifacts. (They cost {1} less to cast for each artifact you control.)",
+        "power": "4",
+        "toughness": "4"
+      }
+    ]
+  },
+  {
+    "oracleId": "324824cb-f938-401c-b9b5-d8908b431ef0",
+    "name": "Snuff Out",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Snuff Out",
+        "manaCost": "{3}{B}",
+        "typeLine": "Instant",
+        "oracleText": "If you control a Swamp, you may pay 4 life rather than pay this spell's mana cost.\nDestroy target nonblack creature. It can't be regenerated."
+      }
+    ]
+  },
+  {
+    "oracleId": "6ad8011d-3471-4369-9d68-b264cc027487",
+    "name": "Sol Ring",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Sol Ring",
+        "manaCost": "{1}",
+        "typeLine": "Artifact",
+        "oracleText": "{T}: Add {C}{C}."
+      }
+    ]
+  },
+  {
+    "oracleId": "2249001c-08d5-4c0a-86f8-d97519a39f37",
+    "name": "Stoke the Flames",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Stoke the Flames",
+        "manaCost": "{2}{R}{R}",
+        "typeLine": "Instant",
+        "oracleText": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nStoke the Flames deals 4 damage to any target."
+      }
+    ]
+  },
+  {
+    "oracleId": "b1544f21-7e98-461b-aed5-e748b0168c52",
+    "name": "Swords to Plowshares",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Swords to Plowshares",
+        "manaCost": "{W}",
+        "typeLine": "Instant",
+        "oracleText": "Exile target creature. Its controller gains life equal to its power."
+      }
+    ]
+  },
+  {
+    "oracleId": "13d4c46b-c2d6-44cc-a252-4a991d471854",
+    "name": "Sylvan Caryatid",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Sylvan Caryatid",
+        "manaCost": "{1}{G}",
+        "typeLine": "Creature — Plant",
+        "oracleText": "Defender, hexproof\n{T}: Add one mana of any color.",
+        "power": "0",
+        "toughness": "3"
+      }
+    ]
+  },
+  {
+    "oracleId": "cce9bbff-82dc-4b2f-addd-d6715588de20",
+    "name": "Thoughtcast",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Thoughtcast",
+        "manaCost": "{4}{U}",
+        "typeLine": "Sorcery",
+        "oracleText": "Affinity for artifacts (This spell costs {1} less to cast for each artifact you control.)\nDraw two cards."
+      }
+    ]
+  },
+  {
+    "oracleId": "3d867016-2601-4a37-a73d-308898d3bd37",
+    "name": "Thrasios, Triton Hero",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Thrasios, Triton Hero",
+        "manaCost": "{G}{U}",
+        "typeLine": "Legendary Creature — Merfolk Wizard",
+        "oracleText": "{4}: Scry 1, then reveal the top card of your library. If it's a land card, put it onto the battlefield tapped. Otherwise, draw a card.\nPartner (You can have two commanders if both have partner.)",
+        "power": "1",
+        "toughness": "3"
+      }
+    ]
+  },
+  {
+    "oracleId": "dbd6a94b-62ff-4a10-9d52-bdd90b26e425",
+    "name": "Time Warp",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Time Warp",
+        "manaCost": "{3}{U}{U}",
+        "typeLine": "Sorcery",
+        "oracleText": "Target player takes an extra turn after this one."
+      }
+    ]
+  },
+  {
+    "oracleId": "8432729e-5fd4-4661-8b79-e41b1d03eb7b",
+    "name": "Travel Preparations",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Travel Preparations",
+        "manaCost": "{1}{G}",
+        "typeLine": "Sorcery",
+        "oracleText": "Put a +1/+1 counter on each of up to two target creatures.\nFlashback {1}{W} (You may cast this card from your graveyard for its flashback cost. Then exile it.)"
+      }
+    ]
+  },
+  {
+    "oracleId": "0b55eac6-a745-4bf4-8926-5ce83bc38d7d",
+    "name": "Treasure Map // Treasure Cove",
+    "layout": "transform",
+    "faces": [
+      {
+        "name": "Treasure Map",
+        "manaCost": "{2}",
+        "typeLine": "Artifact",
+        "oracleText": "{1}, {T}: Scry 1. Put a landmark counter on this artifact. Then if there are three or more landmark counters on it, remove those counters, transform this artifact, and create three Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")"
+      },
+      {
+        "name": "Treasure Cove",
+        "manaCost": null,
+        "typeLine": "Land",
+        "oracleText": "(Transforms from Treasure Map.)\n{T}: Add {C}.\n{T}, Sacrifice a Treasure: Draw a card.",
+        "colors": []
+      }
+    ]
+  },
+  {
+    "oracleId": "fcb2a95b-cef0-4b29-8b2b-538f380aff2b",
+    "name": "Vampire Hexmage",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Vampire Hexmage",
+        "manaCost": "{B}{B}",
+        "typeLine": "Creature — Vampire Shaman",
+        "oracleText": "First strike\nSacrifice this creature: Remove all counters from target permanent.",
+        "power": "2",
+        "toughness": "1"
+      }
+    ]
+  },
+  {
+    "oracleId": "feb244f8-bcb1-44cf-9940-2719221a7309",
+    "name": "Vampire Nighthawk",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Vampire Nighthawk",
+        "manaCost": "{1}{B}{B}",
+        "typeLine": "Creature — Vampire Shaman",
+        "oracleText": "Flying\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
+        "power": "2",
+        "toughness": "3"
+      }
+    ]
+  },
+  {
+    "oracleId": "34515b16-c9a4-4f98-8c77-416a7a523407",
+    "name": "Wrath of God",
+    "layout": "normal",
+    "faces": [
+      {
+        "name": "Wrath of God",
+        "manaCost": "{2}{W}{W}",
+        "typeLine": "Sorcery",
+        "oracleText": "Destroy all creatures. They can't be regenerated."
+      }
+    ]
+  }
+]

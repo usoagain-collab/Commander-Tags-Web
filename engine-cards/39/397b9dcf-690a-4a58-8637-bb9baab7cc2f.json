@@ -1,0 +1,79 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "397b9dcf-690a-4a58-8637-bb9baab7cc2f",
+  "name": "Elder Gargaroth",
+  "oracleHash": "58d562cd68bebdf9",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "reach"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "vigilance"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "trample"
+        },
+        {
+          "kind": "triggered",
+          "when": {
+            "event": "attacksOrBlocks",
+            "object": "self"
+          },
+          "modes": {
+            "count": 1,
+            "options": [
+              {
+                "effect": [
+                  {
+                    "createToken": "beast"
+                  }
+                ],
+                "text": "Create a 3/3 green Beast creature token."
+              },
+              {
+                "effect": [
+                  {
+                    "gainLife": 3
+                  }
+                ],
+                "text": "You gain 3 life."
+              },
+              {
+                "effect": [
+                  {
+                    "draw": 1
+                  }
+                ],
+                "text": "Draw a card."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "tokens": [
+    {
+      "id": "beast",
+      "name": "Beast",
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Beast"
+      ],
+      "colors": [
+        "green"
+      ],
+      "pt": [
+        3,
+        3
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "8ad91f64-ccab-4edc-bd54-b2ee9267d614",
+  "name": "Lotus Cobra",
+  "oracleHash": "fda510469c392dfa",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "landfall",
+          "effect": [
+            {
+              "addMana": {
+                "mana": {
+                  "anyColor": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

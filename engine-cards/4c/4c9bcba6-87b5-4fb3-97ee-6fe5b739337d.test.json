@@ -1,0 +1,115 @@
+{
+  "card": "4c9bcba6-87b5-4fb3-97ee-6fe5b739337d",
+  "name": "Consider",
+  "tests": [
+    {
+      "name": "surveil the top card into the graveyard, then draw",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Consider"
+            ],
+            "battlefield": [
+              "Island"
+            ],
+            "library": [
+              "Forest",
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Consider"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "decision": "arrange",
+              "purpose": "surveil"
+            }
+          ]
+        },
+        {
+          "arrange": {
+            "bottom": [
+              "Forest"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Forest",
+            "Consider"
+          ]
+        },
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Mountain"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "keep it on top and draw it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Consider"
+            ],
+            "battlefield": [
+              "Island"
+            ],
+            "library": [
+              "Forest",
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Consider"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "arrange": {
+            "top": [
+              "Forest"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Forest"
+          ]
+        },
+        {
+          "top": [
+            "Mountain"
+          ]
+        }
+      ]
+    }
+  ]
+}

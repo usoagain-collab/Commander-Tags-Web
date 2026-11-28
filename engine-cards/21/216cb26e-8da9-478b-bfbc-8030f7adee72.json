@@ -1,0 +1,46 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "216cb26e-8da9-478b-bfbc-8030f7adee72",
+  "name": "Avacyn, Angel of Hope",
+  "oracleHash": "71ad73e8eeaec143",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "flying"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "vigilance"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "indestructible"
+        },
+        {
+          "kind": "static",
+          "effects": [
+            {
+              "continuous": {
+                "layer": "6",
+                "affects": {
+                  "select": {
+                    "kind": "permanent",
+                    "controller": "you",
+                    "other": true
+                  }
+                },
+                "do": {
+                  "gainAbility": {
+                    "keyword": "indestructible"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

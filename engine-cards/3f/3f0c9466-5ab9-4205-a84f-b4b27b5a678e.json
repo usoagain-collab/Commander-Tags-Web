@@ -1,0 +1,20 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "3f0c9466-5ab9-4205-a84f-b4b27b5a678e",
+  "name": "Bloodbraid Elf",
+  "oracleHash": "c7db9e2b7ca09f82",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "haste"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "cascade"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "0b55eac6-a745-4bf4-8926-5ce83bc38d7d",
+  "name": "Treasure Map // Treasure Cove",
+  "oracleHash": "e8d266150ea6ae3b",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "activated",
+          "cost": "{1}{T}",
+          "effect": [
+            {
+              "scry": 1
+            },
+            {
+              "addCounters": {
+                "kind": "landmark",
+                "on": "self"
+              }
+            },
+            {
+              "if": {
+                "compare": [
+                  {
+                    "counters": {
+                      "on": "self",
+                      "kind": "landmark"
+                    }
+                  },
+                  ">=",
+                  3
+                ]
+              },
+              "then": [
+                {
+                  "removeCounters": {
+                    "kind": "landmark",
+                    "on": "self"
+                  }
+                },
+                {
+                  "transform": "self"
+                },
+                {
+                  "createToken": {
+                    "token": "Treasure",
+                    "count": 3
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "abilities": [
+        {
+          "kind": "mana",
+          "cost": "tap",
+          "add": "{C}"
+        },
+        {
+          "kind": "activated",
+          "cost": [
+            "tap",
+            {
+              "sacrifice": {
+                "select": {
+                  "subtype": "Treasure"
+                }
+              }
+            }
+          ],
+          "effect": [
+            {
+              "draw": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

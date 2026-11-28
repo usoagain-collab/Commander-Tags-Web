@@ -1,0 +1,141 @@
+{
+  "card": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+  "name": "Cyclonic Rift",
+  "tests": [
+    {
+      "name": "returns target nonland permanent you don't control",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Cyclonic Rift"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Savannah Lions"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears",
+              "Forest"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Cyclonic Rift"
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Grizzly Bears"
+              ],
+              "notChoices": [
+                "Savannah Lions",
+                "Forest"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "zone": "battlefield",
+          "seat": 1,
+          "has": [
+            "Forest"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "overloaded: returns each of them, no targets",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Cyclonic Rift"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Savannah Lions"
+            ]
+          },
+          {
+            "battlefield": [
+              "Grizzly Bears",
+              "Hill Giant",
+              "Forest"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Cyclonic Rift",
+          "via": "overload"
+        },
+        {
+          "check": [
+            {
+              "stack": 1
+            }
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 1,
+          "has": [
+            "Grizzly Bears",
+            "Hill Giant"
+          ]
+        },
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Savannah Lions"
+          ]
+        },
+        {
+          "zone": "battlefield",
+          "seat": 1,
+          "has": [
+            "Forest"
+          ],
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

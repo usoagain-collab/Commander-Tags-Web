@@ -58,9 +58,16 @@ describe("mid-cast rollback (733)", () => {
     expect(step(s, 0, { kind: "pass" }).error).toMatch(/answer the payment/);
   });
 
-  it("refuses {X} costs as not yet built", () => {
-    const s = mainWithForest(deckOf([FOREST, 1], [X_SPELL, 1], [FOREST, 18]));
-    expect(step(s, 0, { kind: "cast", object: handCard(s, 0, "Fireball-ish") }).error).toMatch(/not yet.*\{X\}/);
+  it("asks for X, then charges it (107.3, 601.2b)", () => {
+    const before = mainWithForest(deckOf([FOREST, 1], [X_SPELL, 1], [FOREST, 18]));
+    let s = act(before, { kind: "cast", object: handCard(before, 0, "Fireball-ish") });
+    expect(s.pendingDecision?.kind).toBe("chooseX");
+    s = act(s, { kind: "answer", decision: s.pendingDecision!.id, choice: { number: 3 } });
+    expect(s.pendingDecision?.kind).toBe("payCost");
+    expect(s.casting?.cost).toBe("{3}{R}");
+    // one Forest can't pay {3}{R}: the cast rolls back to the exact state before it
+    const r = step(s, 0, { kind: "answer", decision: s.pendingDecision!.id, choice: { pay: "auto" } });
+    expect(r.state).toBe(before);
   });
 });
 

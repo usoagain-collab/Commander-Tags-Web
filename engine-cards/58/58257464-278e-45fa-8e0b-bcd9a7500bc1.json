@@ -1,0 +1,26 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "58257464-278e-45fa-8e0b-bcd9a7500bc1",
+  "name": "Ash Barrens",
+  "oracleHash": "11b4a162b8244898",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "mana",
+          "cost": "tap",
+          "add": "{C}"
+        },
+        {
+          "kind": "keyword",
+          "keyword": "cycling",
+          "cost": "{1}",
+          "search": {
+            "type": "land",
+            "supertype": "basic"
+          }
+        }
+      ]
+    }
+  ]
+}

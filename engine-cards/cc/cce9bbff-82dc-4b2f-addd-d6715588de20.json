@@ -1,0 +1,27 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "cce9bbff-82dc-4b2f-addd-d6715588de20",
+  "name": "Thoughtcast",
+  "oracleHash": "763dcb31253472b3",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "affinity",
+          "for": {
+            "type": "artifact"
+          }
+        },
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "draw": 2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

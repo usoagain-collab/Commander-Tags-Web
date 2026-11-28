@@ -1,0 +1,187 @@
+{
+  "card": "9d2d6479-531c-4ce1-b52b-00e36fa63b64",
+  "name": "Rancor",
+  "tests": [
+    {
+      "name": "enters attached to the creature it targeted (303.4f)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Rancor"
+            ],
+            "battlefield": [
+              "Forest",
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Rancor"
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Grizzly Bears",
+                "Hill Giant"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "attached": "Rancor",
+          "to": "Grizzly Bears"
+        }
+      ]
+    },
+    {
+      "name": "goes to the graveyard when the creature leaves (704.5m)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains",
+              "Grizzly Bears",
+              {
+                "card": "Rancor",
+                "attachedTo": "Grizzly Bears"
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Swords to Plowshares"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Rancor"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fizzles if its target is gone (608.2b)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Rancor"
+            ],
+            "battlefield": [
+              "Forest",
+              "Grizzly Bears"
+            ]
+          },
+          {
+            "hand": [
+              "Swords to Plowshares"
+            ],
+            "battlefield": [
+              "Plains"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Rancor"
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "pass": true
+        },
+        {
+          "cast": "Swords to Plowshares",
+          "seat": 1
+        },
+        {
+          "targets": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "resolve": true
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "event": "fizzle"
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Rancor"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "+2/+0 and trample, and back to hand from the graveyard",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Grizzly Bears",
+              {
+                "card": "Rancor",
+                "attachedTo": "Grizzly Bears"
+              }
+            ]
+          },
+          {}
+        ]
+      },
+      "expect": [
+        {
+          "chars": "Grizzly Bears",
+          "power": 4
+        }
+      ],
+      "pending": "PR 4c"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "card": "34515b16-c9a4-4f98-8c77-416a7a523407",
+  "name": "Wrath of God",
+  "tests": [
+    {
+      "name": "destroys all creatures",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Wrath of God"
+            ],
+            "battlefield": [
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains",
+              "Grizzly Bears",
+              "Sol Ring"
+            ]
+          },
+          {
+            "battlefield": [
+              "Hill Giant",
+              "Savannah Lions"
+            ]
+          }
+        ]
+      },
+      "do": [
+        {
+          "cast": "Wrath of God"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Sol Ring"
+          ],
+          "lacks": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "zone": "battlefield",
+          "seat": 1,
+          "count": 0
+        },
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "count": 2
+        }
+      ]
+    },
+    {
+      "name": "only as a sorcery",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Wrath of God"
+            ],
+            "battlefield": [
+              "Plains",
+              "Plains",
+              "Plains",
+              "Plains"
+            ]
+          },
+          {}
+        ],
+        "active": 1
+      },
+      "do": [
+        {
+          "pass": true
+        },
+        {
+          "refused": {
+            "cast": "Wrath of God",
+            "seat": 0
+          },
+          "match": "main phase"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "9d2d6479-531c-4ce1-b52b-00e36fa63b64",
+  "name": "Rancor",
+  "oracleHash": "1fc4464b4ff53a87",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "keyword",
+          "keyword": "enchant",
+          "select": {
+            "type": "creature"
+          }
+        },
+        {
+          "kind": "static",
+          "effects": [
+            {
+              "continuous": {
+                "layer": "7c",
+                "affects": {
+                  "attachedTo": "self"
+                },
+                "do": {
+                  "modifyPT": [
+                    2,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "continuous": {
+                "layer": "6",
+                "affects": {
+                  "attachedTo": "self"
+                },
+                "do": {
+                  "gainAbility": {
+                    "keyword": "trample"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "triggered",
+          "when": {
+            "event": "zoneChange",
+            "object": "self",
+            "from": "battlefield",
+            "to": "graveyard"
+          },
+          "effect": [
+            {
+              "move": {
+                "object": "self",
+                "to": "hand"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

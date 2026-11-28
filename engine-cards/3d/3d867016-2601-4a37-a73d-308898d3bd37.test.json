@@ -1,0 +1,153 @@
+{
+  "card": "3d867016-2601-4a37-a73d-308898d3bd37",
+  "name": "Thrasios, Triton Hero",
+  "tests": [
+    {
+      "name": "a land on top goes onto the battlefield tapped",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Thrasios, Triton Hero",
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Forest",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Thrasios, Triton Hero"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "arrange": {
+            "top": [
+              "Forest"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Forest"
+          ]
+        },
+        {
+          "tapped": "Forest"
+        },
+        {
+          "handSize": 0
+        }
+      ]
+    },
+    {
+      "name": "otherwise draw a card",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Thrasios, Triton Hero",
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Grizzly Bears",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Thrasios, Triton Hero"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "arrange": {
+            "top": [
+              "Grizzly Bears"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "scry the land away first",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Thrasios, Triton Hero",
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Forest",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Thrasios, Triton Hero"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "arrange": {
+            "bottom": [
+              "Forest"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "keywords": "Thrasios, Triton Hero",
+          "has": [
+            "partner"
+          ]
+        }
+      ]
+    }
+  ]
+}

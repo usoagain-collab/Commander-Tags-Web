@@ -1,0 +1,92 @@
+{
+  "card": "8164b1e8-3350-465e-8a17-75f57d326344",
+  "name": "Exsanguinate",
+  "tests": [
+    {
+      "name": "X = 3 against one opponent",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Exsanguinate"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Swamp",
+              "Swamp",
+              "Swamp",
+              "Swamp"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Exsanguinate"
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseX"
+            }
+          ]
+        },
+        {
+          "x": 3
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            43,
+            37
+          ]
+        }
+      ]
+    },
+    {
+      "name": "gains what every opponent lost",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Exsanguinate"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Swamp",
+              "Swamp",
+              "Swamp"
+            ]
+          },
+          {},
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Exsanguinate"
+        },
+        {
+          "x": 2
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "life": [
+            44,
+            38,
+            38
+          ]
+        }
+      ]
+    }
+  ]
+}

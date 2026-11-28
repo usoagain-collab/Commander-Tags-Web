@@ -1,0 +1,72 @@
+{
+  "card": "6ad8011d-3471-4369-9d68-b264cc027487",
+  "name": "Sol Ring",
+  "tests": [
+    {
+      "name": "taps for {C}{C}",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Sol Ring"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "mana": "Sol Ring"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "C": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "auto-pay uses both mana",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Big Colossus"
+            ],
+            "battlefield": [
+              "Sol Ring",
+              "Island",
+              "Island",
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Big Colossus"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Big Colossus"
+          ]
+        },
+        {
+          "tapped": "Sol Ring"
+        }
+      ]
+    }
+  ]
+}

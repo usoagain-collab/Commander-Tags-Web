@@ -1,0 +1,69 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "ae92942b-919c-4ea9-b693-85fcef765d5a",
+  "name": "Fire // Ice",
+  "oracleHash": "d811dae3ab1df3b8",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "anyOf": [
+                  {
+                    "type": [
+                      "creature",
+                      "planeswalker"
+                    ]
+                  },
+                  {
+                    "kind": "player"
+                  }
+                ]
+              },
+              "count": {
+                "min": 1,
+                "max": 2
+              },
+              "divide": 2
+            }
+          ],
+          "effect": [
+            {
+              "dealDamage": {
+                "to": "$t",
+                "divided": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "permanent"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "tap": "$t"
+            },
+            {
+              "draw": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

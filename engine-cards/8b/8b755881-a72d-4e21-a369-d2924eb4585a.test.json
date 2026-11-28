@@ -1,0 +1,178 @@
+{
+  "card": "8b755881-a72d-4e21-a369-d2924eb4585a",
+  "name": "Cultivate",
+  "tests": [
+    {
+      "name": "one basic land onto the battlefield tapped, the other to hand",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Cultivate"
+            ],
+            "battlefield": [
+              "Forest",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Plains",
+              "Mountain",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Cultivate"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "Plains",
+                "Mountain"
+              ],
+              "notChoices": [
+                "Grizzly Bears"
+              ]
+            }
+          ]
+        },
+        {
+          "choose": [
+            "Plains",
+            "Mountain"
+          ]
+        },
+        {
+          "choose": [
+            "Plains"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Plains"
+          ]
+        },
+        {
+          "tapped": "Plains"
+        },
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Mountain"
+          ]
+        },
+        {
+          "librarySize": 1
+        },
+        {
+          "event": "reveal"
+        }
+      ]
+    },
+    {
+      "name": "may find nothing (701.23b)",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Cultivate"
+            ],
+            "battlefield": [
+              "Forest",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Grizzly Bears",
+              "Hill Giant"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Cultivate"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "handSize": 0
+        },
+        {
+          "librarySize": 2
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Cultivate"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "one land found goes onto the battlefield",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Cultivate"
+            ],
+            "battlefield": [
+              "Forest",
+              "Island",
+              "Island"
+            ],
+            "library": [
+              "Swamp",
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Cultivate"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "choose": [
+            "Swamp"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Swamp"
+          ]
+        },
+        {
+          "handSize": 0
+        }
+      ]
+    }
+  ]
+}

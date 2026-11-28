@@ -1,0 +1,116 @@
+{
+  "card": "3f0c9466-5ab9-4205-a84f-b4b27b5a678e",
+  "name": "Bloodbraid Elf",
+  "tests": [
+    {
+      "name": "cast for {2}{R}{G}: a 3/2 with haste",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Bloodbraid Elf"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Forest",
+              "Mountain",
+              "Forest"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Bloodbraid Elf"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "chars": "Bloodbraid Elf",
+          "power": 3,
+          "toughness": 2
+        },
+        {
+          "keywords": "Bloodbraid Elf",
+          "has": [
+            "haste",
+            "cascade"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "can't be cast without red and green",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Bloodbraid Elf"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Mountain",
+              "Mountain",
+              "Mountain"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Bloodbraid Elf"
+        }
+      ],
+      "expect": [
+        {
+          "event": "castRolledBack"
+        },
+        {
+          "zone": "hand",
+          "seat": 0,
+          "has": [
+            "Bloodbraid Elf"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cascade casts a cheaper spell from the library",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Bloodbraid Elf"
+            ],
+            "battlefield": [
+              "Mountain",
+              "Forest",
+              "Mountain",
+              "Forest"
+            ],
+            "library": [
+              "Grizzly Bears"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Bloodbraid Elf"
+        }
+      ],
+      "expect": [
+        {
+          "stack": 2
+        }
+      ],
+      "pending": "PR 4a"
+    }
+  ]
+}

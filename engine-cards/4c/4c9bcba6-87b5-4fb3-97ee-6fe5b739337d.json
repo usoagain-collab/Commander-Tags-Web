@@ -1,0 +1,23 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "4c9bcba6-87b5-4fb3-97ee-6fe5b739337d",
+  "name": "Consider",
+  "oracleHash": "09d6b1512d351d40",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "effect": [
+            {
+              "surveil": 1
+            },
+            {
+              "draw": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

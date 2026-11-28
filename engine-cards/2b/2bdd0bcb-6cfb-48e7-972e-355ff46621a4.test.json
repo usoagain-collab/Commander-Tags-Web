@@ -1,0 +1,172 @@
+{
+  "card": "2bdd0bcb-6cfb-48e7-972e-355ff46621a4",
+  "name": "Cryptcaller Chariot",
+  "tests": [
+    {
+      "name": "cast for {3}{B}; menace",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Cryptcaller Chariot"
+            ],
+            "battlefield": [
+              "Swamp",
+              "Swamp",
+              "Swamp",
+              "Swamp"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Cryptcaller Chariot"
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Cryptcaller Chariot"
+          ]
+        },
+        {
+          "keywords": "Cryptcaller Chariot",
+          "has": [
+            "menace",
+            "crew"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "crew 2: tap creatures with total power 2",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Cryptcaller Chariot",
+              "Grizzly Bears",
+              "Savannah Lions"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Cryptcaller Chariot"
+        },
+        {
+          "check": [
+            {
+              "decision": "chooseObjects",
+              "purpose": "crew"
+            }
+          ]
+        },
+        {
+          "refused": {
+            "choose": []
+          }
+        },
+        {
+          "choose": [
+            "Grizzly Bears"
+          ]
+        },
+        {
+          "check": [
+            {
+              "tapped": "Grizzly Bears"
+            },
+            {
+              "tapped": "Savannah Lions",
+              "is": false
+            },
+            {
+              "stack": 1
+            }
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "event": "notYet",
+          "block": "continuous"
+        }
+      ]
+    },
+    {
+      "name": "crew needs enough power",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Cryptcaller Chariot",
+              "Ornithopter"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "refused": {
+            "activate": "Cryptcaller Chariot"
+          },
+          "match": "total power 2"
+        }
+      ]
+    },
+    {
+      "name": "discarding makes tapped Zombies",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Frantic Search"
+            ],
+            "battlefield": [
+              "Cryptcaller Chariot",
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Frantic Search"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "default": true
+        }
+      ],
+      "expect": [
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Zombie"
+          ]
+        }
+      ],
+      "pending": "PR 4a"
+    }
+  ]
+}

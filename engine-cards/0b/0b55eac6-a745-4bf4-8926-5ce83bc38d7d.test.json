@@ -1,0 +1,183 @@
+{
+  "card": "0b55eac6-a745-4bf4-8926-5ce83bc38d7d",
+  "name": "Treasure Map // Treasure Cove",
+  "tests": [
+    {
+      "name": "scry 1 and a landmark counter",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Treasure Map // Treasure Cove",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Treasure Map"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "arrange": {
+            "top": [
+              "Island"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "counters": "Treasure Map",
+          "kind": "landmark",
+          "is": 1
+        },
+        {
+          "tapped": "Treasure Map"
+        }
+      ]
+    },
+    {
+      "name": "the third counter transforms it and makes three Treasures",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              {
+                "card": "Treasure Map // Treasure Cove",
+                "counters": {
+                  "landmark": 2
+                }
+              },
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Treasure Map"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "arrange": {
+            "bottom": [
+              "Island"
+            ]
+          }
+        }
+      ],
+      "expect": [
+        {
+          "face": "Treasure Map",
+          "is": 1
+        },
+        {
+          "chars": "Treasure Map",
+          "name": "Treasure Cove",
+          "types": [
+            "Land"
+          ]
+        },
+        {
+          "counters": "Treasure Map",
+          "kind": "landmark",
+          "is": 0
+        },
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "has": [
+            "Treasure"
+          ],
+          "count": 5
+        },
+        {
+          "event": "tokenCreated",
+          "times": 3
+        }
+      ]
+    },
+    {
+      "name": "Treasure Cove sacrifices a Treasure to draw",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              {
+                "card": "Treasure Map // Treasure Cove",
+                "face": 1
+              },
+              "Treasure",
+              "Treasure"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "activate": "Treasure Map"
+        },
+        {
+          "choose": [
+            "Treasure"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "handSize": 1
+        },
+        {
+          "zone": "battlefield",
+          "seat": 0,
+          "count": 2
+        },
+        {
+          "tapped": "Treasure Map"
+        }
+      ]
+    },
+    {
+      "name": "a Treasure taps and sacrifices for any color",
+      "setup": {
+        "seats": [
+          {
+            "battlefield": [
+              "Treasure"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "mana": "Treasure",
+          "color": "R"
+        }
+      ],
+      "expect": [
+        {
+          "pool": {
+            "R": 1
+          }
+        },
+        {
+          "zone": "battlefield",
+          "count": 0
+        }
+      ]
+    }
+  ]
+}

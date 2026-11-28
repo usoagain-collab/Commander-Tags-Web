@@ -12,3 +12,7 @@ export { SPECIAL_ACTIONS } from "./special";
 export { RULES, CR_DATE } from "./rules-refs";
 export { ENGINE_VERSION } from "./version";
 export type * from "./types";
+export { validateScript, formatErrors, type ScriptError, type ValidateResult, type PrintedFacts } from "./lang/validate";
+export { BLOCKS, CORE_BLOCKS, KEYWORD_NAMES } from "./lang/blocks";
+export { SUPPORTED_LANGUAGES, type CardScript } from "./lang/script-types";
+export { cardPool, runScenario, type CardTests } from "./lang/scenario";

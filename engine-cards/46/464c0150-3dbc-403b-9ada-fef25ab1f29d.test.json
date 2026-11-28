@@ -1,0 +1,145 @@
+{
+  "card": "464c0150-3dbc-403b-9ada-fef25ab1f29d",
+  "name": "Brain Freeze",
+  "tests": [
+    {
+      "name": "target player mills three",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Brain Freeze"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Brain Freeze"
+        },
+        {
+          "check": [
+            {
+              "choices": [
+                "player:0",
+                "player:1"
+              ]
+            }
+          ]
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "librarySize": 7,
+          "seat": 1
+        },
+        {
+          "zone": "graveyard",
+          "seat": 1,
+          "count": 3
+        },
+        {
+          "zone": "graveyard",
+          "seat": 0,
+          "has": [
+            "Brain Freeze"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "can target yourself",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Brain Freeze"
+            ],
+            "battlefield": [
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Brain Freeze"
+        },
+        {
+          "targets": [
+            "player:0"
+          ]
+        },
+        {
+          "resolve": true
+        }
+      ],
+      "expect": [
+        {
+          "librarySize": 7,
+          "seat": 0
+        },
+        {
+          "librarySize": 10,
+          "seat": 1
+        }
+      ]
+    },
+    {
+      "name": "storm copies it for each spell cast before it",
+      "setup": {
+        "seats": [
+          {
+            "hand": [
+              "Brain Freeze",
+              "Quick Thought"
+            ],
+            "battlefield": [
+              "Island",
+              "Island",
+              "Island"
+            ]
+          },
+          {}
+        ]
+      },
+      "do": [
+        {
+          "cast": "Quick Thought"
+        },
+        {
+          "resolve": true
+        },
+        {
+          "cast": "Brain Freeze"
+        },
+        {
+          "targets": [
+            "player:1"
+          ]
+        }
+      ],
+      "expect": [
+        {
+          "stack": 2
+        }
+      ],
+      "pending": "PR 4a"
+    }
+  ]
+}

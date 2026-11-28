@@ -1,0 +1,38 @@
+{
+  "schema": "dg-card/1",
+  "oracleId": "c61fe162-2202-4e56-9ba0-393547f9875f",
+  "name": "Mana Leak",
+  "oracleHash": "d9c333febe909c62",
+  "faces": [
+    {
+      "abilities": [
+        {
+          "kind": "spell",
+          "targets": [
+            {
+              "id": "t",
+              "select": {
+                "kind": "spell"
+              }
+            }
+          ],
+          "effect": [
+            {
+              "unless": {
+                "player": {
+                  "controllerOf": "$t"
+                },
+                "pay": "{3}",
+                "then": [
+                  {
+                    "counter": "$t"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
