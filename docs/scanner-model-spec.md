@@ -159,6 +159,21 @@ DINOv2 with averaged patch tokens instead of the CLS token: 70.3% card, 57.4% pr
 - WASM threads and WebGPU only work on a secure (https) page with cross-origin isolation, so the test files (22-88 MB) can't be served from a plain laptop address. Options: a temporary Cloudflare tunnel from the laptop (new software, David's OK), or Supabase Storage (50 MB per file limit, so split the catalog).
 - **Pass:** under 300 ms per card, the tab survives on iPhone, first download under about 40 MB. Otherwise distill: train a phone-sized model to copy DINOv2's fingerprints on the synthetic pairs.
 
+### Phone results (Nov 27, 2026)
+
+**Android Chrome (David's phone: Android 10, 8 cores, 8 GB, cross-origin isolated, WebGPU, 4 threads): pass.**
+
+| Model, backend | Download | Load | First run | Typical run | Page memory |
+| --- | --- | --- | --- | --- | --- |
+| int8, WASM | 22.9 MB, 6.9 s | 7.1 s | 478 ms | 223 ms | 72 MB |
+| fp16, WASM | 42.2 MB, 11.3 s | 0.2 s | 325 ms | 332 ms | 211 MB |
+| fp16, WebGPU | 42.2 MB, 10.7 s | 0.2 s | 447 ms | 189 ms | 212 MB |
+| int8, WebGPU | 22.9 MB, 5.8 s | 0.1 s | 638 ms | 422 ms | 212 MB |
+
+Catalog search in plain JavaScript: 9 ms for 56,811 artworks at 128-dim int8 (6.9 MB), 28 ms for 115,080 printings at 384-dim (42.1 MB). The tab survived every run.
+
+Reading: **int8 on WASM** is the default (smallest download, lowest memory, under 300 ms, no WebGPU needed). fp16 on WebGPU is a little faster where WebGPU exists, but twice the download. int8 on WASM takes about 7 s to load the first time (compiling the int8 kernels), so load it in the background worker when the scanner opens, not on the first card. Three frames a card is about 0.7 s of recognition. No distillation needed for Android. iPhone Safari: not tested yet.
+
 ### Benchmark results (Nov 27, 2026, 101 frames, no training)
 
 Raw output on the laptop: `ml/runs/recog-v3/compare/` (`ablations.txt`, `scanlab_hand.json`, `scanlab_cv2.json`; not committed).
