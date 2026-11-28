@@ -15,14 +15,14 @@ Written Nov 27, 2026. Status: **signed off by David, Nov 27, 2026 (8:26 PM HST).
 | Casting steps | 601.2 | 2025 | Correct (601.2a-i). Rollback of an illegal cast points to "Handling Illegal Actions", which is **733** in 2026 (731 in 2025). |
 | Triggers, APNAP | 603, 603.3b | 2025 | Correct. Also used: 603.2d (Panharmonicon), 603.4 (intervening if), 603.7 (delayed). |
 | Layers | 613, 613.1, 613.4 (7a-7d) | 2025 | Correct. Also used: 613.3 (CDAs first), **613.6 (an effect keeps applying once started; Humility)**, 613.10 (player effects). |
-| Dependency order | 613.8 | 2025 | **Confirmed.** 613.8a defines "depends on", 613.8b dependent effects wait and loops fall back to timestamps, 613.8c re-check after each effect. |
+| Dependency order | 613.8 | Nov 2026 | **Confirmed, unchanged.** 613.8a defines "depends on", 613.8b dependent effects wait and loops fall back to timestamps, 613.8c re-check after each effect. |
 | Replacement effects | 614-616 | 2025 | Correct. 616.1 is the "affected player chooses order" rule; 614.15 self-replacement. |
 | State-based actions | 704 | 2025 | Correct. Commander-specific ones are **704.6c** (21 commander damage) and **704.6d** (commander to command zone). |
-| Commander to command zone | 903.9a, 903.9b | 2025 | **Confirmed.** 903.9a: graveyard or exile is a state-based action. 903.9b: hand or library is a replacement, and "may apply more than once to the same event" (exception to 614.5). |
+| Commander to command zone | 903.9a, 903.9b | Nov 2026 | **Confirmed, unchanged.** 903.9a: graveyard or exile is a state-based action. 903.9b: hand or library is a replacement, and "may apply more than once to the same event" (exception to 614.5). |
 | Commander tax | 903.8 | 2025 | Correct, {2} more per earlier cast from the command zone. |
 | 21 commander damage | 903.10a | 2025 | Correct. |
 | Free first mulligan | 103.5c | 2025 | Correct (multiplayer and Brawl). |
-| Player leaves | 800.4a | 2025 | **Number confirmed, plan's wording needs a fix.** The rule says effects "which give that player control of any objects or players end", not "control effects they created end". Then their objects on the stack that aren't cards cease to exist, then anything still under their control is exiled. A stolen creature (Gilded Drake) goes back because the effect giving the leaver control ends. |
+| Player leaves | 800.4a | Nov 2026 | **Number confirmed, plan's wording needs a fix.** The rule says effects "which give that player control of any objects or players end", not "control effects they created end". Then their objects on the stack that aren't represented by cards cease to exist, then anything still under their control is exiled. Not a state-based action: it happens at once. If the leaver had priority, it passes to the next player in turn order. A stolen creature (Gilded Drake) goes back because the effect giving the leaver control ends. Related: 800.4j (a turn whose player left continues with no active player) and 800.4k (a turn of a player who left doesn't begin). |
 | Mandatory loops draw | 104.4b | 2026 | Correct. |
 | Basic land mana | 305.6, 305.7 | 2025 | Correct (305.7 is Blood Moon's "loses all abilities from rules text"). |
 | Combat | 506-511 | 2025 | Correct: 506 combat phase, 507 beginning, 508 attackers, 509 blockers, 510 damage, 511 end. |
