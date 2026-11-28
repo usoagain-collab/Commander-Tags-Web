@@ -1,6 +1,6 @@
 # 20 hard cards on paper (Gate 0)
 
-Written Nov 27, 2026, in `dg-card/1` (see `docs/card-language.md`). Oracle text is from our `cards` table (Scryfall, nightly). Status: **draft for David's sign-off.**
+Written Nov 27, 2026, in `dg-card/1` (see `docs/card-language.md`). Oracle text is from our `cards` table (Scryfall, nightly). Status: **signed off by David, Nov 27, 2026 (8:26 PM HST).**
 
 The Gate 0 pass bar: **each card fits, or the gap is named with a fix.** Result: **all 21 fit** (the list says "Gilded Drake / Muldrotha", so both are here). Seven needed something the first draft of the language didn't have; each is named under **What it needed**, and those blocks are now in the spec.
 

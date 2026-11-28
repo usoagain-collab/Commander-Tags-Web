@@ -1,6 +1,6 @@
 # Deck Genome Table: engine design (Gate 0)
 
-Written Nov 27, 2026. Status: **draft for David's sign-off. No Phase 1 code until he says go.**
+Written Nov 27, 2026. Status: **signed off by David, Nov 27, 2026 (8:26 PM HST).**
 
 This is one of five Gate 0 documents:
 

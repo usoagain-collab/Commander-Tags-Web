@@ -1,6 +1,6 @@
 # Terms and limits, with sources (Gate 0)
 
-Checked Nov 27, 2026. Each row quotes the source and links it. Status: **draft for David's sign-off.**
+Checked Nov 27, 2026. Each row quotes the source and links it. Status: **signed off by David, Nov 27, 2026 (8:26 PM HST).**
 
 ## Summary
 

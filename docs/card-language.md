@@ -1,6 +1,6 @@
 # Card language spec, version `dg-card/1` (Gate 0)
 
-Written Nov 27, 2026. Status: **draft for David's sign-off.** The 20 hard cards written in this language are in `docs/engine-hard-cards.md`.
+Written Nov 27, 2026. Status: **signed off by David, Nov 27, 2026 (8:26 PM HST).** The 20 hard cards written in this language are in `docs/engine-hard-cards.md`.
 
 ## What it is, in plain words
 

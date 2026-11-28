@@ -1,6 +1,6 @@
 # Rules cut list and rule-number check (Gate 0)
 
-Written Nov 27, 2026. Status: **draft for David's sign-off.**
+Written Nov 27, 2026. Status: **signed off by David, Nov 27, 2026 (8:26 PM HST).**
 
 ## Which Comprehensive Rules I checked against
 
