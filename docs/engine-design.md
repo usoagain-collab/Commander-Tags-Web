@@ -367,7 +367,7 @@ Readable by everyone (the coverage meter shows on any deck), written only with t
 - Matched triggers wait in `pendingTriggers` and go on the stack the next time a player would get priority, in APNAP order, each player ordering their own (603.3b). Panharmonicon-style effects add copies at match time.
 - State-based actions run as a set whenever a player would get priority, repeated until none apply (704.3), then triggers are put on the stack.
 - Commander returns: graveyard or exile to command zone is a **state-based action** (903.9a), so "dies" triggers still fire; hand or library is a **replacement** (903.9b).
-- A player leaving (800.4a): their objects leave, control effects giving them control end, their objects on the stack are exiled, and anything else they controlled is exiled.
+- A player leaving (800.4a, Nov 2026 rules): the objects they own leave the game and effects giving them control of objects or players end; then their objects on the stack that aren't cards (abilities, copies) cease to exist; then anything still under their control is exiled. It happens at once, not as a state-based action, and if they had priority it passes to the next player. If they leave during their own turn, that turn finishes with no active player (800.4j): PR 1 starts the next turn at once instead, a simplification to replace in PR 3.
 
 ## 11. What the engine promises (invariants checked in every random-game test)
 

@@ -1,6 +1,7 @@
 // Every Comprehensive Rules number the engine cites, in one place, so a renumbering is one edit
 // (docs/engine-rules-cut.md, "Lesson for later docs"). Numbers are from the June 19, 2026 rules
-// unless a note says otherwise; 613.8, 800.4a and 903.9a/b still need a re-read in the 2026 text.
+// unless a note says otherwise. 613.8, 800.4a and 903.9a/b were re-read in the November 6, 2026 rules
+// (docs/engine-rules-cut.md).
 
 export const CR_DATE = "2026-06-19";
 
